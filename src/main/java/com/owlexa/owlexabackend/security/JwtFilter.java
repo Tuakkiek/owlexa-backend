@@ -28,5 +28,6 @@ public class JwtFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
 
         }
+        chain.doFilter(request, response);
     }
 }
