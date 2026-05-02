@@ -1,7 +1,10 @@
 package com.owlexa.owlexabackend.controller;
 
+import com.owlexa.owlexabackend.dto.request.RegisterRequest;
+import com.owlexa.owlexabackend.dto.response.AuthResponse;
 import com.owlexa.owlexabackend.service.AuthService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -9,9 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/auth")
+@RequiredArgsConstructor
 public class AuthController {
-    @Autowired
-    private AuthService authService;
+    private final AuthService authService;
 
     @PostMapping("/login")
     public String login(@RequestBody LoginRequest body) {
@@ -19,11 +22,9 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public String register(@RequestBody RegisterRequest body) {
-        return authService.register(body.phoneNumber(), body.password());
+    public AuthResponse register(@Valid @RequestBody RegisterRequest body) {
+        return authService.register(body);
     }
 
     public record LoginRequest(String phoneNumber, String password) {}
-
-    public record RegisterRequest(String phoneNumber, String password) {}
 }
