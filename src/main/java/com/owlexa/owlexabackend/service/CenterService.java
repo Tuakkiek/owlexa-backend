@@ -19,6 +19,9 @@ public class CenterService {
 
     // Create
     public CenterResponse create(CenterRequest request) {
+        if (centerRepository.existsBySubdomain(request.getSubdomain())) {
+            throw new DuplicateResourceException("Subdomain already exists: " + request.getSubdomain());
+        }
 
         Center center = new Center();
         center.setName(request.getName());
