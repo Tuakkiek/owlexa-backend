@@ -12,7 +12,7 @@ public class ClassEnrollment {
 
     @ManyToOne
     @JoinColumn(name = "class_id")
-    private ClassEntity clazz;
+    private Class clazz;
 
     @ManyToOne
     @JoinColumn(name = "student_id")
