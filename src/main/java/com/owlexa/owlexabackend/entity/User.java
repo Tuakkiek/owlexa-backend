@@ -17,6 +17,9 @@ public class User {
     @Column(unique = true)
     private String email;
 
+    @Column(name = "full_name")
+    private String fullName;
+
     private String password;
 
     @ManyToOne
