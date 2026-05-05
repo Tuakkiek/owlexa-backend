@@ -7,6 +7,7 @@ import lombok.Data;
 @Table(name = "users")
 @Data
 public class User {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -22,11 +23,7 @@ public class User {
 
     private String password;
 
-    @ManyToOne
-    @JoinColumn(name = "role_id")
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private Role role;
-
-    @ManyToOne
-    @JoinColumn(name = "center_id")
-    private Center center;
 }

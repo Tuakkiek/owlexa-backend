@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
+
 @Service
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService {
@@ -18,7 +19,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         String[] authorities = user.getRole() != null
-                ? new String[]{user.getRole().getName()}
+                ? new String[]{user.getRole().name()}
                 : new String[0];
 
         return org.springframework.security.core.userdetails.User
@@ -27,5 +28,4 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .authorities(authorities)
                 .build();
     }
-
 }

@@ -1,14 +1,21 @@
 package com.owlexa.owlexabackend.service;
 
-import com.owlexa.owlexabackend.dto.response.CenterResponse;
 import com.owlexa.owlexabackend.dto.request.CenterRequest;
+import com.owlexa.owlexabackend.dto.response.CenterResponse;
 import com.owlexa.owlexabackend.entity.Center;
+import com.owlexa.owlexabackend.entity.Membership;
+import com.owlexa.owlexabackend.entity.Role;
+import com.owlexa.owlexabackend.entity.User;
 import com.owlexa.owlexabackend.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.repository.CenterRepository;
+import com.owlexa.owlexabackend.repository.MembershipRepository;
+import com.owlexa.owlexabackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -16,40 +23,76 @@ import java.util.List;
 public class CenterService {
 
     private final CenterRepository centerRepository;
+    private final UserRepository userRepository;
+    private final MembershipRepository membershipRepository;
 
-    // Create
     public CenterResponse create(CenterRequest request) {
         if (centerRepository.existsBySubdomain(request.getSubdomain())) {
-            throw new DuplicateResourceException("Subdomain already exists: " + request.getSubdomain());
+            throw new DuplicateResourceException(
+                    "Subdomain already exists: " + request.getSubdomain()
+            );
+        }
+
+        String phone = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
+
+        User owner = userRepository.findByPhoneNumber(phone)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (owner.getRole() != Role.OWNER) {
+            throw new RuntimeException("Only OWNER can create center");
         }
 
         Center center = new Center();
         center.setName(request.getName());
         center.setSubdomain(request.getSubdomain());
+        center.setOwner(owner);
 
-        return toResponse(centerRepository.save(center));
+        Center savedCenter = centerRepository.save(center);
+
+        boolean exists = membershipRepository
+                .existsByUserIdAndCenterId(owner.getId(), savedCenter.getId());
+
+        if (!exists) {
+            Membership membership = new Membership();
+            membership.setUser(owner);
+            membership.setCenter(savedCenter);
+            membership.setJoinedByUser(owner);
+            membership.setJoinedAt(Instant.now());
+
+            membershipRepository.save(membership);
+        }
+
+        return toResponse(savedCenter);
     }
-    // Find all
+
     public List<CenterResponse> findAll() {
         return centerRepository.findAll().stream()
-                .map(center -> toResponse(center))
+                .map(this::toResponse)
                 .toList();
     }
-    // Find by id
+
     public CenterResponse findById(Long id) {
         Center center = centerRepository.findById(id)
-                .orElseThrow( () -> new RuntimeException("Center not found with id: " + id));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Center not found with id: " + id));
+
         return toResponse(center);
     }
-    // Update
+
     public CenterResponse update(Long id, CenterRequest request) {
+
         Center center = centerRepository.findById(id)
-                .orElseThrow( () -> new RuntimeException("Center not found with id: " + id));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Center not found with id: " + id));
 
         centerRepository.findBySubdomain(request.getSubdomain())
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
-                    throw new DuplicateResourceException("Subdomain already exists: " + request.getSubdomain());
+                    throw new DuplicateResourceException(
+                            "Subdomain already exists: " + request.getSubdomain()
+                    );
                 });
 
         center.setName(request.getName());
@@ -57,16 +100,16 @@ public class CenterService {
 
         return toResponse(centerRepository.save(center));
     }
-    // Delete
+
     public CenterResponse delete(Long id) {
         Center center = centerRepository.findById(id)
-                .orElseThrow( () -> new ResourceNotFoundException("Center not found with id: " + id));
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("Center not found with id: " + id));
 
         centerRepository.delete(center);
         return toResponse(center);
     }
 
-    // Map CenterResponse
     private CenterResponse toResponse(Center center) {
         return CenterResponse.builder()
                 .id(center.getId())
