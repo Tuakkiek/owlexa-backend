@@ -11,37 +11,37 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin/centers")
+@RequestMapping("/owner/centers")
 @RequiredArgsConstructor
 public class CenterController {
 
     private final CenterService centerService;
 
-    // Tạo trung tâm mới
+    // CREATE
     @PostMapping
     public CenterResponse create(@Valid @RequestBody CenterRequest request) {
         return centerService.create(request);
     }
 
-    // Lấy toàn bộ danh sách trung tâm
+    // FIND ALL
     @GetMapping
     public List<CenterResponse> findAll() {
         return centerService.findAll();
     }
 
-    // Lấy chi tiết 1 trung tâm theo id
+    // FIND BY ID
     @GetMapping("/{id}")
     public CenterResponse findById(@PathVariable Long id) {
         return centerService.findById(id);
     }
 
-    // Cập nhật trung tâm theo id
+    // UPDATE
     @PutMapping("/{id}")
     public CenterResponse update(@PathVariable Long id, @Valid @RequestBody CenterRequest request) {
         return centerService.update(id, request);
     }
 
-    // Xóa trung tâm theo id
+    // DELETE
     @DeleteMapping("/{id}")
     public CenterResponse delete(@PathVariable Long id) {
         return centerService.delete(id);

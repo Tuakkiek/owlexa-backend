@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.controller;
 
-import com.owlexa.owlexabackend.dto.request.RegisterRequest;
+import com.owlexa.owlexabackend.dto.request.RegisterOwnerRequest;
+import com.owlexa.owlexabackend.dto.request.RegisterStudentRequest;
 import com.owlexa.owlexabackend.dto.response.AuthResponse;
 import com.owlexa.owlexabackend.service.AuthService;
 import jakarta.validation.Valid;
@@ -14,17 +15,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
     private final AuthService authService;
 
+    // LOGIN
     @PostMapping("/login")
     public String login(@RequestBody LoginRequest body) {
         return authService.login(body.phoneNumber(), body.password());
     }
-
-    @PostMapping("/register")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest body) {
-        return authService.register(body);
+    // REGISTER
+    // Student register
+    @PostMapping("/register/student")
+    public AuthResponse registerStudent(@Valid @RequestBody RegisterStudentRequest body) {
+            return authService.registerStudent(body);
+    }
+    // Owner register
+    @PostMapping("/register/owner")
+    public AuthResponse registerOwner(@Valid @RequestBody RegisterOwnerRequest body) {
+        return authService.registerOwner(body);
     }
 
-    public record LoginRequest(String phoneNumber, String password) {}
+    // Record Login request
+    private record LoginRequest(String phoneNumber, String password) {}
 }

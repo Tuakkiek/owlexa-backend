@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin/teachers")
+@RequestMapping("/owner/teachers")
 @RequiredArgsConstructor
 public class TeacherController {
 

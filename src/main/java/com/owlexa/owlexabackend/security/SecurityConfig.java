@@ -23,27 +23,17 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers (
+                                "/auth/login",
+                                "/auth/register/student",
+                                "/auth/register/owner"
+                        ).permitAll()
 
-                        .requestMatchers(HttpMethod.GET, "/admin/centers/**")
-                        .hasAnyAuthority("OWNER", "TEACHER")
-                        .requestMatchers(HttpMethod.POST, "/admin/centers/**")
-                        .hasAnyAuthority("OWNER")
-                        .requestMatchers(HttpMethod.PUT, "/admin/centers/**")
-                        .hasAnyAuthority("OWNER")
-                        .requestMatchers(HttpMethod.DELETE, "/admin/centers/**")
-                        .hasAnyAuthority("OWNER")
-
-                        .requestMatchers(HttpMethod.GET, "/admin/teachers/**")
-                        .hasAnyAuthority("OWNER", "TEACHER")
-
-
-                        .requestMatchers(HttpMethod.POST, "/admin/teachers/**")
-                        .hasAnyAuthority("OWNER")
-
-
-                        .requestMatchers("/admin/**")
-                        .hasAnyAuthority("OWNER")
+                        .requestMatchers("/admin/**").hasAnyAuthority("ADMIN")
+                        .requestMatchers("/owner/**").hasAnyAuthority("OWNER")
+                        .requestMatchers("/teacher/**").hasAnyAuthority("TEACHER")
+                        .requestMatchers("/student/**").hasAnyAuthority("STUDENT")
+                        .requestMatchers("/cashier/**").hasAnyAuthority("CASHIER")
 
                         .anyRequest().authenticated()
                 )
