@@ -23,13 +23,21 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/admin/centers/**").hasAnyAuthority("OWNER", "ADMIN")
-                        .requestMatchers("/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers (
+                                "/auth/login",
+                                "/auth/register/student",
+                                "/auth/register/owner"
+                        ).permitAll()
+
+                        .requestMatchers("/admin/**").hasAnyAuthority("ADMIN")
+                        .requestMatchers("/owner/**").hasAnyAuthority("OWNER")
+                        .requestMatchers("/teacher/**").hasAnyAuthority("TEACHER")
+                        .requestMatchers("/student/**").hasAnyAuthority("STUDENT")
+                        .requestMatchers("/cashier/**").hasAnyAuthority("CASHIER")
+
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtFilter,
-                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

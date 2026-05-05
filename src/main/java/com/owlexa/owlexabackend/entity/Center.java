@@ -18,6 +18,10 @@ public class Center {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne
+    @JoinColumn(name = "owner_user_id", nullable = false)
+    private User owner;
+
     @Column(nullable = false)
     private String name;
 
