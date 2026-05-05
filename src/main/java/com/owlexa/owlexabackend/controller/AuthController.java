@@ -23,8 +23,8 @@ public class AuthController {
 
     @PostMapping("/register")
     public AuthResponse register(@Valid @RequestBody RegisterRequest body) {
-        System.out.println(">>> REGISTER called: " + body.getPhoneNumber()); // thêm dòng này
         return authService.register(body);
     }
+
     public record LoginRequest(String phoneNumber, String password) {}
 }

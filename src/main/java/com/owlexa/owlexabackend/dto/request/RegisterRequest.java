@@ -27,9 +27,7 @@ public class RegisterRequest {
     private String fullName;
 
     @NotBlank(message = "roleName is required")
-    @Pattern(regexp = "^(OWNER|TEACHER|STUDENT|CASHIER)$", message = "roleName must be OWNER|TEACHER|STUDENT|CASHIER")
+    @Pattern(regexp = "^(OWNER|TEACHER|STUDENT)$", message = "roleName must be OWNER|STUDENT|TEACHER")
     private String roleName;
 
-    @NotNull(message = "centerId is required")
-    private Long centerId;
 }

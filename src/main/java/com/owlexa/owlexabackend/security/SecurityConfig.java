@@ -24,12 +24,30 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/admin/centers/**").hasAnyAuthority("OWNER", "ADMIN")
-                        .requestMatchers("/admin/**").hasAuthority("ADMIN")
+
+                        .requestMatchers(HttpMethod.GET, "/admin/centers/**")
+                        .hasAnyAuthority("OWNER", "TEACHER")
+                        .requestMatchers(HttpMethod.POST, "/admin/centers/**")
+                        .hasAnyAuthority("OWNER")
+                        .requestMatchers(HttpMethod.PUT, "/admin/centers/**")
+                        .hasAnyAuthority("OWNER")
+                        .requestMatchers(HttpMethod.DELETE, "/admin/centers/**")
+                        .hasAnyAuthority("OWNER")
+
+                        .requestMatchers(HttpMethod.GET, "/admin/teachers/**")
+                        .hasAnyAuthority("OWNER", "TEACHER")
+
+
+                        .requestMatchers(HttpMethod.POST, "/admin/teachers/**")
+                        .hasAnyAuthority("OWNER")
+
+
+                        .requestMatchers("/admin/**")
+                        .hasAnyAuthority("OWNER")
+
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtFilter,
-                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
