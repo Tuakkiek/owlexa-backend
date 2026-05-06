@@ -1,0 +1,643 @@
+{
+  "info": {
+    "_postman_id": "1f7a2fd4-4f11-4e60-8b02-owlexa-local-sample",
+    "name": "Owlexa Backend - Local Sample",
+    "description": "Sample Postman collection for organizing local API tests. Folder 01 and 02 target the current auth/owner/teacher flow. Folder 03 contains planned requests for CASHIER and ADMIN so you can keep future tests organized in one place.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "studentPhone",
+      "value": "0901111111"
+    },
+    {
+      "key": "studentPassword",
+      "value": "Student@123"
+    },
+    {
+      "key": "studentFullName",
+      "value": "Nguyen Van Student"
+    },
+    {
+      "key": "studentEmail",
+      "value": "student1@example.com"
+    },
+    {
+      "key": "studentToken",
+      "value": ""
+    },
+    {
+      "key": "ownerPhone",
+      "value": "0902222222"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "Owner@123"
+    },
+    {
+      "key": "ownerFullName",
+      "value": "Nguyen Van Owner"
+    },
+    {
+      "key": "ownerEmail",
+      "value": "owner1@example.com"
+    },
+    {
+      "key": "ownerToken",
+      "value": ""
+    },
+    {
+      "key": "adminPhone",
+      "value": "0903333333"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Owner@123"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "centerId",
+      "value": ""
+    },
+    {
+      "key": "tenantId",
+      "value": ""
+    },
+    {
+      "key": "centerName",
+      "value": "Owlexa Center 1"
+    },
+    {
+      "key": "centerSubdomain",
+      "value": "owlexa-center-1"
+    },
+    {
+      "key": "teacherPhone",
+      "value": "0904444444"
+    },
+    {
+      "key": "teacherFullName",
+      "value": "Nguyen Van Teacher"
+    },
+    {
+      "key": "teacherEmail",
+      "value": "teacher1@example.com"
+    },
+    {
+      "key": "cashierPhone",
+      "value": "0905555555"
+    },
+    {
+      "key": "cashierFullName",
+      "value": "Nguyen Van Cashier"
+    },
+    {
+      "key": "cashierEmail",
+      "value": "cashier1@example.com"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Auth - Current",
+      "description": "Current auth flow. Register STUDENT and OWNER, then login and save token into collection variables.",
+      "item": [
+        {
+          "name": "Register Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "if (json.token) {",
+                  "    pm.collectionVariables.set('studentToken', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{studentPhone}}\",\n  \"email\": \"{{studentEmail}}\",\n  \"password\": \"{{studentPassword}}\",\n  \"fullName\": \"{{studentFullName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register/student",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register",
+                "student"
+              ]
+            },
+            "description": "Self-register a STUDENT account."
+          },
+          "response": []
+        },
+        {
+          "name": "Register Owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "if (json.token) {",
+                  "    pm.collectionVariables.set('ownerToken', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{ownerPhone}}\",\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\",\n  \"fullName\": \"{{ownerFullName}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register/owner",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register",
+                "owner"
+              ]
+            },
+            "description": "Self-register an OWNER account."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('studentToken', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{studentPhone}}\",\n  \"password\": \"{{studentPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as STUDENT and save token."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('ownerToken', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{ownerPhone}}\",\n  \"password\": \"{{ownerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login as OWNER and save token."
+          },
+          "response": []
+        },
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('adminToken', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"{{adminPhone}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Use this after updating one local account from OWNER to ADMIN in SQL."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 Owner - Current",
+      "description": "Current owner flow for centers and teachers. Create center first, then use the saved centerId as tenantId for teacher requests.",
+      "item": [
+        {
+          "name": "Create Center",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "if (json.id) {",
+                  "    pm.collectionVariables.set('centerId', json.id);",
+                  "    pm.collectionVariables.set('tenantId', json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{centerName}}\",\n  \"subdomain\": \"{{centerSubdomain}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers"
+              ]
+            },
+            "description": "Create a center as OWNER. This request also saves centerId and tenantId for later requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Centers",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers"
+              ]
+            },
+            "description": "List centers visible to the current OWNER."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Center By Id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers/{{centerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers",
+                "{{centerId}}"
+              ]
+            },
+            "description": "Get details of one center."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Teacher",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"{{teacherFullName}}\",\n  \"email\": \"{{teacherEmail}}\",\n  \"phoneNumber\": \"{{teacherPhone}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers"
+              ]
+            },
+            "description": "Create a TEACHER inside the current center."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Teachers",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers"
+              ]
+            },
+            "description": "List teachers inside the current center."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 Planned - Cashier & Admin",
+      "description": "Keep future tests organized here. These requests assume Step 2 code for CASHIER and ADMIN has been implemented.",
+      "item": [
+        {
+          "name": "Create Cashier",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"{{cashierFullName}}\",\n  \"email\": \"{{cashierEmail}}\",\n  \"phoneNumber\": \"{{cashierPhone}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/cashiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "cashiers"
+              ]
+            },
+            "description": "Planned request for creating a CASHIER in one center."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Cashiers",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{ownerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/owner/cashiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "cashiers"
+              ]
+            },
+            "description": "Planned request for listing CASHIER accounts in one center."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Stats",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "stats"
+              ]
+            },
+            "description": "Planned request for viewing system-level statistics as ADMIN."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
