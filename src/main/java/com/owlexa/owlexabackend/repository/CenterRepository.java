@@ -9,5 +9,7 @@ public interface CenterRepository extends JpaRepository<Center, Long> {
     Optional<Center> findBySubdomain(String subdomain);
 
     boolean existsBySubdomain(String subdomain);
+
+    Optional<Center> findById(Long centerId);
 }
 
