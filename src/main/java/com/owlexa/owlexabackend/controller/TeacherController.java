@@ -1,6 +1,8 @@
 package com.owlexa.owlexabackend.controller;
 
+import com.owlexa.owlexabackend.dto.request.BulkTeacherRequest;
 import com.owlexa.owlexabackend.dto.request.TeacherRequest;
+import com.owlexa.owlexabackend.dto.response.BulkTeacherResult;
 import com.owlexa.owlexabackend.dto.response.TeacherResponse;
 import com.owlexa.owlexabackend.service.TeacherService;
 import jakarta.validation.Valid;
@@ -26,5 +28,11 @@ public class TeacherController {
     @GetMapping
     public List<TeacherResponse> findAll() {
         return teacherService.findAll();
+    }
+
+    @PostMapping("/bulk")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<BulkTeacherResult> bulkCreate(@RequestBody BulkTeacherRequest request) {
+        return teacherService.bulkCreate(request);
     }
 }
