@@ -95,6 +95,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(BulkStudentValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleBulkStudentValidation(BulkStudentValidationException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now());
+        body.put("status", 400);
+        body.put("message", "Bulk student validation failed");
+        body.put("errors", ex.getErrors());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+
     private Map<String, Object> errorBody(int status, String message, Map<String, String> errors) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());

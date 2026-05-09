@@ -11,9 +11,12 @@ import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.repository.CenterRepository;
 import com.owlexa.owlexabackend.repository.MembershipRepository;
 import com.owlexa.owlexabackend.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -26,6 +29,8 @@ public class CenterService {
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
 
+    // CREATE
+    @Transactional
     public CenterResponse create(CenterRequest request) {
         if (centerRepository.existsBySubdomain(request.getSubdomain())) {
             throw new DuplicateResourceException(
@@ -33,15 +38,10 @@ public class CenterService {
             );
         }
 
-        String phone = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getName();
-
-        User owner = userRepository.findByPhoneNumber(phone)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User owner = getCurrentUser();
 
         if (owner.getRole() != Role.OWNER) {
-            throw new RuntimeException("Only OWNER can create center");
+            throw new AccessDeniedException("Only OWNER can create center");
         }
 
         Center center = new Center();
@@ -67,12 +67,23 @@ public class CenterService {
         return toResponse(savedCenter);
     }
 
+    // FIND ALL
+    @Transactional(readOnly = true)
     public List<CenterResponse> findAll() {
-        return centerRepository.findAll().stream()
+
+        User owner = getCurrentUser();
+
+        if (owner.getRole() != Role.OWNER) {
+            throw new AccessDeniedException("Only OWNER can view centers");
+        }
+
+        return centerRepository.findAllByOwnerId(owner.getId()).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
+    // FIND BY ID
+    @Transactional(readOnly = true)
     public CenterResponse findById(Long id) {
         Center center = centerRepository.findById(id)
                 .orElseThrow(() ->
@@ -81,6 +92,8 @@ public class CenterService {
         return toResponse(center);
     }
 
+    // UPDATE
+    @Transactional
     public CenterResponse update(Long id, CenterRequest request) {
 
         Center center = centerRepository.findById(id)
@@ -101,6 +114,8 @@ public class CenterService {
         return toResponse(centerRepository.save(center));
     }
 
+    // DELETE
+    @Transactional
     public CenterResponse delete(Long id) {
         Center center = centerRepository.findById(id)
                 .orElseThrow(() ->
@@ -110,6 +125,7 @@ public class CenterService {
         return toResponse(center);
     }
 
+    // HELPER
     private CenterResponse toResponse(Center center) {
         return CenterResponse.builder()
                 .id(center.getId())
@@ -117,5 +133,15 @@ public class CenterService {
                 .subdomain(center.getSubdomain())
                 .createdAt(center.getCreatedAt())
                 .build();
+    }
+
+    private User getCurrentUser() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null) {
+            throw new ResourceNotFoundException("Authentication not found");
+        }
+        return userRepository.findByPhoneNumber(authentication.getName())
+                .orElseThrow( () -> new ResourceNotFoundException("User not found"));
     }
 }
