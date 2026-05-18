@@ -1,5 +1,7 @@
 package com.owlexa.owlexabackend.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -26,4 +28,10 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
+
+    @Column(name = "refresh_token")
+    private String refreshToken;
+
+    @Column(name = "refresh_token_expiry_at")
+    private LocalDateTime refreshTokenExpiredAt;
 }
