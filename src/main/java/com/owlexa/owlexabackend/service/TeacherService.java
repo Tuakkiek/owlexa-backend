@@ -115,9 +115,7 @@ public class TeacherService {
 
         List<BulkTeacherError> errors = new ArrayList<>();
 
-        // =========================
         // PHASE 1: VALIDATION ONLY
-        // =========================
         for (int i = 0; i < request.getTeachers().size(); i++) {
 
             BulkTeacherRequest.Item item = request.getTeachers().get(i);
@@ -173,9 +171,7 @@ public class TeacherService {
             throw new BulkTeacherValidationException(errors);
         }
 
-        // =========================
         // PHASE 2: EXECUTION
-        // =========================
         List<BulkTeacherResult> results = new ArrayList<>();
 
         for (BulkTeacherRequest.Item item : request.getTeachers()) {
@@ -228,6 +224,7 @@ public class TeacherService {
 
         return results;
     }
+
     //HELPER FUNCTION
 
     private void createMembership(User teacherUser, Center center, User joinedByUser) {
