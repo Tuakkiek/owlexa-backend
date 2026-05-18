@@ -16,3 +16,4 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
 
     Optional<Membership> findByUserIdAndCenterId(Long userId, Long centerId);
 }
+    

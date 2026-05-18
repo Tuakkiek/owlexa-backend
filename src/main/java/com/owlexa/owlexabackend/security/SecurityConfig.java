@@ -26,7 +26,8 @@ public class SecurityConfig {
                         .requestMatchers (
                                 "/auth/login",
                                 "/auth/register/student",
-                                "/auth/register/owner"
+                                "/auth/register/owner",
+                                "/auth/refresh-token"
                         ).permitAll()
 
                         .requestMatchers("/admin/**").hasAnyAuthority("ADMIN")

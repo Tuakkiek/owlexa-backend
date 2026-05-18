@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.controller;
 
+import com.owlexa.owlexabackend.dto.request.RefreshTokenRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterOwnerRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterStudentRequest;
 import com.owlexa.owlexabackend.dto.response.AuthResponse;
@@ -20,8 +21,13 @@ public class AuthController {
 
     // LOGIN
     @PostMapping("/login")
-    public String login(@RequestBody LoginRequest body) {
+    public AuthResponse login(@RequestBody LoginRequest body) {
         return authService.login(body.phoneNumber(), body.password());
+    }
+    // REFRESH TOKEN
+    @PostMapping("/refresh-token")
+    public AuthResponse refreshToken(@RequestBody RefreshTokenRequest body) {
+        return authService.refreshToken(body);
     }
     // REGISTER
     // Student register
