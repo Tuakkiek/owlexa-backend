@@ -15,5 +15,12 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     List<Membership> findAllByCenterIdAndUserRole(Long centerId, Role role);
 
     Optional<Membership> findByUserIdAndCenterId(Long userId, Long centerId);
+
+    Optional<Membership> findByUserIdAndCenterIdAndUserRole(
+            Long userId,
+            Long centerId,
+            Role userRole
+    );
+
 }
     

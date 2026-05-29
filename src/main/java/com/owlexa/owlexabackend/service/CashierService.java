@@ -35,6 +35,7 @@ public class CashierService {
     private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+    // Create
     @Transactional
     public CashierResponse create(CashierRequest request) {
         User currentUser = getCurrentUser();
@@ -87,6 +88,7 @@ public class CashierService {
 
     }
 
+    // Find All
     @Transactional(readOnly = true)
     public List<CashierResponse> findAll() {
         User currentUser = getCurrentUser();
@@ -101,6 +103,59 @@ public class CashierService {
                 .toList();
     }
 
+    // Update
+    @Transactional
+    public CashierResponse update(Long cashierId, CashierRequest request) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Membership membership = membershipRepository
+                .findByUserIdAndCenterIdAndUserRole(cashierId, centerId, Role.CASHIER)
+                .orElseThrow(() -> new ResourceNotFoundException("Cashier not found in this center"));
+
+        User cashier = membership.getUser();
+
+        String phoneNumber = request.getPhoneNumber().trim();
+        String email = normalizeOptionalEmail(request.getEmail());
+        String fullName = request.getFullName();
+
+        if (cashier.getPhoneNumber().equals(phoneNumber) || cashier.getEmail().equals(email) || cashier.getFullName().equals(fullName)) {
+            throw new DuplicateResourceException("The updated information is a duplicate of the current information");
+        }
+
+        if (userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new DuplicateResourceException("Phone number already exists");
+        }
+
+        if (email != null && !cashier.getEmail().equals(email) && userRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException("Email already exists");
+        }
+
+        cashier.setPhoneNumber(phoneNumber);
+        cashier.setEmail(email);
+        cashier.setFullName(fullName);
+
+        cashier = userRepository.save(cashier);
+
+        return toResponse(cashier, centerId, null);
+    }
+
+    // Delete
+    @Transactional
+    public void delete(Long cashierId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Membership membership = membershipRepository
+                .findByUserIdAndCenterIdAndUserRole(cashierId, centerId, Role.CASHIER)
+                        .orElseThrow(() -> new ResourceNotFoundException("Cashier not found in this center"));
+
+        membershipRepository.delete(membership);
+    }
 
     // HELPER
     // Get current USER
@@ -172,7 +227,7 @@ public class CashierService {
         }
 
         String trimmed = email.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return trimmed.isEmpty() ? null : trimmed.toLowerCase();
     }
 
 }

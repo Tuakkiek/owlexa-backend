@@ -35,4 +35,20 @@ public class TeacherController {
     public List<BulkTeacherResult> bulkCreate(@RequestBody BulkTeacherRequest request) {
         return teacherService.bulkCreate(request);
     }
+
+    // Update
+    @PutMapping("/{teacherId}")
+    public TeacherResponse update(
+            @PathVariable Long teacherId,
+            @Valid @RequestBody TeacherRequest request
+    ) {
+        return teacherService.update(teacherId, request);
+    }
+
+    @DeleteMapping("/{teacherId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long teacherId) {
+        teacherService.delete(teacherId);
+    }
+
 }
