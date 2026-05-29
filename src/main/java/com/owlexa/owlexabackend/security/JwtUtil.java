@@ -6,6 +6,7 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
@@ -13,6 +14,7 @@ import java.util.Date;
 public class JwtUtil {
 
     private final String SECRET = "owlexa-secret-key-owlexa-secret-key";
+    private final SecretKey signingKey = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
 
     private static final long ACCESS_TOKEN_EXPIRE_MS = 1000 * 60 * 15; // 15 minutes
     private static final long REFRESH_TOKEN_EXPIRE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
@@ -25,7 +27,7 @@ public class JwtUtil {
                 .claim("tokenType", "access")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRE_MS))
-                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
+                .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
     //Generate refreshToken
@@ -35,7 +37,7 @@ public class JwtUtil {
                 .claim("tokenType", "refresh")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRE_MS))
-                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
+                .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
@@ -71,7 +73,7 @@ public class JwtUtil {
     // Decoding token and get Claims
     private Claims getClaims(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(SECRET.getBytes())
+                .setSigningKey(signingKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
