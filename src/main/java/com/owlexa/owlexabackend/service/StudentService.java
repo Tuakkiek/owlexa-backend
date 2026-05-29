@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.service;
 
 import com.owlexa.owlexabackend.dto.request.BulkStudentRequest;
+import com.owlexa.owlexabackend.dto.request.StudentRequest;
 import com.owlexa.owlexabackend.dto.response.BulkStudentError;
 import com.owlexa.owlexabackend.dto.response.BulkStudentResult;
 import com.owlexa.owlexabackend.dto.response.StudentResponse;
@@ -41,6 +42,89 @@ public class StudentService {
     private final CenterRepository centerRepository;
     private final PasswordEncoder passwordEncoder;
 
+    // Create
+    @Transactional
+    public StudentResponse create(StudentRequest request) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        Center center = centerRepository
+                .findById(centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+
+        User studentUser;
+        String temporaryPassword = null;
+
+        // Check if student is present
+        var existingStudent = userRepository.findByPhoneNumber(request.getPhoneNumber());
+
+        if (existingStudent.isPresent()) {
+            studentUser = existingStudent.get();
+
+            if (studentUser.getRole() != Role.STUDENT) {
+                throw new BadRequestException("User is not a STUDENT");
+            }
+            boolean existsMembership = membershipRepository.existsByUserIdAndCenterId(studentUser.getId(), centerId);
+
+            if (!existsMembership) {
+                createMembership(studentUser, center, currentUser);
+            }
+        }  else {
+            temporaryPassword = generateTemporaryPassword();
+            studentUser = new User();
+            studentUser.setPhoneNumber(request.getPhoneNumber());
+            studentUser.setEmail(normalizeOptionalEmail(request.getEmail()));
+            studentUser.setFullName(request.getFullName());
+            studentUser.setRole(Role.STUDENT);
+            studentUser.setPassword(passwordEncoder.encode(temporaryPassword));
+            studentUser = userRepository.save(studentUser);
+            createMembership(studentUser, center, currentUser);
+        }
+        return toResponse(studentUser, centerId, temporaryPassword);
+    }
+
+    // Update
+    @Transactional
+    public StudentResponse update(Long studentId,StudentRequest request) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Membership membership = membershipRepository
+                .findByUserIdAndCenterIdAndUserRole(studentId, centerId, Role.STUDENT)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found in this center"));
+
+        User student = membership.getUser();
+
+        String phoneNumber = request.getPhoneNumber();
+        String email = normalizeOptionalEmail(request.getEmail());
+        String fullName = request.getFullName().trim();
+
+        if (student.getPhoneNumber().equals(phoneNumber) || student.getEmail().equals(email) || student.getFullName().equals(fullName)) {
+            throw new BadRequestException("The updated information is a duplicate of the current information");
+        }
+
+        if (userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new BadRequestException("Phone number is already exists");
+        }
+        if (email != null && !email.equals(student.getEmail()) && userRepository.existsByEmail(email)) {
+            throw new BadRequestException("Email already exists");
+        }
+
+        student.setPhoneNumber(phoneNumber);
+        student.setEmail(email);
+        student.setFullName(fullName);
+
+        student = userRepository.save(student);
+
+        return toResponse(student, centerId, null);
+    }
+
+    // Bulk Crate
     @Transactional
     public List<BulkStudentResult> bulkCreate(@NonNull BulkStudentRequest request) {
         if (request.getStudents() == null || request.getStudents().isEmpty()) {
@@ -175,6 +259,7 @@ public class StudentService {
         return results;
     }
 
+    // Find all
     @Transactional(readOnly = true)
     public List<StudentResponse> findAll() {
         User currentUser = getCurrentUser();
@@ -185,8 +270,23 @@ public class StudentService {
         return membershipRepository.findAllByCenterIdAndUserRole(centerId, Role.STUDENT)
                 .stream()
                 .map(Membership::getUser)
-                .map(user -> toResponse(user, centerId))
+                .map(user -> toResponse(user, centerId, null))
                 .toList();
+    }
+
+    // Delete
+    @Transactional
+    public void delete(Long studentId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Membership membership = membershipRepository
+                .findByUserIdAndCenterIdAndUserRole(currentUser.getId(), centerId, Role.STUDENT)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found in this center"));
+
+        membershipRepository.delete(membership);
     }
 
     // HELPER
@@ -243,12 +343,13 @@ public class StudentService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private StudentResponse toResponse(User user, Long centerId) {
+    private StudentResponse toResponse(User user, Long centerId, String temporaryPassword) {
         return StudentResponse.builder()
                 .userId(user.getId())
                 .fullName(user.getFullName())
                 .phoneNumber(user.getPhoneNumber())
                 .centerId(centerId)
+                .temporaryPassword(temporaryPassword)
                 .build();
     }
 }

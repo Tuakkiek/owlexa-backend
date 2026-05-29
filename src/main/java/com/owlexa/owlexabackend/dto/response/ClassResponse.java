@@ -9,11 +9,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudentResponse {
+public class ClassResponse {
 
-    private Long userId;
-    private String phoneNumber;
-    private String fullName;
+    private Long id;
+    private String name;
+    private String vstepLevel;
+    private Integer maxStudents;
+    private Double monthFee;
+    private Boolean isActive;
     private Long centerId;
-    private String temporaryPassword;
 }

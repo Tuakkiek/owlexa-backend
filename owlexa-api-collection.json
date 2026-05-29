@@ -1,0 +1,703 @@
+{
+  "info": {
+    "_postman_id": "f5e9da84-6047-4f6c-8ab5-3ad04b7e19f7",
+    "name": "Owlexa API Collection",
+    "description": "Postman Collection for testing all APIs in Owlexa Backend.\n\n### Hướng dẫn sử dụng:\n1. **Import** tệp này vào Postman.\n2. **Đăng nhập/Đăng ký** bằng bất kỳ API nào trong folder `Authentication`.\n3. Mã kiểm thử (Test script) trong các API đó sẽ tự động trích xuất `accessToken` và lưu vào biến của Collection.\n4. Các API trong các thư mục `Owner` và `Admin` sẽ tự động kế thừa (Inherit) token này từ Collection để gửi đi mà không cần cấu hình thủ công.\n5. Collection này cũng tự động gắn `Content-Type: application/json` cho request có body raw JSON, và tự điền `X-Tenant-ID` từ biến `tenantId` khi request cần tenant.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "Nhóm các API đăng ký, đăng nhập và làm mới token. Không yêu cầu xác thực.",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "    console.log(\"Saved accessToken to collection variable!\");",
+                  "}",
+                  "if (jsonData && jsonData.refreshToken) {",
+                  "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
+                  "    console.log(\"Saved refreshToken to collection variable!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"0987654321\",\n  \"password\": \"Password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Đăng nhập hệ thống bằng số điện thoại và mật khẩu. Tự động lưu `accessToken` và `refreshToken`."
+          },
+          "response": []
+        },
+        {
+          "name": "Register Owner",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "    console.log(\"Saved accessToken to collection variable!\");",
+                  "}",
+                  "if (jsonData && jsonData.refreshToken) {",
+                  "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
+                  "    console.log(\"Saved refreshToken to collection variable!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"0987654321\",\n  \"email\": \"owner@owlexa.com\",\n  \"password\": \"Password123\",\n  \"fullName\": \"Nguyen Van Owner\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register/owner",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register",
+                "owner"
+              ]
+            },
+            "description": "Đăng ký tài khoản với tư cách là chủ sở hữu (Owner)."
+          },
+          "response": []
+        },
+        {
+          "name": "Register Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "    console.log(\"Saved accessToken to collection variable!\");",
+                  "}",
+                  "if (jsonData && jsonData.refreshToken) {",
+                  "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
+                  "    console.log(\"Saved refreshToken to collection variable!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"0977654321\",\n  \"email\": \"student@owlexa.com\",\n  \"password\": \"Password123\",\n  \"fullName\": \"Nguyen Van Student\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register/student",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register",
+                "student"
+              ]
+            },
+            "description": "Đăng ký tài khoản với tư cách là học sinh (Student)."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.accessToken) {",
+                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "    console.log(\"Refreshed accessToken saved!\");",
+                  "}",
+                  "if (jsonData && jsonData.refreshToken) {",
+                  "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
+                  "    console.log(\"Refreshed refreshToken saved!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh-token"
+              ]
+            },
+            "description": "Lấy accessToken mới sử dụng refreshToken hiện tại."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Các API dành riêng cho quản trị viên hệ thống (ADMIN).",
+      "item": [
+        {
+          "name": "Get Admin Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "stats"
+              ]
+            },
+            "description": "Lấy dữ liệu thống kê tổng hợp của hệ thống."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Centers",
+      "description": "Quản lý các cơ sở đào tạo (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Create Center",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try {",
+                  "  jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "  jsonData = null;",
+                  "}",
+                  "",
+                  "var centerId = null;",
+                  "if (jsonData) {",
+                  "  centerId = jsonData.id || jsonData.centerId || (jsonData.data && (jsonData.data.id || jsonData.data.centerId));",
+                  "}",
+                  "",
+                  "if (centerId) {",
+                  "  pm.collectionVariables.set(\"centerId\", String(centerId));",
+                  "  pm.collectionVariables.set(\"tenantId\", String(centerId));",
+                  "  console.log(\"Saved centerId and tenantId to collection variables!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Owlexa Center Ho Chi Minh\",\n  \"subdomain\": \"hcm-center\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers"
+              ]
+            },
+            "description": "Tạo một cơ sở mới. subdomain chỉ chứa chữ thường, số và gạch ngang."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Centers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers"
+              ]
+            },
+            "description": "Lấy danh sách tất cả cơ sở."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Center by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers",
+                "1"
+              ]
+            },
+            "description": "Lấy chi tiết một cơ sở dựa trên ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Center",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Owlexa Center HCM Updated\",\n  \"subdomain\": \"hcm-center-updated\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers",
+                "1"
+              ]
+            },
+            "description": "Cập nhật thông tin cơ sở dựa trên ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Center",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/centers/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "centers",
+                "1"
+              ]
+            },
+            "description": "Xóa một cơ sở dựa trên ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Teachers",
+      "description": "Quản lý thông tin Giáo viên (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Create Teacher",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Tran Van Teacher\",\n  \"email\": \"teacher.tran@owlexa.com\",\n  \"phoneNumber\": \"0934567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers"
+              ]
+            },
+            "description": "Thêm một giáo viên mới. Số điện thoại phải là định dạng Việt Nam hợp lệ (10 chữ số bắt đầu bằng 0)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Teachers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers"
+              ]
+            },
+            "description": "Lấy danh sách tất cả giáo viên."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Create Teachers",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teachers\": [\n    {\n      \"fullName\": \"Teacher Alpha\",\n      \"email\": \"alpha.teacher@owlexa.com\",\n      \"phoneNumber\": \"0945678901\"\n    },\n    {\n      \"fullName\": \"Teacher Beta\",\n      \"email\": \"beta.teacher@owlexa.com\",\n      \"phoneNumber\": \"0956789012\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers/bulk",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers",
+                "bulk"
+              ]
+            },
+            "description": "Thêm hàng loạt giáo viên cùng lúc."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Teacher",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Tran Van Teacher Updated\",\n  \"email\": \"teacher.tran.updated@owlexa.com\",\n  \"phoneNumber\": \"0934567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers",
+                "1"
+              ]
+            },
+            "description": "Cập nhật thông tin giáo viên dựa trên ID giáo viên."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Teacher",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/teachers/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "teachers",
+                "1"
+              ]
+            },
+            "description": "Xóa giáo viên theo ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Cashiers",
+      "description": "Quản lý nhân viên Thu ngân (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Create Cashier",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Le Thi Cashier\",\n  \"email\": \"cashier.le@owlexa.com\",\n  \"phoneNumber\": \"0967890123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/cashiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "cashiers"
+              ]
+            },
+            "description": "Thêm một thu ngân mới."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Cashiers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/cashiers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "cashiers"
+              ]
+            },
+            "description": "Lấy danh sách tất cả thu ngân."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Students",
+      "description": "Quản lý thông tin Học sinh (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Get All Students",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "students"
+              ]
+            },
+            "description": "Lấy danh sách học sinh."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Create Students",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"students\": [\n    {\n      \"fullName\": \"Student Alpha\",\n      \"email\": \"alpha.student@owlexa.com\",\n      \"phoneNumber\": \"0978901234\"\n    },\n    {\n      \"fullName\": \"Student Beta\",\n      \"email\": \"beta.student@owlexa.com\",\n      \"phoneNumber\": \"0989012345\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/students/bulk",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "students",
+                "bulk"
+              ]
+            },
+            "description": "Thêm hàng loạt học sinh cùng lúc."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "var method = (pm.request.method || \"\").toUpperCase();",
+          "var hasRawBody = pm.request.body && pm.request.body.mode === \"raw\";",
+          "if (hasRawBody && [\"POST\", \"PUT\", \"PATCH\", \"DELETE\"].indexOf(method) !== -1) {",
+          "    pm.request.headers.upsert({ key: \"Content-Type\", value: \"application/json\" });",
+          "}",
+          "",
+          "var tenantId = pm.collectionVariables.get(\"tenantId\") || pm.environment.get(\"tenantId\") || pm.variables.get(\"tenantId\");",
+          "if (tenantId) {",
+          "    var path = \"\";",
+          "    if (pm.request.url && typeof pm.request.url.getPath === \"function\") {",
+          "        path = pm.request.url.getPath().join(\"/\");",
+          "    }",
+          "",
+          "    if (path.indexOf(\"owner/teachers\") === 0 || path.indexOf(\"owner/cashiers\") === 0 || path.indexOf(\"owner/students\") === 0) {",
+          "        pm.request.headers.upsert({ key: \"X-Tenant-ID\", value: String(tenantId) });",
+          "    }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "centerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "tenantId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

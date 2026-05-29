@@ -3,6 +3,7 @@ package com.owlexa.owlexabackend.controller;
 import com.owlexa.owlexabackend.dto.request.CashierRequest;
 import com.owlexa.owlexabackend.dto.response.CashierResponse;
 import com.owlexa.owlexabackend.service.CashierService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -25,5 +26,18 @@ public class CashierController {
     @GetMapping
     public List<CashierResponse> findAll() {
         return cashierService.findAll();
+    }
+
+    // Update Cashier
+    @PutMapping("/{cashierId}")
+    public CashierResponse update(@PathVariable Long cashierId,
+                                  @Valid @RequestBody CashierRequest request) {
+        return cashierService.update(cashierId, request);
+    }
+    // Delete Cashier
+    @DeleteMapping("/{cashierId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable Long cashierId) {
+        cashierService.delete(cashierId);
     }
 }

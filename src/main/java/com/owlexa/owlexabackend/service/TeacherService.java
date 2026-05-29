@@ -99,6 +99,59 @@ public class TeacherService {
                 .toList();
     }
 
+    // Update
+    @Transactional
+    public TeacherResponse update(Long teacherId, TeacherRequest request) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Membership membership = membershipRepository
+                .findByUserIdAndCenterIdAndUserRole(teacherId, centerId, Role.TEACHER)
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found in this center"));
+
+        User teacher = membership.getUser();
+
+        String phoneNumber = request.getPhoneNumber().trim();
+        String email = normalizeOptionalEmail(request.getEmail());
+        String fullName = request.getFullName().trim();
+
+        if (!teacher.getPhoneNumber().equals(phoneNumber)
+                && userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new DuplicateResourceException("Phone number already exists");
+        }
+
+        if (email != null
+                && !email.equals(teacher.getEmail())
+                && userRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException("Email already exists");
+        }
+
+        teacher.setPhoneNumber(phoneNumber);
+        teacher.setEmail(email);
+        teacher.setFullName(fullName);
+
+        teacher = userRepository.save(teacher);
+
+        return toResponse(teacher, centerId, null);
+    }
+
+    // Delete
+    @Transactional
+    public void delete(Long teacherId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Membership membership = membershipRepository
+                .findByUserIdAndCenterIdAndUserRole(teacherId, centerId, Role.TEACHER)
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found in this center"));
+
+        membershipRepository.delete(membership);
+    }
+
     @Transactional
     public List<BulkTeacherResult> bulkCreate(@NonNull BulkTeacherRequest request) {
 
@@ -283,5 +336,15 @@ public class TeacherService {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }
         return centerId;
+    }
+
+    private String normalizeOptionalEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+
+        email = email.trim().toLowerCase();
+
+        return email.isEmpty() ? null : email;
     }
 }
