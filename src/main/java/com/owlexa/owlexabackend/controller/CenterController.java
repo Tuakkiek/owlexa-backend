@@ -43,7 +43,7 @@ public class CenterController {
 
     // DELETE
     @DeleteMapping("/{id}")
-    public CenterResponse delete(@PathVariable Long id) {
-        return centerService.delete(id);
+    public void delete(@PathVariable Long id) {
+        centerService.delete(id);
     }
 }
