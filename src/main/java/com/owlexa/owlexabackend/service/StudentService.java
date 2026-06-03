@@ -11,6 +11,7 @@ import com.owlexa.owlexabackend.entity.Role;
 import com.owlexa.owlexabackend.entity.User;
 import com.owlexa.owlexabackend.exception.BadRequestException;
 import com.owlexa.owlexabackend.exception.BulkStudentValidationException;
+import com.owlexa.owlexabackend.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.filter.TenantFilter;
 import com.owlexa.owlexabackend.repository.CenterRepository;
@@ -24,11 +25,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.swing.text.html.Option;
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -48,18 +47,21 @@ public class StudentService {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
         Center center = centerRepository
                 .findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
 
-        assertOwnerAndCenterMembership(currentUser, centerId);
+        String phoneNumber = request.getPhoneNumber().trim();
+        String email = normalizeOptionalEmail(request.getEmail());
+        String fullName = request.getFullName().trim();
 
-
-        User studentUser;
         String temporaryPassword = null;
 
-        // Check if student is present
-        var existingStudent = userRepository.findByPhoneNumber(request.getPhoneNumber());
+        Optional<User> existingStudent = userRepository.findByPhoneNumber(phoneNumber);
+
+        User studentUser;
 
         if (existingStudent.isPresent()) {
             studentUser = existingStudent.get();
@@ -67,23 +69,27 @@ public class StudentService {
             if (studentUser.getRole() != Role.STUDENT) {
                 throw new BadRequestException("User is not a STUDENT");
             }
-            boolean existsMembership = membershipRepository.existsByUserIdAndCenterId(studentUser.getId(), centerId);
+            boolean membership = membershipRepository.existsByUserIdAndCenterId(studentUser.getId(), centerId);
 
-            if (!existsMembership) {
+            if (!membership) {
                 createMembership(studentUser, center, currentUser);
             }
-        }  else {
+        } else {
+
             temporaryPassword = generateTemporaryPassword();
-            studentUser = new User();
-            studentUser.setPhoneNumber(request.getPhoneNumber());
-            studentUser.setEmail(normalizeOptionalEmail(request.getEmail()));
-            studentUser.setFullName(request.getFullName());
-            studentUser.setRole(Role.STUDENT);
-            studentUser.setPassword(passwordEncoder.encode(temporaryPassword));
-            studentUser = userRepository.save(studentUser);
+
+            studentUser = createStudent(
+                    phoneNumber,
+                    email,
+                    fullName,
+                    temporaryPassword
+            );
+
             createMembership(studentUser, center, currentUser);
         }
+
         return toResponse(studentUser, centerId, temporaryPassword);
+
     }
 
     // Update
@@ -100,43 +106,46 @@ public class StudentService {
 
         User student = membership.getUser();
 
-        String phoneNumber = request.getPhoneNumber();
+        String phoneNumber = request.getPhoneNumber().trim();
         String email = normalizeOptionalEmail(request.getEmail());
         String fullName = request.getFullName().trim();
 
-        if (student.getPhoneNumber().equals(phoneNumber) || student.getEmail().equals(email) || student.getFullName().equals(fullName)) {
-            throw new BadRequestException("The updated information is a duplicate of the current information");
+        if (!student.getPhoneNumber().equals(phoneNumber)
+            && userRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new DuplicateResourceException("Phone number already exists");
         }
 
-        if (userRepository.existsByPhoneNumber(phoneNumber)) {
-            throw new BadRequestException("Phone number is already exists");
-        }
-        if (email != null && !email.equals(student.getEmail()) && userRepository.existsByEmail(email)) {
-            throw new BadRequestException("Email already exists");
+        if (email != null
+            && !email.equals(student.getEmail())
+            && userRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException("Email already exists");
         }
 
         student.setPhoneNumber(phoneNumber);
         student.setEmail(email);
         student.setFullName(fullName);
 
-        student = userRepository.save(student);
+        User savedStudent = userRepository.save(student);
 
-        return toResponse(student, centerId, null);
+        return toResponse(savedStudent, centerId, null);
     }
 
     // Bulk Crate
     @Transactional
     public List<BulkStudentResult> bulkCreate(@NonNull BulkStudentRequest request) {
+
         if (request.getStudents() == null || request.getStudents().isEmpty()) {
             throw new BadRequestException("Students list must not be empty");
         }
 
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
         Center center = centerRepository.findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
 
-        assertOwnerAndCenterMembership(currentUser, centerId);
 
         List<BulkStudentError> errors = new ArrayList<>();
 
@@ -148,57 +157,49 @@ public class StudentService {
             int row = i + 1;
 
             if (item.getPhoneNumber() == null || item.getPhoneNumber().isBlank()
-                    || item.getFullName() == null || item.getFullName().isBlank()) {
-
-                BulkStudentError error = new BulkStudentError();
-                error.setRow(row);
-                error.setPhoneNumber(item.getPhoneNumber());
-                error.setStatus("INVALID_INPUT");
-                error.setMessage("Phone number and full name are required");
-
-                errors.add(error);
+                || item.getFullName() == null || item.getFullName().isBlank()) {
+                errors.add(buildBulkError(
+                        row,
+                        item.getPhoneNumber(),
+                        "INVALID_INPUT",
+                        "Phone number and full name are required"
+                ));
                 continue;
             }
 
             String phoneNumber = item.getPhoneNumber().trim();
+            String email = normalizeOptionalEmail(item.getEmail());
 
             if (!seenPhoneNumbers.add(phoneNumber)) {
-                BulkStudentError error = new BulkStudentError();
-                error.setRow(row);
-                error.setPhoneNumber(item.getPhoneNumber());
-                error.setStatus("INVALID_INPUT");
-                error.setMessage("Duplicate phone number in request");
-
-                errors.add(error);
+                errors.add(buildBulkError(
+                        row,
+                        phoneNumber,
+                        "INVALID_INPUT",
+                        "Duplicate phone number in request"
+                ));
                 continue;
             }
 
-            if (item.getEmail() != null && !item.getEmail().isBlank()
-                    && userRepository.existsByEmail(item.getEmail())) {
-
-                BulkStudentError error = new BulkStudentError();
-                error.setRow(row);
-                error.setPhoneNumber(item.getPhoneNumber());
-                error.setStatus("INVALID_INPUT");
-                error.setMessage("Email already exists");
-
-                errors.add(error);
+            if (email != null && userRepository.existsByEmail(email)) {
+                errors.add(buildBulkError(
+                        row,
+                        phoneNumber,
+                        "INVALID_INPUT",
+                        "Email already exists"
+                ));
                 continue;
             }
 
             var existingUser = userRepository.findByPhoneNumber(phoneNumber);
             if (existingUser.isPresent() && existingUser.get().getRole() != Role.STUDENT) {
-
-                BulkStudentError error = new BulkStudentError();
-                error.setRow(row);
-                error.setPhoneNumber(item.getPhoneNumber());
-                error.setStatus("ROLE_CONFLICT");
-                error.setMessage("Existing user role is not STUDENT");
-
-                errors.add(error);
+                errors.add(buildBulkError(
+                        row,
+                        phoneNumber,
+                        "ROLE_CONFLICT",
+                        "Exists user role is not STUDENT"
+                ));
             }
         }
-
 
         if (!errors.isEmpty()) {
             throw new BulkStudentValidationException(errors);
@@ -283,13 +284,26 @@ public class StudentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(currentUser.getId(), centerId, Role.STUDENT)
+                .findByUserIdAndCenterIdAndUserRole(studentId, centerId, Role.STUDENT)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in this center"));
 
         membershipRepository.delete(membership);
     }
 
     // HELPER
+    // Create student
+    private User createStudent(String phoneNumber, String email, String fullName, String password) {
+        User studentUser = new User();
+
+        studentUser.setPhoneNumber(phoneNumber);
+        studentUser.setEmail(email);
+        studentUser.setFullName(fullName);
+        studentUser.setRole(Role.STUDENT);
+        studentUser.setPassword(passwordEncoder.encode(password));
+
+        return userRepository.save(studentUser);
+    }
+    // Create membership
     private void createMembership(User studentUser, Center center, User joinedByUser) {
         Membership membership = new Membership();
         membership.setUser(studentUser);
@@ -298,6 +312,23 @@ public class StudentService {
         membershipRepository.save(membership);
     }
 
+    // Build bulk error
+    private BulkStudentError buildBulkError(
+            int row,
+            String phoneNumber,
+            String status,
+            String message
+    ) {
+        BulkStudentError error = new BulkStudentError();
+        error.setRow(row);
+        error.setPhoneNumber(phoneNumber);
+        error.setStatus(status);
+        error.setMessage(message);
+
+        return error;
+    }
+
+    // Generate temporary password
     private String generateTemporaryPassword() {
         int length = 8 + SECURE_RANDOM.nextInt(3);
         StringBuilder password = new StringBuilder(length);
@@ -308,6 +339,7 @@ public class StudentService {
         return password.toString();
     }
 
+    // Assert owner and center membership
     private void assertOwnerAndCenterMembership(User currentUser, Long centerId) {
         if (currentUser.getRole() != Role.OWNER) {
             throw new AccessDeniedException("Only OWNER can add student to center");
@@ -319,13 +351,23 @@ public class StudentService {
         }
     }
 
+    // Get current user
     private User getCurrentUser() {
-        String phone = SecurityContextHolder.getContext().getAuthentication().getName();
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        return userRepository.findByPhoneNumber(phone)
+        if (authentication == null
+            || !authentication.isAuthenticated()
+            || "anonymousUser".equals(authentication.getName()) ) {
+            throw new AccessDeniedException("User is not authenticated");
+        }
+
+        String phoneNumber = authentication.getName();
+
+        return userRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
     }
 
+    // Required current centerId
     private Long requiredCurrentCenterId() {
         Long centerId = TenantFilter.getCurrentCenterId();
         if (centerId == null) {
@@ -334,6 +376,7 @@ public class StudentService {
         return centerId;
     }
 
+    // Normalize optional email
     private String normalizeOptionalEmail(String email) {
         if (email == null) {
             return null;
@@ -343,6 +386,7 @@ public class StudentService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    // To response
     private StudentResponse toResponse(User user, Long centerId, String temporaryPassword) {
         return StudentResponse.builder()
                 .userId(user.getId())
