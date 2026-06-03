@@ -32,7 +32,10 @@ public class CenterService {
     // CREATE
     @Transactional
     public CenterResponse create(CenterRequest request) {
-        if (centerRepository.existsBySubdomain(request.getSubdomain())) {
+
+        String subdomain = request.getSubdomain().trim().toLowerCase();
+
+        if (centerRepository.existsBySubdomain(subdomain)) {
             throw new DuplicateResourceException(
                     "Subdomain already exists: " + request.getSubdomain()
             );
@@ -45,8 +48,8 @@ public class CenterService {
         }
 
         Center center = new Center();
-        center.setName(request.getName());
-        center.setSubdomain(request.getSubdomain());
+        center.setName(request.getName().trim());
+        center.setSubdomain(subdomain);
         center.setOwner(owner);
 
         Center savedCenter = centerRepository.save(center);
@@ -70,7 +73,6 @@ public class CenterService {
     // FIND ALL
     @Transactional(readOnly = true)
     public List<CenterResponse> findAll() {
-
         User owner = getCurrentUser();
 
         if (owner.getRole() != Role.OWNER) {
@@ -85,9 +87,12 @@ public class CenterService {
     // FIND BY ID
     @Transactional(readOnly = true)
     public CenterResponse findById(Long id) {
+        User currentUser = getCurrentUser();
+
         Center center = centerRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Center not found with id: " + id));
+        assertOwnerOfCenter(currentUser, center);
 
         return toResponse(center);
     }
@@ -95,12 +100,18 @@ public class CenterService {
     // UPDATE
     @Transactional
     public CenterResponse update(Long id, CenterRequest request) {
+        User currentUser = getCurrentUser();
 
         Center center = centerRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Center not found with id: " + id));
 
-        centerRepository.findBySubdomain(request.getSubdomain())
+        assertOwnerOfCenter(currentUser, center);
+
+        String newName = request.getName().trim();
+        String newSubdomain = request.getSubdomain().toLowerCase();
+
+        centerRepository.findBySubdomain(newSubdomain)
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
                     throw new DuplicateResourceException(
@@ -108,24 +119,49 @@ public class CenterService {
                     );
                 });
 
-        center.setName(request.getName());
-        center.setSubdomain(request.getSubdomain());
+        center.setName(newName);
+        center.setSubdomain(newSubdomain);
 
-        return toResponse(centerRepository.save(center));
+        Center savedCenter = centerRepository.save(center);
+
+        return toResponse(savedCenter);
     }
 
     // DELETE
     @Transactional
-    public CenterResponse delete(Long id) {
+    public void delete(Long id) {
+        User currentUser = getCurrentUser();
+
         Center center = centerRepository.findById(id)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Center not found with id: " + id));
 
+        assertOwnerOfCenter(currentUser, center);
+
         centerRepository.delete(center);
-        return toResponse(center);
+    }
+    // HELPER
+    // Assert owner of center
+    private void assertOwnerOfCenter(User currentUser, Center center) {
+        if (currentUser.getRole() != Role.OWNER) {
+            throw new AccessDeniedException("Only OWNER can manage center");
+        }
+        if (!center.getOwner().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You do not own this center");
+        }
+    }
+    // Get current user
+    private User getCurrentUser() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getName())) {
+            throw new ResourceNotFoundException("Authentication not found");
+        }
+        return userRepository.findByPhoneNumber(authentication.getName())
+                .orElseThrow( () -> new ResourceNotFoundException("User not found"));
     }
 
-    // HELPER
+    // To response
     private CenterResponse toResponse(Center center) {
         return CenterResponse.builder()
                 .id(center.getId())
@@ -135,13 +171,5 @@ public class CenterService {
                 .build();
     }
 
-    private User getCurrentUser() {
-        var authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication == null) {
-            throw new ResourceNotFoundException("Authentication not found");
-        }
-        return userRepository.findByPhoneNumber(authentication.getName())
-                .orElseThrow( () -> new ResourceNotFoundException("User not found"));
-    }
 }
