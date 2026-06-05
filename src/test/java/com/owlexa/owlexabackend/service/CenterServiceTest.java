@@ -12,6 +12,7 @@ import com.owlexa.owlexabackend.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 import java.util.List;
 
@@ -97,5 +99,26 @@ class CenterServiceTest {
         assertThat(response.getName()).isEqualTo("Owlexa VSTEP");
         assertThat(response.getSubdomain()).isEqualTo("owlexa-hcm");
         assertThat(response.getCreatedAt()).isNotNull();
+
+        ArgumentCaptor<Center> centerCaptor = ArgumentCaptor.forClass(Center.class);
+
+        verify(centerRepository).save(centerCaptor.capture());
+
+        Center savedCenter = centerCaptor.getValue();
+
+        assertThat(savedCenter.getName()).isEqualTo("Owlexa VSTEP");
+        assertThat(savedCenter.getSubdomain()).isEqualTo("owlexa-hcm");
+        assertThat(savedCenter.getOwner()).isEqualTo(owner);
+
+        ArgumentCaptor<Membership> membershipCaptor = ArgumentCaptor.forClass(Membership.class);
+
+        verify(membershipRepository).save(membershipCaptor.capture());
+
+        Membership savedMembership = membershipCaptor.getValue();
+
+        assertThat(savedMembership.getUser()).isEqualTo(owner);
+        assertThat(savedMembership.getCenter().getId()).isEqualTo(10L);
+        assertThat(savedMembership.getJoinedByUser()).isEqualTo(owner);
+        assertThat(savedMembership.getJoinedAt()).isNotNull();
     }
 }
