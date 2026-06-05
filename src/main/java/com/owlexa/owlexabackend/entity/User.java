@@ -35,6 +35,4 @@ public class User {
     @Column(name = "refresh_token_expiry_at")
     private LocalDateTime refreshTokenExpiredAt;
 
-    public boolean getRefreshTokenExpireA() {
-    }
 }
