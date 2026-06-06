@@ -19,12 +19,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import org.springframework.security.access.AccessDeniedException;
+import com.owlexa.owlexabackend.exception.DuplicateResourceException;
+
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 
 import java.util.List;
 
@@ -77,7 +83,7 @@ class CenterServiceTest {
                 .thenReturn(false);
 
         when(userRepository.findByPhoneNumber("0901234567"))
-                .thenReturn(java.util.Optional.of(owner));
+                .thenReturn(Optional.of(owner));
 
         when(centerRepository.save(any(Center.class)))
                 .thenAnswer(invocation -> {
@@ -121,4 +127,52 @@ class CenterServiceTest {
         assertThat(savedMembership.getJoinedByUser()).isEqualTo(owner);
         assertThat(savedMembership.getJoinedAt()).isNotNull();
     }
+
+    @Test
+    void create_whenCurrentUserIsNotOwner_shouldThrowAccessDeniedException() {
+        loginAs("0901234567");
+
+        User student = new User();
+        student.setId(1L);
+        student.setPhoneNumber("0901234567");
+        student.setFullName("Nguyen Van A");
+        student.setEmail("student@example.com");
+        student.setRole(Role.STUDENT);
+
+        CenterRequest request = CenterRequest.builder()
+                .name("Owlexa VSTEP")
+                .subdomain("owlexa-hcm")
+                .build();
+
+        when(centerRepository.existsBySubdomain("owlexa-hcm"))
+                .thenReturn(false);
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(Optional.of(student));
+        assertThatThrownBy(() -> centerService.create(request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Only OWNER can create center");
+
+        verify(centerRepository, never()).save(any(Center.class));
+        verify(membershipRepository, never()).save(any(Membership.class));
+    }
+
+    @Test
+    void create_whenSubdomainAlreadyExists_shouldThrowDuplicateResourceException() {
+        CenterRequest request = CenterRequest.builder()
+                .name("Owlexa VSTEP")
+                .subdomain("owlexa-hcm")
+                .build();
+
+        when(centerRepository.existsBySubdomain("owlexa-hcm"))
+                .thenReturn(true);
+        assertThatThrownBy(() -> centerService.create(request))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("Subdomain already exists");
+
+        verify(userRepository, never()).findByPhoneNumber(any());
+        verify(centerRepository, never()).save(any(Center.class));
+        verify(membershipRepository, never()).save(any(Membership.class));
+    }
+
+
 }
