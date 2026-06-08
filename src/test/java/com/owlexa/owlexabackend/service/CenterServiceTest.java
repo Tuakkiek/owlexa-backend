@@ -174,5 +174,202 @@ class CenterServiceTest {
         verify(membershipRepository, never()).save(any(Membership.class));
     }
 
+    @Test
+    void findAll_whenCurrentUserIsOwner_shouldReturnOwnerCenters() {
+        loginAs("0901234567");
 
+        User owner = new User();
+        owner.setId(1L);
+        owner.setPhoneNumber("0901234567");
+        owner.setFullName("Owner A");
+        owner.setRole(Role.OWNER);
+
+        Center center1 = new Center();
+        center1.setId(10L);
+        center1.setName("Owlexa HCM");
+        center1.setSubdomain("owlexa-hcm");
+        center1.setOwner(owner);
+        center1.setCreatedAt(Instant.now());
+
+        Center center2 = new Center();
+        center2.setId(11L);
+        center2.setName("Owlexa Hanoi");
+        center2.setSubdomain("owlexa-hanoi");
+        center2.setOwner(owner);
+        center2.setCreatedAt(Instant.now());
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(java.util.Optional.of(owner));
+
+        when(centerRepository.findAllByOwnerId(1L))
+                .thenReturn(java.util.List.of(center1, center2));
+
+        java.util.List<CenterResponse> responses = centerService.findAll();
+
+        assertThat(responses).hasSize(2);
+
+        assertThat(responses.get(0).getId()).isEqualTo(10L);
+        assertThat(responses.get(0).getName()).isEqualTo("Owlexa HCM");
+        assertThat(responses.get(0).getSubdomain()).isEqualTo("owlexa-hcm");
+
+        assertThat(responses.get(1).getId()).isEqualTo(11L);
+        assertThat(responses.get(1).getName()).isEqualTo("Owlexa Hanoi");
+        assertThat(responses.get(1).getSubdomain()).isEqualTo("owlexa-hanoi");
+    }
+
+    @Test
+    void findById_whenCurrentUserOwnsCenter_shouldReturnCenter() {
+        loginAs("0901234567");
+
+        User owner = new User();
+        owner.setId(1L);
+        owner.setFullName("Nguyen Van A");
+        owner.setPhoneNumber("0901234567");
+        owner.setRole(Role.OWNER);
+
+        Center center = new Center();
+        center.setId(10L);
+        center.setOwner(owner);
+        center.setName("Owlexa HCM");
+        center.setSubdomain("owlexa-hcm");
+        center.setCreatedAt(Instant.now());
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(Optional.of(owner));
+        when(centerRepository.findById(10L))
+                .thenReturn(Optional.of(center));
+
+        CenterResponse response = centerService.findById(10L);
+
+        assertThat(response.getId()).isEqualTo(10L);
+        assertThat(response.getName()).isEqualTo("Owlexa HCM");
+        assertThat(response.getSubdomain()).isEqualTo("owlexa-hcm");
+        assertThat(response.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void findById_whenCurrentUserDoesNotOwnCenter_shouldThrowAccessDeniedException() {
+        loginAs("0901234567");
+
+        User currentOwner = new User();
+        currentOwner.setId(1L);
+        currentOwner.setPhoneNumber("0901234567");
+        currentOwner.setFullName("Owner A");
+        currentOwner.setRole(Role.OWNER);
+
+        User otherOwner = new User();
+        otherOwner.setId(2L);
+        otherOwner.setPhoneNumber("0987654321");
+        otherOwner.setFullName("Owner B");
+        otherOwner.setRole(Role.OWNER);
+
+        Center center = new Center();
+        center.setId(10L);
+        center.setName("Other Center");
+        center.setSubdomain("other-center");
+        center.setOwner(otherOwner);
+        center.setCreatedAt(Instant.now());
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(Optional.of(currentOwner));
+
+        when(centerRepository.findById(10L))
+                .thenReturn(Optional.of(center));
+
+        assertThatThrownBy(() -> centerService.findById(10L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You do not own this center");
+    }
+
+    @Test
+    void update_whenCurrentUserOwnsCenter_shouldUpdateCenter() {
+        loginAs("0901234567");
+
+        User owner = new User();
+        owner.setId(1L);
+        owner.setPhoneNumber("0901234567");
+        owner.setFullName("Owner A");
+        owner.setRole(Role.OWNER);
+
+        Center existingCenter = new Center();
+        existingCenter.setId(10L);
+        existingCenter.setName("Old Name");
+        existingCenter.setSubdomain("old-subdomain");
+        existingCenter.setOwner(owner);
+        existingCenter.setCreatedAt(Instant.now());
+
+        CenterRequest request = CenterRequest.builder()
+                .name(" New Owlexa Name ")
+                .subdomain(" New-Subdomain ")
+                .build();
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(java.util.Optional.of(owner));
+
+        when(centerRepository.findById(10L))
+                .thenReturn(java.util.Optional.of(existingCenter));
+
+        when(centerRepository.findBySubdomain("new-subdomain"))
+                .thenReturn(java.util.Optional.empty());
+
+        when(centerRepository.save(any(Center.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CenterResponse response = centerService.update(10L, request);
+
+        assertThat(response.getId()).isEqualTo(10L);
+        assertThat(response.getName()).isEqualTo("New Owlexa Name");
+        assertThat(response.getSubdomain()).isEqualTo("new-subdomain");
+
+        ArgumentCaptor<Center> centerCaptor = ArgumentCaptor.forClass(Center.class);
+
+        verify(centerRepository).save(centerCaptor.capture());
+
+        Center savedCenter = centerCaptor.getValue();
+
+        assertThat(savedCenter.getName()).isEqualTo("New Owlexa Name");
+        assertThat(savedCenter.getSubdomain()).isEqualTo("new-subdomain");
+        assertThat(savedCenter.getOwner()).isEqualTo(owner);
+    }
+
+    @Test
+    void update_whenCurrentUserDoesNotOwnCenter_shouldThrowAccessDeniedException() {
+        loginAs("0901234567");
+
+        User currentOwner = new User();
+        currentOwner.setId(1L);
+        currentOwner.setPhoneNumber("0901234567");
+        currentOwner.setFullName("Owner A");
+        currentOwner.setRole(Role.OWNER);
+
+        User otherOwner = new User();
+        otherOwner.setId(2L);
+        otherOwner.setPhoneNumber("0987654321");
+        otherOwner.setFullName("Owner B");
+        otherOwner.setRole(Role.OWNER);
+
+        Center existingCenter = new Center();
+        existingCenter.setId(10L);
+        existingCenter.setName("Other Center");
+        existingCenter.setSubdomain("other-center");
+        existingCenter.setOwner(otherOwner);
+        existingCenter.setCreatedAt(Instant.now());
+
+        CenterRequest request = CenterRequest.builder()
+                .name("New Name")
+                .subdomain("new-subdomain")
+                .build();
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(java.util.Optional.of(currentOwner));
+
+        when(centerRepository.findById(10L))
+                .thenReturn(java.util.Optional.of(existingCenter));
+
+        assertThatThrownBy(() -> centerService.update(10L, request))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You do not own this center");
+
+        verify(centerRepository, never()).save(any(Center.class));
+    }
 }
