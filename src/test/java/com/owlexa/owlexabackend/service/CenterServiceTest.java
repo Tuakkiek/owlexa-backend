@@ -27,10 +27,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.*;
 
 import java.util.List;
 
@@ -334,6 +332,7 @@ class CenterServiceTest {
 
     @Test
     void update_whenCurrentUserDoesNotOwnCenter_shouldThrowAccessDeniedException() {
+
         loginAs("0901234567");
 
         User currentOwner = new User();
@@ -359,12 +358,11 @@ class CenterServiceTest {
                 .name("New Name")
                 .subdomain("new-subdomain")
                 .build();
-
         when(userRepository.findByPhoneNumber("0901234567"))
-                .thenReturn(java.util.Optional.of(currentOwner));
+                .thenReturn(Optional.of(currentOwner));
 
         when(centerRepository.findById(10L))
-                .thenReturn(java.util.Optional.of(existingCenter));
+                .thenReturn(Optional.of(existingCenter));
 
         assertThatThrownBy(() -> centerService.update(10L, request))
                 .isInstanceOf(AccessDeniedException.class)
@@ -372,4 +370,65 @@ class CenterServiceTest {
 
         verify(centerRepository, never()).save(any(Center.class));
     }
+    @Test
+    void delete_whenCurrentUserDoesNotOwnCenter_shouldThrowAccessDeniedException() {
+        loginAs("0901234567");
+
+        User currentOwner = new User();
+        currentOwner.setId(1L);
+        currentOwner.setPhoneNumber("0901234567");
+        currentOwner.setFullName("Owner A");
+        currentOwner.setRole(Role.OWNER);
+
+        User otherOwner = new User();
+        otherOwner.setId(2L);
+        otherOwner.setPhoneNumber("0987654321");
+        otherOwner.setFullName("Owner B");
+        otherOwner.setRole(Role.OWNER);
+
+        Center existingCenter = new Center();
+        existingCenter.setId(10L);
+        existingCenter.setName("Other Center");
+        existingCenter.setSubdomain("other-center");
+        existingCenter.setOwner(otherOwner);
+        existingCenter.setCreatedAt(Instant.now());
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(Optional.of(currentOwner));
+
+        when(centerRepository.findById(10L))
+                .thenReturn(Optional.of(existingCenter));
+
+        assertThatThrownBy(() -> centerService.delete(10L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You do not own this center");
+
+        verify(centerRepository, never()).delete(any(Center.class));
+    }
+//
+//    @Test
+//    void delete_whenCurrentUserOwnerCenter_shouldDeleteCenter() {
+//        loginAs("0901234567");
+//
+//        User currentOwner = new User();
+//        currentOwner.setId(1L);
+//        currentOwner.setPhoneNumber("0901234567");
+//        currentOwner.setFullName("Owner A");
+//        currentOwner.setRole(Role.OWNER);
+//
+//        Center existingCenter = new Center();
+//        existingCenter.setId(10L);
+//        existingCenter.setName("Other Center");
+//        existingCenter.setSubdomain("other-center");
+//        existingCenter.setOwner(currentOwner);
+//        existingCenter.setCreatedAt(Instant.now());
+//
+//        when(userRepository.findByPhoneNumber("0901234567"))
+//                .thenReturn(Optional.of(currentOwner));
+//
+//        when(centerRepository.findById(10L))
+//                .thenReturn(Optional.of(existingCenter));
+//
+//        verify(centerRepository, atLeast(1)).delete(any(Center.class));
+//    }
 }
