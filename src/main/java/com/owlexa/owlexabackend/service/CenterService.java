@@ -109,7 +109,9 @@ public class CenterService {
         assertOwnerOfCenter(currentUser, center);
 
         String newName = request.getName().trim();
-        String newSubdomain = request.getSubdomain().toLowerCase();
+        String newSubdomain = request.getSubdomain()
+                .trim()
+                .toLowerCase();
 
         centerRepository.findBySubdomain(newSubdomain)
                 .filter(existing -> !existing.getId().equals(id))

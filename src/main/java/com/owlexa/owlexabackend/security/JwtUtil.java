@@ -62,8 +62,8 @@ public class JwtUtil {
     // Check if it's refresh token
     public boolean isRefreshToken(String token) {
         String tokenType = extractTokenType(token);
-        
-        if (tokenType.equals("refresh")) {
+
+        if(tokenType.equals("refresh")) {
             return true;
         }
 
