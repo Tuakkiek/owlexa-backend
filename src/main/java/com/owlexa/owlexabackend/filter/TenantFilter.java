@@ -45,4 +45,12 @@ public class TenantFilter extends OncePerRequestFilter {
     public static Long getCurrentCenterId() {
         return currentCenterId.get();
     }
+
+    public static void clearCurrentCenterId() {
+        currentCenterId.remove();
+    }
+
+    public static void setCurrentCenterIdForTest(Long centerId) {
+        currentCenterId.set(centerId);
+    }
 }
