@@ -6,6 +6,8 @@ import com.owlexa.owlexabackend.entity.Center;
 import com.owlexa.owlexabackend.entity.Membership;
 import com.owlexa.owlexabackend.entity.Role;
 import com.owlexa.owlexabackend.entity.User;
+import com.owlexa.owlexabackend.exception.BadRequestException;
+import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.filter.TenantFilter;
 import com.owlexa.owlexabackend.repository.CenterRepository;
 import com.owlexa.owlexabackend.repository.MembershipRepository;
@@ -218,6 +220,55 @@ public class StudentServiceTest {
         verify(membershipRepository, never()).save(any(Membership.class));
     }
 
+    @Test
+    void create_whenExistingUserIsNotStudent_shouldThrowBadRequestException() {
+        loginAs("0901234567");
+        setCurrentCenterId(10L);
+
+        User owner = user(1L, "0901234567", Role.OWNER);
+        User teacher = user(100L, "0987654321", Role.TEACHER);
+        Center center = center(10L, "Owlexa HCM", "owlexa-hcm", owner);
+
+        when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
+        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L)).thenReturn(true);
+        when(centerRepository.findById(10L)).thenReturn(Optional.of(center));
+        when(userRepository.findByPhoneNumber("0987654321")).thenReturn(Optional.of(teacher));
+
+        StudentRequest request = request("Nguyen Van A", "student@example.com", "0987654321");
+
+        assertThatThrownBy(() -> studentService.create(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("User is not a STUDENT");
+
+        verify(userRepository, never()).save(any(User.class));
+        verify(membershipRepository, never()).save(any(Membership.class));
+    }
+
+    @Test
+    void create_whenCenterNotFound_shouldThrowResourceNotFoundException() {
+        loginAs("0901234567");
+        setCurrentCenterId(10L);
+
+        User owner = user(1L, "0901234567", Role.OWNER);
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(Optional.of(owner));
+        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L))
+                .thenReturn(true);
+        when(centerRepository.findById(10L))
+                .thenReturn(Optional.empty());
+
+        StudentRequest request = request("Nguyen Tuan Kiet", "student@examle.com", "0987654321");
+
+        assertThatThrownBy(() -> studentService.create(request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Center not found with id: 10");
+
+        verify(userRepository, never()).save(any(User.class));
+        verify(membershipRepository, never()).save(any(Membership.class));
+    }
+
 
 
 }
+
