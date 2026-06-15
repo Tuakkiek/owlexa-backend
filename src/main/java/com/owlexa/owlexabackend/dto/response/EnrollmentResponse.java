@@ -17,7 +17,7 @@ public class EnrollmentResponse {
     private Long classId;
     private Long centerId;
 
-    private Long studentId;
+    private Long studentUserId;
     private String studentPhoneNumber;
     private String studentFullName;
 
