@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.repository;
 
 import com.owlexa.owlexabackend.entity.ClassEnrollment;
+import com.owlexa.owlexabackend.entity.EnrollmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -8,7 +9,7 @@ import java.util.Optional;
 
 public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment, Long> {
 
-    List<ClassEnrollment> findAllByClazzId(Long classId);
+    List<ClassEnrollment> findAllByClazzIdAndStatus(Long classId, EnrollmentStatus status);
 
     List<ClassEnrollment> findAllByClazzIdAndCenterId(Long clazzId, Long centerId);
 
@@ -16,5 +17,5 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
     boolean existsByClazzIdAndStudentUserId(Long clazzId, Long studentUserId);
 
-    long countByClazzId(Long classId);
+    long countByClazzIdAndStatus(Long classId, EnrollmentStatus status);
 }

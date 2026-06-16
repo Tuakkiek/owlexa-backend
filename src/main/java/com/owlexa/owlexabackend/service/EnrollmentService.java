@@ -15,6 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class EnrollmentService {
@@ -53,22 +55,103 @@ public class EnrollmentService {
             throw new DuplicateResourceException("Student is already exists in this class");
         }
 
-        long currentEnrollmentCount = classEnrollmentRepository.countByClazzId(classId);
-        if (currentEnrollmentCount >= clazz.getMaxStudents()) {
+        long activeEnrollmentCount = classEnrollmentRepository.countByClazzIdAndStatus(
+                classId, EnrollmentStatus.ACTIVE
+        );
+
+        if (activeEnrollmentCount >= clazz.getMaxStudents()) {
             throw new BadRequestException("Class is full");
         }
 
-        Center center = centerRepository.findById(centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
+        var existingEnrollment = classEnrollmentRepository.findByClazzIdAndStudentUserId(classId, student.getId());
 
-        ClassEnrollment enrollment = ClassEnrollment.builder()
-                .clazz(clazz)
-                .studentUser(student)
-                .center(center)
-                .enrolledByUser(currentUser)
-                .build();
+        ClassEnrollment enrollment;
+        if (existingEnrollment.isPresent()) {
+            enrollment = existingEnrollment.get();
 
-        return toResponse(classEnrollmentRepository.save(enrollment));
+            if (enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
+                throw new DuplicateResourceException("Student is already enrolled in this class");
+            }
+
+            enrollment.setStatus(EnrollmentStatus.ACTIVE);
+            enrollment.setEnrolledByUser(currentUser);
+        } else {
+            enrollment = ClassEnrollment.builder()
+                    .clazz(clazz)
+                    .studentUser(student)
+                    .center(clazz.getCenter())
+                    .enrolledByUser(currentUser)
+                    .status(EnrollmentStatus.ACTIVE)
+                    .build();
+        }
+
+        enrollment = classEnrollmentRepository.save(enrollment);
+        return toResponse(enrollment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EnrollmentResponse> findAllByClass(Long classId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertCenterMembership(currentUser, centerId);
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new AccessDeniedException("You do not have permission to manage to view this class");
+        }
+
+        return classEnrollmentRepository.findAllByClazzIdAndStatus(classId, EnrollmentStatus.ACTIVE)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public void drop (Long classId, Long studentUserId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+        if(!clazz.getCenter().getId().equals(centerId)) {
+            throw new AccessDeniedException("You do not have permission to manage this class");
+        }
+
+        ClassEnrollment enrollment = classEnrollmentRepository
+                .findByClazzIdAndStudentUserId(classId, studentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Enrollment not found for studentId: " + studentUserId
+                ));
+        if (enrollment.getStatus() == EnrollmentStatus.DROPPED) {
+            return;
+        }
+
+        enrollment.setStatus(EnrollmentStatus.DROPPED);
+        classEnrollmentRepository.save(enrollment);
+    }
+
+    @Transactional
+    public void remove(Long classId, Long studentUserId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+
+        if(!clazz.getCenter().getId().equals(classId)) {
+            throw new AccessDeniedException("You do not permission to manage this class");
+        }
+
+        ClassEnrollment enrollment = classEnrollmentRepository
+                .findByClazzIdAndStudentUserId(classId, studentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found for studentId: " +studentUserId));
+
+        classEnrollmentRepository.delete(enrollment);
     }
 
     // Helper
@@ -82,6 +165,7 @@ public class EnrollmentService {
                 .studentPhoneNumber(enrollment.getStudentUser().getPhoneNumber())
                 .studentFullName(enrollment.getStudentUser().getFullName())
                 .enrollmentByUserId(enrollment.getEnrolledByUser().getId())
+                .status(enrollment.getStatus())
                 .enrolledAt(enrollment.getEnrolledAt())
                 .build();
     }

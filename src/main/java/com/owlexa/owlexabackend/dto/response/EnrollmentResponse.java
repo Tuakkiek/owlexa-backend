@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.dto.response;
 
+import com.owlexa.owlexabackend.entity.EnrollmentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,5 +23,6 @@ public class EnrollmentResponse {
     private String studentFullName;
 
     private Long enrollmentByUserId;
+    private EnrollmentStatus status;
     private Instant enrolledAt;
 }
