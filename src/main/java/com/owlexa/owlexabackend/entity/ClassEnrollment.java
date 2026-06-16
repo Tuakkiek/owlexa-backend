@@ -40,6 +40,11 @@ public class ClassEnrollment {
     @JoinColumn(name = "enrolled_by_user_id", nullable = false)
     private User enrolledByUser;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private EnrollmentStatus status = EnrollmentStatus.ACTIVE;
+
     @CreationTimestamp
     @Column(name = "enrolled_at", nullable = false, updatable = false)
     private Instant enrolledAt;
