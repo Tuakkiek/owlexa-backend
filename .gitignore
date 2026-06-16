@@ -44,3 +44,7 @@ build/
 !**/src/test/**/build/
 
 .vscode/
+
+# Custom ignored files
+owlexa_roadmap.md
+
