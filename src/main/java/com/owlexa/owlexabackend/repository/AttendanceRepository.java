@@ -29,4 +29,6 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
             LocalDate sessionDate,
             AttendanceStatus status
     );
+
+    void deleteByCenterId(Long centerId);
 }

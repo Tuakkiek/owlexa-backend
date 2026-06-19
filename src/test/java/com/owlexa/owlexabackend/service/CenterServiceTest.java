@@ -11,6 +11,11 @@ import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.repository.CenterRepository;
 import com.owlexa.owlexabackend.repository.MembershipRepository;
 import com.owlexa.owlexabackend.repository.UserRepository;
+import com.owlexa.owlexabackend.repository.AttendanceRepository;
+import com.owlexa.owlexabackend.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.repository.ClassRepository;
+import com.owlexa.owlexabackend.repository.FeeRecordRepository;
+import com.owlexa.owlexabackend.repository.ScheduleRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +49,21 @@ class CenterServiceTest {
 
     @Mock
     private MembershipRepository membershipRepository;
+
+    @Mock
+    private AttendanceRepository attendanceRepository;
+
+    @Mock
+    private ClassEnrollmentRepository classEnrollmentRepository;
+
+    @Mock
+    private ClassRepository classRepository;
+
+    @Mock
+    private FeeRecordRepository feeRecordRepository;
+
+    @Mock
+    private ScheduleRepository scheduleRepository;
 
     @InjectMocks
     private CenterService centerService;
