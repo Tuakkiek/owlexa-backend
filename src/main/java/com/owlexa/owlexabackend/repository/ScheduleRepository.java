@@ -19,4 +19,6 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
             java.time.LocalTime startTime,
             Long centerId
     );
+
+    void deleteByCenterId(Long centerId);
 }

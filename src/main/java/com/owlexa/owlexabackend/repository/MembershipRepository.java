@@ -22,5 +22,6 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
             Role userRole
     );
 
+    void deleteByCenterId(Long centerId);
 }
     
