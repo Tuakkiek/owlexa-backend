@@ -11,6 +11,11 @@ import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.repository.CenterRepository;
 import com.owlexa.owlexabackend.repository.MembershipRepository;
 import com.owlexa.owlexabackend.repository.UserRepository;
+import com.owlexa.owlexabackend.repository.AttendanceRepository;
+import com.owlexa.owlexabackend.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.repository.ClassRepository;
+import com.owlexa.owlexabackend.repository.FeeRecordRepository;
+import com.owlexa.owlexabackend.repository.ScheduleRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,6 +33,11 @@ public class CenterService {
     private final CenterRepository centerRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final ClassEnrollmentRepository classEnrollmentRepository;
+    private final ClassRepository classRepository;
+    private final FeeRecordRepository feeRecordRepository;
+    private final ScheduleRepository scheduleRepository;
 
     // CREATE
     @Transactional
@@ -139,6 +149,13 @@ public class CenterService {
                         new ResourceNotFoundException("Center not found with id: " + id));
 
         assertOwnerOfCenter(currentUser, center);
+
+        attendanceRepository.deleteByCenterId(id);
+        classEnrollmentRepository.deleteByCenterId(id);
+        feeRecordRepository.deleteByCenterId(id);
+        scheduleRepository.deleteByCenterId(id);
+        classRepository.deleteByCenterId(id);
+        membershipRepository.deleteByCenterId(id);
 
         centerRepository.delete(center);
     }

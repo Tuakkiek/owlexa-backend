@@ -394,6 +394,28 @@
       "item": [
         {
           "name": "Create Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "",
+                  "var teacherUserId = null;",
+                  "if (jsonData) {",
+                  "  teacherUserId = jsonData.userId || jsonData.teacherUserId || (jsonData.data && (jsonData.data.userId || jsonData.data.teacherUserId));",
+                  "}",
+                  "",
+                  "if (teacherUserId) {",
+                  "  pm.collectionVariables.set(\"teacherUserId\", String(teacherUserId));",
+                  "  console.log(\"Saved teacherUserId to collection variables!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
@@ -577,6 +599,60 @@
       "description": "Quản lý thông tin Học sinh (Yêu cầu quyền OWNER).",
       "item": [
         {
+          "name": "Create Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+          "exec": [
+                  "var jsonData = null;",
+                  "try {",
+                  "  jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "  jsonData = null;",
+                  "}",
+                  "",
+                  "var studentUserId = null;",
+                  "if (jsonData) {",
+                  "  studentUserId = jsonData.userId || jsonData.studentUserId || (jsonData.data && (jsonData.data.userId || jsonData.data.studentUserId));",
+                  "}",
+                  "",
+                  "if (studentUserId) {",
+                  "  pm.collectionVariables.set(\"studentUserId\", String(studentUserId));",
+                  "  console.log(\"Saved studentUserId to collection variables!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nguyen Van Student\",\n  \"email\": \"student.single@owlexa.com\",\n  \"phoneNumber\": \"0978901234\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "students"
+              ]
+            },
+            "description": "Thêm một học sinh mới."
+          },
+          "response": []
+        },
+        {
           "name": "Get All Students",
           "request": {
             "method": "GET",
@@ -625,6 +701,529 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Owner - Classes",
+      "description": "Class management APIs for the current center.",
+      "item": [
+        {
+          "name": "Create Class",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "",
+                  "var classId = null;",
+                  "if (jsonData) {",
+                  "  classId = jsonData.id || jsonData.classId || (jsonData.data && (jsonData.data.id || jsonData.data.classId));",
+                  "}",
+                  "",
+                  "if (classId) {",
+                  "  pm.collectionVariables.set(\"classId\", String(classId));",
+                  "  console.log(\"Saved classId to collection variables!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VSTEP B2 Evening\",\n  \"vstepLevel\": \"B2\",\n  \"maxStudent\": 12,\n  \"monthlyFee\": 1500000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes"
+              ]
+            },
+            "description": "Create a class in the active center."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Classes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes"
+              ]
+            },
+            "description": "List all classes in the active center."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Class",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"VSTEP B2 Evening Updated\",\n  \"vstepLevel\": \"B2\",\n  \"maxStudent\": 15,\n  \"monthlyFee\": 1800000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}"
+              ]
+            },
+            "description": "Update class by classId."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Class",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}"
+              ]
+            },
+            "description": "Delete a class by classId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Enrollments",
+      "description": "Manage students inside classes.",
+      "item": [
+        {
+          "name": "Enroll Student",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"studentId\": {{studentUserId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "enrollments"
+              ]
+            },
+            "description": "Enroll a student into a class."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Enrollments By Class",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/enrollments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "enrollments"
+              ]
+            },
+            "description": "List active students in a class."
+          },
+          "response": []
+        },
+        {
+          "name": "Drop Student",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/enrollments/{{studentUserId}}/drop",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "enrollments",
+                "{{studentUserId}}",
+                "drop"
+              ]
+            },
+            "description": "Mark a student as dropped from a class."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Schedules",
+      "description": "Manage class schedules.",
+      "item": [
+        {
+          "name": "Create Schedule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "",
+                  "var scheduleId = null;",
+                  "if (jsonData) {",
+                  "  scheduleId = jsonData.id || jsonData.scheduleId || (jsonData.data && (jsonData.data.id || jsonData.data.scheduleId));",
+                  "}",
+                  "",
+                  "if (scheduleId) {",
+                  "  pm.collectionVariables.set(\"scheduleId\", String(scheduleId));",
+                  "  console.log(\"Saved scheduleId to collection variables!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teacherUserId\": {{teacherUserId}},\n  \"dayOfWeek\": 2,\n  \"startTime\": \"18:30:00\",\n  \"endTime\": \"20:00:00\",\n  \"room\": \"A101\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "schedules"
+              ]
+            },
+            "description": "Create a schedule for a class."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Schedules By Class",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "schedules"
+              ]
+            },
+            "description": "List all schedules of a class."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Schedules By Teacher",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules/teacher/{{teacherUserId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "schedules",
+                "teacher",
+                "{{teacherUserId}}"
+              ]
+            },
+            "description": "List all schedules for a teacher."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Schedule",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teacherUserId\": {{teacherUserId}},\n  \"dayOfWeek\": 3,\n  \"startTime\": \"19:00:00\",\n  \"endTime\": \"20:30:00\",\n  \"room\": \"A102\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules/{{scheduleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "schedules",
+                "{{scheduleId}}"
+              ]
+            },
+            "description": "Update a schedule by scheduleId."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Schedule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules/{{scheduleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "schedules",
+                "{{scheduleId}}"
+              ]
+            },
+            "description": "Delete a schedule."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "description": "Attendance endpoints.",
+      "item": [
+        {
+          "name": "Mark Attendance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionDate\": \"2026-06-19\",\n  \"records\": [\n    {\n      \"studentUserId\": {{studentUserId}},\n      \"status\": \"PRESENT\",\n      \"note\": \"On time\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/attendance/schedules/{{scheduleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance",
+                "schedules",
+                "{{scheduleId}}"
+              ]
+            },
+            "description": "Mark attendance for one class session."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attendance By Schedule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/schedules/{{scheduleId}}?sessionDate=2026-06-19",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attendance",
+                "schedules",
+                "{{scheduleId}}"
+              ],
+              "query": [
+                {
+                  "key": "sessionDate",
+                  "value": "2026-06-19"
+                }
+              ]
+            },
+            "description": "View attendance by schedule and session date."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Fee Records",
+      "description": "Tuition fee endpoints.",
+      "item": [
+        {
+          "name": "Generate Fee Records For Class",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"month\": \"2026-06\",\n  \"dueDate\": \"2026-06-25\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/fee-records/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "fee-records",
+                "generate"
+              ]
+            },
+            "description": "Generate tuition fee records for active students in a class."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Fee Records By Class",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/fee-records?month=2026-06",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "classes",
+                "{{classId}}",
+                "fee-records"
+              ],
+              "query": [
+                {
+                  "key": "month",
+                  "value": "2026-06"
+                }
+              ]
+            },
+            "description": "View fee records by class and month."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Fee Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fee-records/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "fee-records",
+                "me"
+              ]
+            },
+            "description": "Student views their own fee records."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Overdue Fee Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/fee-records/overdue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "owner",
+                "fee-records",
+                "overdue"
+              ]
+            },
+            "description": "View overdue fee records for the center."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "auth": {
@@ -656,7 +1255,7 @@
           "        path = pm.request.url.getPath().join(\"/\");",
           "    }",
           "",
-          "    if (path.indexOf(\"owner/teachers\") === 0 || path.indexOf(\"owner/cashiers\") === 0 || path.indexOf(\"owner/students\") === 0) {",
+          "    if (path.indexOf(\"owner/\") === 0 || path.indexOf(\"attendance\") === 0 || path.indexOf(\"fee-records\") === 0) {",
           "        pm.request.headers.upsert({ key: \"X-Tenant-ID\", value: String(tenantId) });",
           "    }",
           "}"
@@ -696,6 +1295,26 @@
     },
     {
       "key": "tenantId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "classId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teacherUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "scheduleId",
       "value": "",
       "type": "string"
     }
