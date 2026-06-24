@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.repository;
 
 import com.owlexa.owlexabackend.entity.Role;
 import com.owlexa.owlexabackend.entity.User;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -16,5 +17,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     long countByRole(Role role);
+
+    @EntityGraph(attributePaths = {"userPermissions", "userPermission.permisison"})
+    Optional<User> findWithUserPermissionById(Long id);
+
+    @EntityGraph(attributePaths = {"userPermissions", "userPermission.permission"})
+    Optional<User> findWithUserPermissionByPhoneNumber(String phoneNumber);
 
 }

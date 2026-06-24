@@ -1,9 +1,13 @@
 package com.owlexa.owlexabackend.entity;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Entity
 @Table(name = "users")
@@ -29,10 +33,31 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Set<UserPermission> userPermissions = new HashSet<>();
+
     @Column(name = "refresh_token")
     private String refreshToken;
+
 
     @Column(name = "refresh_token_expiry_at")
     private LocalDateTime refreshTokenExpiredAt;
 
+    // Helper
+    public void grantPermission(Permission permission) {
+        UserPermission link = new UserPermission();
+        link.setUser(this);
+        link.setPermission(permission);
+        userPermissions.add(link);
+    }
+
+    public void revokePermission(String permissionCode) {
+        userPermissions.removeIf(link ->
+                link.getPermission() != null
+                        && link.getPermission().getCode() !=null
+                        && link.getPermission().getCode().equalsIgnoreCase(permissionCode)
+        );
+    }
 }
