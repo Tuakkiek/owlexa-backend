@@ -46,14 +46,14 @@ public class User {
     private LocalDateTime refreshTokenExpiredAt;
 
     // Helper
-    private void grantPermission(Permission permission) {
+    public void grantPermission(Permission permission) {
         UserPermission link = new UserPermission();
         link.setUser(this);
         link.setPermission(permission);
         userPermissions.add(link);
     }
 
-    private void revokePermission(String permissionCode) {
+    public void revokePermission(String permissionCode) {
         userPermissions.removeIf(link ->
                 link.getPermission() != null
                         && link.getPermission().getCode() !=null
