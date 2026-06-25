@@ -1,19 +1,26 @@
 package com.owlexa.owlexabackend.filter;
 
+import com.owlexa.owlexabackend.entity.Center;
+import com.owlexa.owlexabackend.repository.CenterRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Optional;
 
 
 @Component
 @Order(1)
 public class TenantFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private CenterRepository centerRepository;
 
     private static final ThreadLocal<Long> currentCenterId = new ThreadLocal<>();
 
@@ -30,10 +37,16 @@ public class TenantFilter extends OncePerRequestFilter {
                 try {
                     currentCenterId.set(Long.parseLong(tenantId));
                 } catch (NumberFormatException e) {
-                    // Header sai format → trả lỗi 400
-                    response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                    response.getWriter().write("Invalid X-Tenant-ID header");
-                    return;
+                    // Nếu không phải là số, coi như là subdomain và tìm trong DB
+                    Optional<Center> centerOpt = centerRepository.findBySubdomain(tenantId.trim().toLowerCase());
+                    if (centerOpt.isPresent()) {
+                        currentCenterId.set(centerOpt.get().getId());
+                    } else if (!"default".equalsIgnoreCase(tenantId.trim())) {
+                        // Nếu không phải default và không tìm thấy Center tương ứng
+                        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                        response.getWriter().write("Center not found for subdomain: " + tenantId);
+                        return;
+                    }
                 }
             }
             chain.doFilter(request, response);
