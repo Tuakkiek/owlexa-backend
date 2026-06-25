@@ -38,13 +38,6 @@ public class User {
     @EqualsAndHashCode.Exclude
     private Set<UserPermission> userPermissions = new HashSet<>();
 
-    @Column(name = "refresh_token")
-    private String refreshToken;
-
-
-    @Column(name = "refresh_token_expiry_at")
-    private LocalDateTime refreshTokenExpiredAt;
-
     // Helper
     public void grantPermission(Permission permission) {
         UserPermission link = new UserPermission();

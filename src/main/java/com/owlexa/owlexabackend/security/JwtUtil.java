@@ -4,73 +4,89 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
 
-    private final String SECRET = "owlexa-secret-key-owlexa-secret-key";
-    private final SecretKey signingKey = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    @Value("${jwt.secret}")
+    private String secret;
 
-    private static final long ACCESS_TOKEN_EXPIRE_MS = 1000 * 60 * 15; // 15 minutes
-    private static final long REFRESH_TOKEN_EXPIRE_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+    @Value("${jwt.access-token-expiration-ms:900000}")
+    private long accessTokenExpirationMs;
 
-    // Generate accessToken
-    public String generateAccessToken(String subject, String role) {
+    @Value("${jwt.refresh-token-expiration-ms:604800000}")
+    private long refreshTokenExpirationMs;
+
+    private SecretKey signingKey;
+
+    @PostConstruct
+    public void init() {
+        signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public String generateAccessToken(String subject, String role, String sessionId) {
         return Jwts.builder()
                 .setSubject(subject)
                 .claim("role", role)
                 .claim("tokenType", "access")
+                .claim("sessionId", sessionId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRE_MS))
+                .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpirationMs))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
-    //Generate refreshToken
-    public String generateRefreshToken(String subject) {
+
+    public String generateRefreshToken(String subject, String sessionId) {
         return Jwts.builder()
                 .setSubject(subject)
                 .claim("tokenType", "refresh")
+                .claim("sessionId", sessionId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRE_MS))
+                .setExpiration(new Date(System.currentTimeMillis() + refreshTokenExpirationMs))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // Extract Subject
     public String extractSubject(String token) {
-        Claims claims = getClaims(token);
-        return claims.getSubject();
+        return getClaims(token).getSubject();
     }
 
-    // Extract Role
     public String extractRole(String token) {
-        Claims claims = getClaims(token);
-        return claims.get("role", String.class);
+        return getClaims(token).get("role", String.class);
     }
 
-    // Extract Token type
     public String extractTokenType(String token) {
-        Claims claims = getClaims(token);
-        return claims.get("tokenType", String.class);
+        return getClaims(token).get("tokenType", String.class);
     }
 
-    // Check if it's refresh token
+    public String extractSessionId(String token) {
+        return getClaims(token).get("sessionId", String.class);
+    }
+
     public boolean isRefreshToken(String token) {
-        String tokenType = extractTokenType(token);
-
-        if(tokenType.equals("refresh")) {
-            return true;
-        }
-
-        return false;
+        return "refresh".equals(extractTokenType(token));
     }
 
-    // Decoding token and get Claims
+    public String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
+    }
+
     private Claims getClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(signingKey)

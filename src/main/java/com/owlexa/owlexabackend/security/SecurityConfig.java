@@ -47,12 +47,19 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers (
+                        .requestMatchers(
                                 "/auth/login",
                                 "/auth/register/student",
                                 "/auth/register/owner",
                                 "/auth/refresh-token"
                         ).permitAll()
+
+                        // Session management — yêu cầu đăng nhập, không phân biệt role
+                        .requestMatchers(
+                                "/auth/logout",
+                                "/auth/sessions",
+                                "/auth/sessions/**"
+                        ).authenticated()
 
                         .requestMatchers("/admin/**").hasAnyAuthority("ADMIN")
                         .requestMatchers("/owner/**").hasAnyAuthority("OWNER")
