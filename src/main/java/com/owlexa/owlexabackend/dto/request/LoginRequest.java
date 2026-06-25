@@ -15,4 +15,8 @@ public class LoginRequest {
 
     @NotBlank(message = "Password is required")
     private String password;
+
+    private String deviceName;
+
+    private String deviceType;
 }

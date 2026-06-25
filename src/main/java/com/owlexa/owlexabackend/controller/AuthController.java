@@ -5,13 +5,16 @@ import com.owlexa.owlexabackend.dto.request.RefreshTokenRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterOwnerRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterStudentRequest;
 import com.owlexa.owlexabackend.dto.response.AuthResponse;
+import com.owlexa.owlexabackend.dto.response.SessionResponse;
 import com.owlexa.owlexabackend.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/auth")
@@ -20,25 +23,56 @@ public class AuthController {
 
     private final AuthService authService;
 
-    // LOGIN
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest body) {
-        return authService.login(body);
+    public AuthResponse login(@Valid @RequestBody LoginRequest body,
+                              HttpServletRequest request) {
+        return authService.login(body, request);
     }
-    // REFRESH TOKEN
+
     @PostMapping("/refresh-token")
     public AuthResponse refreshToken(@RequestBody RefreshTokenRequest body) {
         return authService.refreshToken(body);
     }
-    // REGISTER
-    // Student register
+
     @PostMapping("/register/student")
-    public AuthResponse registerStudent(@Valid @RequestBody RegisterStudentRequest body) {
-            return authService.registerStudent(body);
+    public AuthResponse registerStudent(@Valid @RequestBody RegisterStudentRequest body,
+                                        HttpServletRequest request) {
+        return authService.registerStudent(body, request);
     }
-    // Owner register
+
     @PostMapping("/register/owner")
-    public AuthResponse registerOwner(@Valid @RequestBody RegisterOwnerRequest body) {
-        return authService.registerOwner(body);
+    public AuthResponse registerOwner(@Valid @RequestBody RegisterOwnerRequest body,
+                                      HttpServletRequest request) {
+        return authService.registerOwner(body, request);
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(HttpServletRequest request) {
+        String sessionId = (String) request.getAttribute("currentSessionId");
+        authService.logout(sessionId);
+    }
+
+    @GetMapping("/sessions")
+    public List<SessionResponse> getSessions(HttpServletRequest request) {
+        String phoneNumber    = currentPhoneNumber();
+        String currentSession = (String) request.getAttribute("currentSessionId");
+        return authService.getSessions(phoneNumber, currentSession);
+    }
+
+    @DeleteMapping("/sessions/{sessionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeSession(@PathVariable String sessionId) {
+        authService.revokeSession(currentPhoneNumber(), sessionId);
+    }
+
+    @DeleteMapping("/sessions")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeAllSessions() {
+        authService.revokeAllSessions(currentPhoneNumber());
+    }
+
+    private String currentPhoneNumber() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
     }
 }
