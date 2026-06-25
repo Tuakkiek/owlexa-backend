@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.service;
 
+import com.owlexa.owlexabackend.dto.request.LoginRequest;
 import com.owlexa.owlexabackend.dto.request.RefreshTokenRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterOwnerRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterStudentRequest;
@@ -19,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -31,23 +33,45 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final PermissionRepository permissionRepository;
-
     // LOGIN
-    public AuthResponse login(String phoneNumber, String password) {
-        User user = userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow( () -> new BadRequestException("User not found"));
+    public AuthResponse login(LoginRequest request) {
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
+        String normalizedPhoneNumber = request.getPhoneNumber() == null
+                ? null
+                : request.getPhoneNumber().trim();
+
+        String password = request.getPassword();
+
+        if (normalizedPhoneNumber == null || normalizedPhoneNumber.isBlank()) {
+            throw new BadRequestException("Phone number must not be empty");
+        }
+
+        User user = userRepository.findByPhoneNumber(normalizedPhoneNumber)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        boolean passwordMatches = passwordEncoder.matches(password, user.getPassword());
+        boolean legacyPlainTextMatches = password != null
+                && password.equals(user.getPassword());
+
+        if (!passwordMatches && !legacyPlainTextMatches) {
             throw new BadRequestException("Invalid password");
         }
 
-        String role = user.getRole() != null ? user.getRole().name() : null;
+        // Upgrade legacy plaintext passwords to bcrypt on successful login
+        if (legacyPlainTextMatches && !passwordMatches) {
+            user.setPassword(passwordEncoder.encode(password));
+        }
+
+        String role = user.getRole() != null
+                ? user.getRole().name()
+                : null;
 
         String refreshToken = jwtUtil.generateRefreshToken(user.getPhoneNumber());
         String accessToken = jwtUtil.generateAccessToken(user.getPhoneNumber(), role);
 
         user.setRefreshToken(refreshToken);
-        user.setRefreshTokenExpiredAt(java.time.LocalDateTime.now().plusDays(7));
+        user.setRefreshTokenExpiredAt(LocalDateTime.now().plusDays(7));
+
         userRepository.save(user);
 
         return AuthResponse.builder()
@@ -59,7 +83,6 @@ public class AuthService {
                 .roleName(role)
                 .centerName(null)
                 .build();
-
     }
     // REGISTER STUDENT
     public AuthResponse registerStudent(RegisterStudentRequest request) {
