@@ -47,7 +47,7 @@ public class AuthService {
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional
-    public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
+    public LoginResult login(LoginRequest request, HttpServletRequest httpRequest) {
         String phone = normalizePhone(request.getPhoneNumber());
 
         User user = userRepository.findByPhoneNumber(phone)
@@ -83,7 +83,11 @@ public class AuthService {
 
         sessionRepository.save(session);
 
-        return buildAuthResponse(accessToken, refreshToken, sessionId, user, role);
+        AuthResponse authResponse = buildAuthResponse(accessToken, sessionId, user, role);
+        return LoginResult.builder()
+                .authResponse(authResponse)
+                .refreshToken(refreshToken)
+                .build();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -91,8 +95,7 @@ public class AuthService {
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional
-    public AuthResponse refreshToken(RefreshTokenRequest request) {
-        String token = request.getRefreshToken();
+    public RefreshResult refreshToken(String token) {
         if (token == null || token.isBlank()) {
             throw new BadRequestException("Refresh token must not be empty");
         }
@@ -145,7 +148,12 @@ public class AuthService {
         session.setLastUsedAt(LocalDateTime.now());
         sessionRepository.save(session);
 
-        return buildAuthResponse(newAccessToken, newRefreshToken, sessionId, user, role);
+        AuthResponse authResponse = buildAuthResponse(newAccessToken, sessionId, user, role);
+        return RefreshResult.builder()
+                .authResponse(authResponse)
+                .newRefreshTokenGenerated(true)
+                .newRefreshToken(newRefreshToken)
+                .build();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -211,18 +219,18 @@ public class AuthService {
     // REGISTER
     // ═══════════════════════════════════════════════════════════════
 
-    public AuthResponse registerStudent(RegisterStudentRequest request, HttpServletRequest httpRequest) {
+    public LoginResult registerStudent(RegisterStudentRequest request, HttpServletRequest httpRequest) {
         return registerUser(request.getPhoneNumber(), request.getEmail(),
                 request.getFullName(), request.getPassword(), Role.STUDENT, httpRequest);
     }
 
-    public AuthResponse registerOwner(RegisterOwnerRequest request, HttpServletRequest httpRequest) {
+    public LoginResult registerOwner(RegisterOwnerRequest request, HttpServletRequest httpRequest) {
         return registerUser(request.getPhoneNumber(), request.getEmail(),
                 request.getFullName(), request.getPassword(), Role.OWNER, httpRequest);
     }
 
     @Transactional
-    public AuthResponse registerUser(String phoneNumber, String email, String fullName,
+    public LoginResult registerUser(String phoneNumber, String email, String fullName,
                                      String rawPassword, Role role, HttpServletRequest httpRequest) {
         if (userRepository.existsByPhoneNumber(phoneNumber)) {
             throw new DuplicateResourceException("phoneNumber is already exists");
@@ -261,7 +269,11 @@ public class AuthService {
 
         sessionRepository.save(session);
 
-        return buildAuthResponse(accessToken, refreshToken, sessionId, user, role.name());
+        AuthResponse authResponse = buildAuthResponse(accessToken, sessionId, user, role.name());
+        return LoginResult.builder()
+                .authResponse(authResponse)
+                .refreshToken(refreshToken)
+                .build();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -299,11 +311,10 @@ public class AuthService {
         }
     }
 
-    private AuthResponse buildAuthResponse(String accessToken, String refreshToken,
+    private AuthResponse buildAuthResponse(String accessToken,
                                            String sessionId, User user, String role) {
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
                 .sessionId(sessionId)
                 .phoneNumber(user.getPhoneNumber())
                 .email(user.getEmail())
@@ -377,5 +388,20 @@ public class AuthService {
             case STUDENT -> List.of("VIEW_STUDENT");
             case ADMIN   -> List.of("VIEW_SALARY");
         };
+    }
+
+    @lombok.Getter
+    @lombok.Builder
+    public static class LoginResult {
+        private final AuthResponse authResponse;
+        private final String refreshToken;
+    }
+
+    @lombok.Getter
+    @lombok.Builder
+    public static class RefreshResult {
+        private final AuthResponse authResponse;
+        private final boolean newRefreshTokenGenerated;
+        private final String newRefreshToken;
     }
 }

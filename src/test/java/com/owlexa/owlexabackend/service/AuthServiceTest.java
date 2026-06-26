@@ -92,14 +92,15 @@ class AuthServiceTest {
             return user;
         });
 
-        AuthResponse response = authService.registerStudent(request, httpRequest);
+        AuthService.LoginResult result = authService.registerStudent(request, httpRequest);
+        AuthResponse response = result.getAuthResponse();
 
         assertThat(response.getPhoneNumber()).isEqualTo("0901234567");
         assertThat(response.getEmail()).isEqualTo("student@example.com");
         assertThat(response.getFullName()).isEqualTo("Nguyen Van A");
         assertThat(response.getRoleName()).isEqualTo(Role.STUDENT.name());
         assertThat(response.getAccessToken()).isEqualTo("access-token");
-        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
 
         ArgumentCaptor<UserSession> sessionCaptor = ArgumentCaptor.forClass(UserSession.class);
         verify(sessionRepository).save(sessionCaptor.capture());
@@ -151,14 +152,15 @@ class AuthServiceTest {
             return user;
         });
 
-        AuthResponse response = authService.registerOwner(request, httpRequest);
+        AuthService.LoginResult result = authService.registerOwner(request, httpRequest);
+        AuthResponse response = result.getAuthResponse();
 
         assertThat(response.getPhoneNumber()).isEqualTo("0901234568");
         assertThat(response.getEmail()).isEqualTo("owner@example.com");
         assertThat(response.getFullName()).isEqualTo("Nguyen Van B");
         assertThat(response.getRoleName()).isEqualTo(Role.OWNER.name());
         assertThat(response.getAccessToken()).isEqualTo("access-token");
-        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
 
         ArgumentCaptor<UserSession> sessionCaptor = ArgumentCaptor.forClass(UserSession.class);
         verify(sessionRepository).save(sessionCaptor.capture());
@@ -222,13 +224,14 @@ class AuthServiceTest {
                 .thenReturn("access-token");
         when(jwtUtil.hashToken("refresh-token")).thenReturn("hashed-refresh-token");
 
-        AuthResponse response = authService.login(request, httpRequest);
+        AuthService.LoginResult result = authService.login(request, httpRequest);
+        AuthResponse response = result.getAuthResponse();
 
         assertThat(response.getPhoneNumber()).isEqualTo("0901234567");
         assertThat(response.getEmail()).isEqualTo("student@example.com");
         assertThat(response.getFullName()).isEqualTo("Nguyen Van A");
         assertThat(response.getRoleName()).isEqualTo("STUDENT");
-        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
         assertThat(response.getAccessToken()).isEqualTo("access-token");
 
         ArgumentCaptor<UserSession> sessionCaptor = ArgumentCaptor.forClass(UserSession.class);
@@ -276,8 +279,7 @@ class AuthServiceTest {
 
     @Test
     void refreshToken_whenRefreshTokenIsValid_shouldReturnNewAccessToken() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken("old-refresh-token");
+        String requestToken = "old-refresh-token";
 
         User user = new User();
         user.setId(1L);
@@ -302,10 +304,11 @@ class AuthServiceTest {
         when(jwtUtil.generateAccessToken("0901234567", "STUDENT", "session-123")).thenReturn("new-access-token");
         when(jwtUtil.hashToken("new-refresh-token")).thenReturn("hashed-new-refresh-token");
 
-        AuthResponse response = authService.refreshToken(request);
+        AuthService.RefreshResult result = authService.refreshToken(requestToken);
+        AuthResponse response = result.getAuthResponse();
 
         assertThat(response.getAccessToken()).isEqualTo("new-access-token");
-        assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+        assertThat(result.getNewRefreshToken()).isEqualTo("new-refresh-token");
         assertThat(response.getPhoneNumber()).isEqualTo("0901234567");
 
         verify(sessionRepository).save(session);
@@ -314,10 +317,9 @@ class AuthServiceTest {
 
     @Test
     void refreshToken_whenTokenIsEmpty_shouldThrowBadRequestException() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken("");
+        String requestToken = "";
 
-        assertThatThrownBy(() -> authService.refreshToken(request))
+        assertThatThrownBy(() -> authService.refreshToken(requestToken))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Refresh token must not be empty");
 
@@ -326,10 +328,9 @@ class AuthServiceTest {
 
     @Test
     void refreshToken_whenTokenIsNull_shouldThrowBadRequestException() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken(null);
+        String requestToken = null;
 
-        assertThatThrownBy(() -> authService.refreshToken(request))
+        assertThatThrownBy(() -> authService.refreshToken(requestToken))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Refresh token must not be empty");
 
@@ -338,21 +339,19 @@ class AuthServiceTest {
 
     @Test
     void refreshToken_whenTokenIsMalformed_shouldThrowBadRequestException() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken("malformed-token");
+        String requestToken = "malformed-token";
 
         when(jwtUtil.isRefreshToken("malformed-token")).thenReturn(true);
         when(jwtUtil.extractSessionId("malformed-token")).thenReturn(null);
 
-        assertThatThrownBy(() -> authService.refreshToken(request))
+        assertThatThrownBy(() -> authService.refreshToken(requestToken))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Malformed token");
     }
 
     @Test
     void refreshToken_whenTokenIsReuseDetected_shouldDeactivateAllSessionsAndThrowException() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken("reuse-refresh-token");
+        String requestToken = "reuse-refresh-token";
 
         User user = new User();
         user.setId(1L);
@@ -369,7 +368,7 @@ class AuthServiceTest {
         when(sessionRepository.findById("session-123")).thenReturn(Optional.of(session));
         when(jwtUtil.hashToken("reuse-refresh-token")).thenReturn("incoming-hash");
 
-        assertThatThrownBy(() -> authService.refreshToken(request))
+        assertThatThrownBy(() -> authService.refreshToken(requestToken))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Security alert: token reuse detected");
 
@@ -378,8 +377,7 @@ class AuthServiceTest {
 
     @Test
     void refreshToken_whenSessionIsRevoked_shouldThrowException() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken("revoked-refresh-token");
+        String requestToken = "revoked-refresh-token";
 
         User user = new User();
         user.setId(1L);
@@ -396,15 +394,14 @@ class AuthServiceTest {
         when(sessionRepository.findById("session-123")).thenReturn(Optional.of(session));
         when(jwtUtil.hashToken("revoked-refresh-token")).thenReturn("hashed-token");
 
-        assertThatThrownBy(() -> authService.refreshToken(request))
+        assertThatThrownBy(() -> authService.refreshToken(requestToken))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Session has been revoked");
     }
 
     @Test
     void refreshToken_whenSessionIsExpired_shouldDeactivateSessionAndThrowException() {
-        RefreshTokenRequest request = new RefreshTokenRequest();
-        request.setRefreshToken("expired-refresh-token");
+        String requestToken = "expired-refresh-token";
 
         User user = new User();
         user.setId(1L);
@@ -422,7 +419,7 @@ class AuthServiceTest {
         when(sessionRepository.findById("session-123")).thenReturn(Optional.of(session));
         when(jwtUtil.hashToken("expired-refresh-token")).thenReturn("hashed-token");
 
-        assertThatThrownBy(() -> authService.refreshToken(request))
+        assertThatThrownBy(() -> authService.refreshToken(requestToken))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Session has expired");
 
