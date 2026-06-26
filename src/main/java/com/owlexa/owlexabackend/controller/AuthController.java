@@ -1,13 +1,15 @@
 package com.owlexa.owlexabackend.controller;
 
 import com.owlexa.owlexabackend.dto.request.LoginRequest;
-import com.owlexa.owlexabackend.dto.request.RefreshTokenRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterOwnerRequest;
 import com.owlexa.owlexabackend.dto.request.RegisterStudentRequest;
 import com.owlexa.owlexabackend.dto.response.AuthResponse;
 import com.owlexa.owlexabackend.dto.response.SessionResponse;
 import com.owlexa.owlexabackend.service.AuthService;
+import com.owlexa.owlexabackend.util.CookieUtil;
+import com.owlexa.owlexabackend.exception.BadRequestException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,35 +24,49 @@ import java.util.List;
 public class AuthController {
 
     private final AuthService authService;
+    private final CookieUtil cookieUtil;
 
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest body,
-                              HttpServletRequest request) {
-        return authService.login(body, request);
+                              HttpServletRequest request, HttpServletResponse response) {
+        AuthService.LoginResult result = authService.login(body, request);
+        cookieUtil.setRefreshTokenCookie(response, result.getRefreshToken());
+        return result.getAuthResponse();
     }
 
     @PostMapping("/refresh-token")
-    public AuthResponse refreshToken(@RequestBody RefreshTokenRequest body) {
-        return authService.refreshToken(body);
+    public AuthResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = cookieUtil.extractRefreshTokenFromCookie(request)
+            .orElseThrow(() -> new BadRequestException("Cookie không tồn tại hoặc đã hết hạn"));
+        AuthService.RefreshResult result = authService.refreshToken(refreshToken);
+        if (result.isNewRefreshTokenGenerated()) {
+            cookieUtil.setRefreshTokenCookie(response, result.getNewRefreshToken());
+        }
+        return result.getAuthResponse();
     }
 
     @PostMapping("/register/student")
     public AuthResponse registerStudent(@Valid @RequestBody RegisterStudentRequest body,
-                                        HttpServletRequest request) {
-        return authService.registerStudent(body, request);
+                                        HttpServletRequest request, HttpServletResponse response) {
+        AuthService.LoginResult result = authService.registerStudent(body, request);
+        cookieUtil.setRefreshTokenCookie(response, result.getRefreshToken());
+        return result.getAuthResponse();
     }
 
     @PostMapping("/register/owner")
     public AuthResponse registerOwner(@Valid @RequestBody RegisterOwnerRequest body,
-                                      HttpServletRequest request) {
-        return authService.registerOwner(body, request);
+                                      HttpServletRequest request, HttpServletResponse response) {
+        AuthService.LoginResult result = authService.registerOwner(body, request);
+        cookieUtil.setRefreshTokenCookie(response, result.getRefreshToken());
+        return result.getAuthResponse();
     }
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(HttpServletRequest request) {
+    public void logout(HttpServletRequest request, HttpServletResponse response) {
         String sessionId = (String) request.getAttribute("currentSessionId");
         authService.logout(sessionId);
+        cookieUtil.clearRefreshTokenCookie(response);
     }
 
     @GetMapping("/sessions")
@@ -68,8 +84,9 @@ public class AuthController {
 
     @DeleteMapping("/sessions")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revokeAllSessions() {
+    public void revokeAllSessions(HttpServletResponse response) {
         authService.revokeAllSessions(currentPhoneNumber());
+        cookieUtil.clearRefreshTokenCookie(response);
     }
 
     private String currentPhoneNumber() {
