@@ -57,8 +57,9 @@ public class AuthService {
 
         // Upgrade mật khẩu plaintext cũ sang bcrypt ngay khi đăng nhập thành công
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
-            userRepository.save(user);
+            String encoded = passwordEncoder.encode(request.getPassword());
+            userRepository.updatePasswordById(user.getId(), encoded);
+            user.setPassword(encoded); // keep in-memory state consistent
         }
 
         String role      = user.getRole() != null ? user.getRole().name() : null;
@@ -339,38 +340,104 @@ public class AuthService {
 
     /** Ưu tiên tên client khai báo; nếu không có thì suy ra từ User-Agent. */
     private String resolveDeviceName(String clientDeviceName, HttpServletRequest request) {
-        if (clientDeviceName != null && !clientDeviceName.isBlank()) {
-            return clientDeviceName.trim();
+        String normalizedClientDeviceName = normalizeDeviceName(clientDeviceName);
+        if (normalizedClientDeviceName != null && !looksLikeUserAgent(normalizedClientDeviceName)) {
+            return normalizedClientDeviceName;
         }
-        String ua = request.getHeader("User-Agent");
-        if (ua == null || ua.isBlank()) return "Unknown Device";
-
-        if (ua.contains("iPhone"))   return "iPhone";
-        if (ua.contains("iPad"))     return "iPad";
-        if (ua.contains("Android"))  return "Android Device";
-        if (ua.contains("Mobile"))   return "Mobile Browser";
-        if (ua.contains("Macintosh")) return "Mac";
-        if (ua.contains("Windows"))  return "Windows PC";
-        if (ua.contains("Linux"))    return "Linux";
-        return "Browser";
+        return deriveDeviceName(request.getHeader("User-Agent"));
     }
 
     /** Ưu tiên loại client khai báo; nếu không có thì suy ra từ User-Agent. */
     private DeviceType resolveDeviceType(String clientDeviceType, HttpServletRequest request) {
         if (clientDeviceType != null && !clientDeviceType.isBlank()) {
-            try {
-                return DeviceType.valueOf(clientDeviceType.toUpperCase());
-            } catch (IllegalArgumentException ignored) { }
+            switch (clientDeviceType.trim().toUpperCase()) {
+                case "DESKTOP":
+                case "WEB":
+                    return DeviceType.DESKTOP;
+                case "MOBILE":
+                    return DeviceType.MOBILE;
+                case "TABLET":
+                    return DeviceType.TABLET;
+                case "UNKNOWN":
+                    return DeviceType.UNKNOWN;
+                default:
+                    break;
+            }
         }
-        String ua = request.getHeader("User-Agent");
-        if (ua == null) return DeviceType.UNKNOWN;
-        if (ua.contains("iPhone") || ua.contains("Android") && ua.contains("Mobile")) return DeviceType.MOBILE;
-        if (ua.contains("iPad")   || ua.contains("Android") && !ua.contains("Mobile")) return DeviceType.TABLET;
-        if (ua.contains("Mozilla") || ua.contains("Chrome") || ua.contains("Safari"))  return DeviceType.WEB;
-        return DeviceType.UNKNOWN;
+        return deriveDeviceType(request.getHeader("User-Agent"));
     }
 
     /** Lấy IP thực của client, có tính đến proxy/load balancer. */
+    private String normalizeDeviceName(String deviceName) {
+        if (deviceName == null) {
+            return null;
+        }
+        String trimmed = deviceName.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean looksLikeUserAgent(String value) {
+        String lower = value.toLowerCase();
+        return lower.contains("mozilla/")
+                || lower.contains("applewebkit")
+                || lower.contains("chrome/")
+                || lower.contains("safari/")
+                || lower.contains("gecko/")
+                || lower.contains("version/")
+                || value.length() > 120;
+    }
+
+    private String deriveDeviceName(String userAgent) {
+        if (userAgent == null || userAgent.isBlank()) {
+            return "Unknown Device";
+        }
+
+        String ua = userAgent.toLowerCase();
+        if (ua.contains("iphone")) {
+            return "iPhone";
+        }
+        if (ua.contains("ipad")) {
+            return "iPad";
+        }
+        if (ua.contains("android")) {
+            if (ua.contains("mobile")) {
+                return "Android Phone";
+            }
+            if (ua.contains("tablet")) {
+                return "Android Tablet";
+            }
+            return "Android Device";
+        }
+        if (ua.contains("macintosh") || ua.contains("mac os x")) {
+            return "Mac";
+        }
+        if (ua.contains("windows")) {
+            return "Windows PC";
+        }
+        if (ua.contains("linux")) {
+            return "Linux PC";
+        }
+        return "Unknown Device";
+    }
+
+    private DeviceType deriveDeviceType(String userAgent) {
+        if (userAgent == null || userAgent.isBlank()) {
+            return DeviceType.UNKNOWN;
+        }
+
+        String ua = userAgent.toLowerCase();
+        if (ua.contains("iphone") || (ua.contains("android") && ua.contains("mobile"))) {
+            return DeviceType.MOBILE;
+        }
+        if (ua.contains("ipad") || (ua.contains("android") && !ua.contains("mobile"))) {
+            return DeviceType.TABLET;
+        }
+        if (ua.contains("windows") || ua.contains("macintosh") || ua.contains("linux")) {
+            return DeviceType.DESKTOP;
+        }
+        return DeviceType.UNKNOWN;
+    }
+
     private String extractIp(HttpServletRequest request) {
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {

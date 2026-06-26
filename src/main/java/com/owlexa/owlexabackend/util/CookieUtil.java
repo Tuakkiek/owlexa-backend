@@ -19,10 +19,13 @@ public class CookieUtil {
     @Value("${jwt.refresh-token-expiration-ms:604800000}")
     private long refreshTokenExpirationMs;
 
+    @Value("${cookie.secure:false}")
+    private boolean cookieSecure;
+
     public void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE_NAME, refreshToken)
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .sameSite("Lax")
                 .path(COOKIE_PATH)
                 .maxAge(refreshTokenExpirationMs / 1000)
@@ -34,7 +37,7 @@ public class CookieUtil {
     public void clearRefreshTokenCookie(HttpServletResponse response) {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .sameSite("Lax")
                 .path(COOKIE_PATH)
                 .maxAge(0)
@@ -54,3 +57,4 @@ public class CookieUtil {
                 .findFirst();
     }
 }
+

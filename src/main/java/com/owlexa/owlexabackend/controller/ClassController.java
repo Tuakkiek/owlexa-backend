@@ -11,31 +11,40 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/owner/classes")
 @RequiredArgsConstructor
 public class ClassController {
 
     private final ClassService classService;
 
-    // Create
-    @PostMapping
+    // ── OWNER: Manage classes ────────────────────────────────────────────────
+
+    @PostMapping("/owner/classes")
     @ResponseStatus(HttpStatus.CREATED)
     public ClassResponse create(@Valid @RequestBody ClassRequest request) {
         return classService.create(request);
     }
-    // Find all
-    @GetMapping
+
+    @GetMapping("/owner/classes")
     public List<ClassResponse> findAll() {
         return classService.findAll();
     }
-    // Update
-    @PutMapping("/{classId}")
+
+    @PutMapping("/owner/classes/{classId}")
     public ClassResponse update(@PathVariable Long classId, @RequestBody ClassRequest request) {
         return classService.update(classId, request);
     }
-    // Delete
-    @DeleteMapping("/{classId}")
+
+    @DeleteMapping("/owner/classes/{classId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long classId) {
         classService.delete(classId);
     }
+
+    // ── TEACHER: View own classes ────────────────────────────────────────────
+
+    @GetMapping("/teacher/classes/me")
+    public List<ClassResponse> findMyClassesAsTeacher() {
+        return classService.findMyClassesAsTeacher();
+    }
 }
+

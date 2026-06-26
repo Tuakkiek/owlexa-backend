@@ -1,26 +1,35 @@
 package com.owlexa.owlexabackend.filter;
 
 import com.owlexa.owlexabackend.entity.Center;
+import com.owlexa.owlexabackend.entity.Membership;
+import com.owlexa.owlexabackend.entity.User;
 import com.owlexa.owlexabackend.repository.CenterRepository;
+import com.owlexa.owlexabackend.repository.MembershipRepository;
+import com.owlexa.owlexabackend.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
 
-@Component
-@Order(1)
 public class TenantFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private CenterRepository centerRepository;
+    private final CenterRepository centerRepository;
+    private final UserRepository userRepository;
+    private final MembershipRepository membershipRepository;
+
+    public TenantFilter(CenterRepository centerRepository,
+                        UserRepository userRepository,
+                        MembershipRepository membershipRepository) {
+        this.centerRepository = centerRepository;
+        this.userRepository = userRepository;
+        this.membershipRepository = membershipRepository;
+    }
 
     private static final ThreadLocal<Long> currentCenterId = new ThreadLocal<>();
 
@@ -48,10 +57,34 @@ public class TenantFilter extends OncePerRequestFilter {
                         return;
                     }
                 }
+            } else {
+                resolveTenantFromAuthenticatedUser();
             }
             chain.doFilter(request, response);
         } finally {
             currentCenterId.remove();
+        }
+    }
+
+    private void resolveTenantFromAuthenticatedUser() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return;
+        }
+
+        String principalName = authentication.getName();
+        if (principalName == null || principalName.isBlank() || "anonymousUser".equals(principalName)) {
+            return;
+        }
+
+        Optional<User> userOpt = userRepository.findByPhoneNumber(principalName);
+        if (userOpt.isEmpty()) {
+            return;
+        }
+
+        List<Membership> memberships = membershipRepository.findAllByUserId(userOpt.get().getId());
+        if (memberships.size() == 1) {
+            currentCenterId.set(memberships.get(0).getCenter().getId());
         }
     }
 

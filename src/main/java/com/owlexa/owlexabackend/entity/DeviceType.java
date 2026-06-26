@@ -1,9 +1,8 @@
 package com.owlexa.owlexabackend.entity;
 
 public enum DeviceType {
+    DESKTOP,
     MOBILE,
     TABLET,
-    DESKTOP,
-    WEB,
     UNKNOWN
 }

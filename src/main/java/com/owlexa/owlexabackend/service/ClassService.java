@@ -13,6 +13,7 @@ import com.owlexa.owlexabackend.filter.TenantFilter;
 import com.owlexa.owlexabackend.repository.CenterRepository;
 import com.owlexa.owlexabackend.repository.ClassRepository;
 import com.owlexa.owlexabackend.repository.MembershipRepository;
+import com.owlexa.owlexabackend.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -31,6 +32,7 @@ public class ClassService {
     private final CenterRepository centerRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
+    private final ScheduleRepository scheduleRepository;
 
     // Create
     @Transactional
@@ -75,11 +77,30 @@ public class ClassService {
             result.add(toResponse(c));
         }
         return result;
+    }
 
-//        return classRepository.findAllByCenterId(centerId)
-//                .stream()
-//                .map(this::toResponse)
-//                .toList();A
+    // Find my classes as Teacher
+    @Transactional(readOnly = true)
+    public List<ClassResponse> findMyClassesAsTeacher() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.TEACHER) {
+            throw new org.springframework.security.access.AccessDeniedException("Only TEACHER can access their own classes");
+        }
+
+        List<Long> classIds = scheduleRepository
+                .findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+                .stream()
+                .map(s -> s.getClazz().getId())
+                .distinct()
+                .toList();
+
+        return classIds.stream()
+                .map(id -> classRepository.findById(id).orElse(null))
+                .filter(c -> c != null)
+                .map(this::toResponse)
+                .toList();
     }
     // Update
     @Transactional

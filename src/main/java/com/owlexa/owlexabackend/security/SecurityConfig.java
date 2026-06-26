@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.security;
 
+import com.owlexa.owlexabackend.filter.TenantFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,7 +26,7 @@ public class SecurityConfig {
     private final JwtFilter jwtFilter;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, TenantFilter tenantFilter) throws Exception {
         return http
                 // 1. Kích hoạt và thiết lập cấu hình CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -70,7 +71,15 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(tenantFilter, JwtFilter.class)
                 .build();
+    }
+
+    @Bean
+    public TenantFilter tenantFilter(com.owlexa.owlexabackend.repository.CenterRepository centerRepository,
+                                     com.owlexa.owlexabackend.repository.UserRepository userRepository,
+                                     com.owlexa.owlexabackend.repository.MembershipRepository membershipRepository) {
+        return new TenantFilter(centerRepository, userRepository, membershipRepository);
     }
 
     // 2. Định nghĩa cấu hình CORS chi tiết

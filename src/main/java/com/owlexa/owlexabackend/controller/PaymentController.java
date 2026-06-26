@@ -17,7 +17,7 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping({
-            "/owwner/fee-record/{feeRecordId}/payments/cash",
+            "/owner/fee-record/{feeRecordId}/payments/cash",
             "/cashier/fee-record/{feeRecordId}/payments/cash"
     })
     @ResponseStatus(HttpStatus.CREATED)
@@ -29,8 +29,8 @@ public class PaymentController {
     }
 
     @GetMapping({
-            "owner/fee-record/{feeRecordI}/payments",
-            "cashier/fee-record/{feeRecordId}/payments"
+            "/owner/fee-record/{feeRecordId}/payments",
+            "/cashier/fee-record/{feeRecordId}/payments"
     })
     public List<PaymentResponse> findAllByFeeRecord(
             @PathVariable Long feeRecordId
