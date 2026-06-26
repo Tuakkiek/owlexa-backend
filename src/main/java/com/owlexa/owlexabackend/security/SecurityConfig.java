@@ -78,6 +78,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:5173")); // Cho phép nguồn từ Vite Dev Server
+        configuration.setAllowedOriginPatterns(List.of("https://*.owlexa.vn"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         // Cho phép các Headers tiêu chuẩn kèm theo Header Tenant ID tùy chỉnh của hệ thống
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Tenant-ID"));
