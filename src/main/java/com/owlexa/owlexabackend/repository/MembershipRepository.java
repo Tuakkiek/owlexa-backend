@@ -12,6 +12,8 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
 
     List<Membership> findAllByCenterId(Long centerId);
 
+    List<Membership> findAllByUserId(Long userId);
+
     List<Membership> findAllByCenterIdAndUserRole(Long centerId, Role role);
 
     Optional<Membership> findByUserIdAndCenterId(Long userId, Long centerId);
@@ -23,5 +25,7 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     );
 
     void deleteByCenterId(Long centerId);
+
+    long countByCenterIdAndUserRole(Long centerId, Role userRole);
 }
     

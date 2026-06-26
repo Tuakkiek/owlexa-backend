@@ -30,5 +30,9 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     boolean existsByClazzIdAndMonth(Long classId, String month);
 
+    long countByCenterId(Long centerId);
+
+    long countByCenterIdAndStatus(Long centerId, FeeStatus status);
+
     void deleteByCenterId(Long centerId);
 }

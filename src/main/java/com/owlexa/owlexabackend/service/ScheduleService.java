@@ -11,6 +11,7 @@ import com.owlexa.owlexabackend.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.filter.TenantFilter;
 import com.owlexa.owlexabackend.repository.*;
+import com.owlexa.owlexabackend.entity.ClassEnrollment;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,6 +30,7 @@ public class ScheduleService {
     private final ClassRepository classRepository;
     private final MembershipRepository membershipRepository;
     private final ScheduleRepository scheduleRepository;
+    private final ClassEnrollmentRepository classEnrollmentRepository;
 
     // Create
     @Transactional
@@ -128,6 +130,62 @@ public class ScheduleService {
                 .map(this::toResponse)
                 .toList();
     }
+
+    // Find my schedules — for logged-in TEACHER
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> findMySchedules() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.TEACHER) {
+            throw new AccessDeniedException("Only TEACHER can access their own schedules");
+        }
+
+        return scheduleRepository.findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // Find my schedules — for logged-in STUDENT (via enrolled classes)
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> findMySchedulesAsStudent() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.STUDENT) {
+            throw new AccessDeniedException("Only STUDENT can access their own schedules");
+        }
+
+        List<Long> enrolledClassIds = classEnrollmentRepository
+                .findAllByStudentUserIdAndCenterId(currentUser.getId(), centerId)
+                .stream()
+                .map(e -> e.getClazz().getId())
+                .toList();
+
+        return enrolledClassIds.stream()
+                .flatMap(classId -> scheduleRepository.findAllByClazzIdAndCenterId(classId, centerId).stream())
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // Find my classes — for logged-in TEACHER (distinct classes from schedules)
+    @Transactional(readOnly = true)
+    public List<Long> findMyClassIds() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.TEACHER) {
+            throw new AccessDeniedException("Only TEACHER can access their own classes");
+        }
+
+        return scheduleRepository.findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+                .stream()
+                .map(s -> s.getClazz().getId())
+                .distinct()
+                .toList();
+    }
+
     // Update
     @Transactional
     public ScheduleResponse update(Long scheduleId, ScheduleRequest request) {
@@ -208,6 +266,7 @@ public class ScheduleService {
         return ScheduleResponse.builder()
                 .id(schedule.getId())
                 .classId(schedule.getClazz().getId())
+                .className(schedule.getClazz().getName())
                 .centerId(schedule.getCenter().getId())
                 .teacherUserId(schedule.getTeacherUser().getId())
                 .teacherUserFullName(schedule.getTeacherUser().getFullName())

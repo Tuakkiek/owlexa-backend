@@ -8,6 +8,8 @@ import java.util.List;
 public interface ClassRepository extends JpaRepository<Class, Long> {
     List<Class> findAllByCenterId(Long centerId);
 
+    long countByCenterId(Long centerId);
+
     boolean existsByNameAndCenterId(String name, Long centerId);
 
     void deleteByCenterId(Long centerId);

@@ -35,14 +35,15 @@ public class UserSession {
     @Column(name = "device_name", length = 120)
     private String deviceName;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = DeviceTypeConverter.class)
     @Column(name = "device_type", length = 20)
     private DeviceType deviceType;
 
     @Column(name = "ip_address", length = 50)
     private String ipAddress;
 
-    @Column(name = "user_agent", length = 512)
+    @Lob
+    @Column(name = "user_agent", columnDefinition = "TEXT")
     private String userAgent;
 
     @Column(name = "is_active", nullable = false)

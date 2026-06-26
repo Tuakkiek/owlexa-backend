@@ -16,6 +16,7 @@ public class ScheduleResponse {
 
     private Long id;
     private Long classId;
+    private String className;
     private Long centerId;
 
     private Long teacherUserId;

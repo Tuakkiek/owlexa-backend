@@ -246,6 +246,43 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_whenDeviceNameLooksLikeUserAgent_shouldFallbackToShortDeviceName() {
+        LoginRequest request = new LoginRequest();
+        request.setPhoneNumber("0901234567");
+        request.setPassword("123456");
+        request.setDeviceName("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        request.setDeviceType("WEB");
+
+        HttpServletRequest httpRequest = createMockRequest();
+
+        User user = new User();
+        user.setId(1L);
+        user.setPhoneNumber("0901234567");
+        user.setRole(Role.STUDENT);
+        user.setPassword("encoded-password");
+
+        when(userRepository.findByPhoneNumber("0901234567"))
+                .thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("123456", "encoded-password"))
+                .thenReturn(true);
+        when(jwtUtil.generateRefreshToken(eq("0901234567"), anyString()))
+                .thenReturn("refresh-token");
+        when(jwtUtil.generateAccessToken(eq("0901234567"), eq("STUDENT"), anyString()))
+                .thenReturn("access-token");
+        when(jwtUtil.hashToken("refresh-token")).thenReturn("hashed-refresh-token");
+
+        authService.login(request, httpRequest);
+
+        ArgumentCaptor<UserSession> sessionCaptor = ArgumentCaptor.forClass(UserSession.class);
+        verify(sessionRepository).save(sessionCaptor.capture());
+
+        UserSession savedSession = sessionCaptor.getValue();
+        assertThat(savedSession.getDeviceName()).isEqualTo("Windows PC");
+        assertThat(savedSession.getDeviceType()).isEqualTo(DeviceType.DESKTOP);
+        assertThat(savedSession.getUserAgent()).isEqualTo("Mozilla/5.0 Windows");
+    }
+
+    @Test
     void login_withLegacyPlaintextPassword_shouldUpgradeToBcrypt() {
         LoginRequest request = new LoginRequest();
         request.setPhoneNumber("0901234567");
@@ -273,7 +310,7 @@ class AuthServiceTest {
 
         authService.login(request, httpRequest);
 
-        verify(userRepository).save(user);
+        verify(userRepository).updatePasswordById(1L, "new-encoded-password");
         assertThat(user.getPassword()).isEqualTo("new-encoded-password");
     }
 
@@ -490,7 +527,7 @@ class AuthServiceTest {
         UserSession s1 = UserSession.builder()
                 .id("session-1")
                 .deviceName("Windows PC")
-                .deviceType(DeviceType.WEB)
+                .deviceType(DeviceType.DESKTOP)
                 .ipAddress("127.0.0.1")
                 .createdAt(LocalDateTime.now())
                 .lastUsedAt(LocalDateTime.now())
