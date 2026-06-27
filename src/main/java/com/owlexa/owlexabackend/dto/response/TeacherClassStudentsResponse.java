@@ -5,14 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudentResponse {
-    private Long userId;
-    private String phoneNumber;
-    private String fullName;
-    private Long centerId;
-    private String temporaryPassword;
+public class TeacherClassStudentsResponse {
+    private Long id;
+    private String className;
+    private Long studentCount;
+    private List<StudentResponse> students;
 }

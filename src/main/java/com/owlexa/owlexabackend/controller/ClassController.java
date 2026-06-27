@@ -46,5 +46,10 @@ public class ClassController {
     public List<ClassResponse> findMyClassesAsTeacher() {
         return classService.findMyClassesAsTeacher();
     }
+
+    @GetMapping("/teacher/classes/with-students")
+    public List<com.owlexa.owlexabackend.dto.response.TeacherClassStudentsResponse> findMyClassesWithStudentsAsTeacher() {
+        return classService.findMyClassesWithStudentsAsTeacher();
+    }
 }
 
