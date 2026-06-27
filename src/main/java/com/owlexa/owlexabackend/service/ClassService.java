@@ -2,8 +2,12 @@ package com.owlexa.owlexabackend.service;
 
 import com.owlexa.owlexabackend.dto.request.ClassRequest;
 import com.owlexa.owlexabackend.dto.response.ClassResponse;
+import com.owlexa.owlexabackend.dto.response.StudentResponse;
+import com.owlexa.owlexabackend.dto.response.TeacherClassStudentsResponse;
 import com.owlexa.owlexabackend.entity.Center;
 import com.owlexa.owlexabackend.entity.Class;
+import com.owlexa.owlexabackend.entity.ClassEnrollment;
+import com.owlexa.owlexabackend.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.entity.Role;
 import com.owlexa.owlexabackend.entity.User;
 import com.owlexa.owlexabackend.exception.BadRequestException;
@@ -11,6 +15,7 @@ import com.owlexa.owlexabackend.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.filter.TenantFilter;
 import com.owlexa.owlexabackend.repository.CenterRepository;
+import com.owlexa.owlexabackend.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.repository.ClassRepository;
 import com.owlexa.owlexabackend.repository.MembershipRepository;
 import com.owlexa.owlexabackend.repository.ScheduleRepository;
@@ -33,6 +38,7 @@ public class ClassService {
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
     private final ScheduleRepository scheduleRepository;
+    private final ClassEnrollmentRepository classEnrollmentRepository;
 
     // Create
     @Transactional
@@ -100,6 +106,50 @@ public class ClassService {
                 .map(id -> classRepository.findById(id).orElse(null))
                 .filter(c -> c != null)
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TeacherClassStudentsResponse> findMyClassesWithStudentsAsTeacher() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.TEACHER) {
+            throw new AccessDeniedException("Only TEACHER can access their own classes");
+        }
+
+        List<Long> classIds = scheduleRepository
+                .findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+                .stream()
+                .map(schedule -> schedule.getClazz().getId())
+                .distinct()
+                .toList();
+
+        return classIds.stream()
+                .map(classId -> {
+                    Class clazz = classRepository.findById(classId)
+                            .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+
+                    List<StudentResponse> students = classEnrollmentRepository
+                            .findAllByClazzIdAndStatus(classId, EnrollmentStatus.ACTIVE)
+                            .stream()
+                            .map(ClassEnrollment::getStudentUser)
+                            .map(student -> StudentResponse.builder()
+                                    .userId(student.getId())
+                                    .phoneNumber(student.getPhoneNumber())
+                                    .fullName(student.getFullName())
+                                    .centerId(centerId)
+                                    .temporaryPassword(null)
+                                    .build())
+                            .toList();
+
+                    return TeacherClassStudentsResponse.builder()
+                            .id(clazz.getId())
+                            .className(clazz.getName())
+                            .studentCount((long) students.size())
+                            .students(students)
+                            .build();
+                })
                 .toList();
     }
     // Update

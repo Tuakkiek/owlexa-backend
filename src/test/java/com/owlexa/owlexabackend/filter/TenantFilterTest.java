@@ -16,7 +16,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.util.List;
@@ -31,14 +30,10 @@ class TenantFilterTest {
 
     @Test
     void doFilterInternal_whenHeaderMissingAndUserHasSingleMembership_shouldUseMembershipCenter() throws Exception {
-        TenantFilter filter = new TenantFilter();
         CenterRepository centerRepository = mock(CenterRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         MembershipRepository membershipRepository = mock(MembershipRepository.class);
-
-        ReflectionTestUtils.setField(filter, "centerRepository", centerRepository);
-        ReflectionTestUtils.setField(filter, "userRepository", userRepository);
-        ReflectionTestUtils.setField(filter, "membershipRepository", membershipRepository);
+        TenantFilter filter = new TenantFilter(centerRepository, userRepository, membershipRepository);
 
         User user = new User();
         user.setId(10L);
