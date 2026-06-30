@@ -1,47 +1,20 @@
 package com.owlexa.owlexabackend.modules.attendance.service;
-import com.owlexa.owlexabackend.modules.attendance.dto.request.AttendanceMarkRequest;
-import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceResponse;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestLevel;
-import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
-import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
-import com.owlexa.owlexabackend.modules.document.entity.StudentDocument;
-import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmissionStatus;
-import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayGradingResult;
-import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import com.owlexa.owlexabackend.modules.user.entity.Role;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptStatus;
-import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
-import com.owlexa.owlexabackend.modules.user.entity.DeviceTypeConverter;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayCriteriaScore;
-import com.owlexa.owlexabackend.modules.user.entity.User;
-import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
-import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
-import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmission;
-import com.owlexa.owlexabackend.modules.user.entity.Membership;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayRubric;
-import com.owlexa.owlexabackend.modules.user.entity.UserSession;
-import com.owlexa.owlexabackend.modules.teacher.entity.BulkTeacherStatus;
-import com.owlexa.owlexabackend.modules.user.entity.UserPermission;
-import com.owlexa.owlexabackend.modules.document.entity.DocumentType;
-import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttempt;
-import com.owlexa.owlexabackend.modules.user.entity.DeviceType;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptAnswer;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayRubricCriterion;
-import com.owlexa.owlexabackend.modules.payment.entity.Payment;
-import com.owlexa.owlexabackend.modules.user.entity.Permission;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTest;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestQuestion;
+
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.modules.attendance.dto.request.AttendanceMarkRequest;
+import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceResponse;
+import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
+import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
-import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
-import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
+import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
+import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -102,20 +75,20 @@ public class AttendanceService {
             }
 
             Attendance attendance = attendanceRepository
-                    .findByScheduleIdAndStudentUserIdAndSessionDate(
+                    .findByScheduleIdAndStudentUserIdAndDate(
                             scheduleId,
                             student.getId(),
-                            request.getSessionDate()
+                            request.getDate()
                     )
                     .orElseGet(() -> Attendance.builder()
                             .schedule(schedule)
                             .studentUser(student)
                             .center(schedule.getCenter())
-                            .sessionDate(request.getSessionDate())
+                            .date(request.getDate())
                             .build());
 
             attendance.setStatus(item.getStatus());
-            attendance.setNotedByUser(currentUser);
+            attendance.setMarkedBy(currentUser);
             attendance.setNote(normalizeOptionalText(item.getNote()));
 
             attendance = attendanceRepository.save(attendance);
@@ -126,7 +99,7 @@ public class AttendanceService {
     }
 
     @Transactional(readOnly = true)
-    public List<AttendanceResponse> findAllBySchedule(Long scheduleId, LocalDate sessionDate) {
+    public List<AttendanceResponse> findAllBySchedule(Long scheduleId, LocalDate date) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
@@ -139,20 +112,20 @@ public class AttendanceService {
             throw new AccessDeniedException("You do not have permission to view this schedule");
         }
 
-        return attendanceRepository.findAllByScheduleIdAndSessionDate(scheduleId, sessionDate)
+        return attendanceRepository.findAllByScheduleIdAndDate(scheduleId, date)
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<AttendanceResponse> findMyClassAttendances(Long classId, LocalDate sessionDate) {
+    public List<AttendanceResponse> findMyClassAttendances(Long classId, LocalDate date) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
         assertCenterMembership(currentUser, centerId);
 
-        List<Attendance> attendances = attendanceRepository.findAllByScheduleIdAndSessionDate(classId, sessionDate);
+        List<Attendance> attendances = attendanceRepository.findAllByScheduleIdAndDate(classId, date);
 
         return attendances.stream()
                 .map(this::toResponse)
@@ -173,10 +146,6 @@ public class AttendanceService {
             if (!hasMembership) {
                 throw new AccessDeniedException("User is not a member of this center");
             }
-
-            if (!schedule.getTeacherUser().getId().equals(currentUser.getId())) {
-                throw new AccessDeniedException("Only assigned teacher can mark attendance");
-            }
             return;
         }
 
@@ -192,10 +161,10 @@ public class AttendanceService {
                 .studentUserId(attendance.getStudentUser().getId())
                 .studentPhoneNumber(attendance.getStudentUser().getPhoneNumber())
                 .studentFullName(attendance.getStudentUser().getFullName())
-                .sessionDate(attendance.getSessionDate())
+                .date(attendance.getDate())
                 .status(attendance.getStatus())
                 .note(attendance.getNote())
-                .notedByUserId(attendance.getNotedByUser().getId())
+                .markedByUserId(attendance.getMarkedBy() != null ? attendance.getMarkedBy().getId() : null)
                 .createdAt(attendance.getCreatedAt())
                 .build();
     }
@@ -216,7 +185,7 @@ public class AttendanceService {
     }
 
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }

@@ -28,5 +28,5 @@ public class ScheduleResponse {
     private String room;
 
     private boolean isActive;
-    private Instant createAt;
+    private Instant createdAt;
 }

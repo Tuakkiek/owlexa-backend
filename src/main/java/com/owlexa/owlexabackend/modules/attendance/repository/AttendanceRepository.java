@@ -1,4 +1,5 @@
 package com.owlexa.owlexabackend.modules.attendance.repository;
+
 import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,23 +10,23 @@ import java.util.Optional;
 
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
-    List<Attendance> findAllByScheduleIdAndSessionDate(Long scheduleId, LocalDate sessionDate);
+    List<Attendance> findAllByScheduleIdAndDate(Long scheduleId, LocalDate date);
 
-    Optional<Attendance> findByScheduleIdAndStudentUserIdAndSessionDate(
+    Optional<Attendance> findByScheduleIdAndStudentUserIdAndDate(
             Long scheduleId,
             Long studentUserId,
-            LocalDate sessionDate
+            LocalDate date
     );
 
-    boolean existsByScheduleIdAndStudentUserIdAndSessionDate(
+    boolean existsByScheduleIdAndStudentUserIdAndDate(
             Long scheduleId,
             Long studentUserId,
-            LocalDate sessionDate
+            LocalDate date
     );
 
-    long countByScheduleIdAndSessionDateAndStatus(
+    long countByScheduleIdAndDateAndStatus(
             Long scheduleId,
-            LocalDate sessionDate,
+            LocalDate date,
             AttendanceStatus status
     );
 

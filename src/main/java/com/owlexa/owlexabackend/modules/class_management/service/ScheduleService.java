@@ -8,7 +8,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
@@ -294,7 +294,7 @@ public class ScheduleService {
                 .endTime(schedule.getEndTime())
                 .room(schedule.getRoom())
                 .isActive(schedule.getIsActive())
-                .createAt(schedule.getCreatedAt())
+                .createdAt(schedule.getCreatedAt())
                 .build();
     }
 
@@ -314,7 +314,7 @@ public class ScheduleService {
 
     // Required current centerId
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
 
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");

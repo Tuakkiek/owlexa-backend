@@ -8,7 +8,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -56,7 +56,7 @@ public class StudentServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
-        TenantFilter.clearCurrentCenterId();
+        TenantContext.clear();
     }
 
     private void loginAs(String phoneNumber) {
@@ -71,7 +71,7 @@ public class StudentServiceTest {
     }
 
     private void setCurrentCenterId(Long centerId) {
-        TenantFilter.setCurrentCenterIdForTest(centerId);
+        TenantContext.setCurrentTenantId(centerId);
     }
 
     private User user(Long id, String phoneNumber, Role role) {

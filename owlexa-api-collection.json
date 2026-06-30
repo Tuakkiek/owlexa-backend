@@ -19,24 +19,20 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "",
-                  "// --- Status check ---",
                   "pm.test(\"Status 200\", function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "// --- Save accessToken ---",
                   "if (jsonData && jsonData.accessToken) {",
                   "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
                   "    console.log(\"[Auth] Saved accessToken\");",
                   "}",
                   "",
-                  "// --- Save refreshToken ---",
                   "if (jsonData && jsonData.refreshToken) {",
                   "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
                   "    console.log(\"[Auth] Saved refreshToken\");",
                   "}",
                   "",
-                  "// --- Save sessionId (from SessionResponse) ---",
                   "var sessionId = null;",
                   "if (jsonData && jsonData.session) {",
                   "    sessionId = jsonData.session.sessionId || jsonData.session.id;",
@@ -80,13 +76,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "login"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
             },
             "description": "Đăng nhập bằng số điện thoại và mật khẩu.\n\n**JWT Session:** Server sẽ tạo `UserSession` mới, trả về `accessToken` (15 phút), `refreshToken` (7 ngày) và thông tin session.\n\n**Headers bắt buộc:**\n- `X-Device-Type`: WEB | MOBILE | DESKTOP | TABLET\n- `X-Device-Info` *(tuỳ chọn)*: mô tả thiết bị\n\nTest script tự động lưu `accessToken`, `refreshToken`, `sessionId` vào Collection Variables."
           },
@@ -101,24 +92,17 @@
                 "exec": [
                   "var jsonData = pm.response.json();",
                   "",
-                  "// --- Status check (register returns 201) ---",
                   "pm.test(\"Status 200 or 201\", function () {",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
                   "});",
                   "",
-                  "// --- Save accessToken ---",
                   "if (jsonData && jsonData.accessToken) {",
                   "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
-                  "    console.log(\"[Auth] Saved accessToken\");",
                   "}",
-                  "",
-                  "// --- Save refreshToken ---",
                   "if (jsonData && jsonData.refreshToken) {",
                   "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
-                  "    console.log(\"[Auth] Saved refreshToken\");",
                   "}",
                   "",
-                  "// --- Save sessionId (from SessionResponse) ---",
                   "var sessionId = null;",
                   "if (jsonData && jsonData.session) {",
                   "    sessionId = jsonData.session.sessionId || jsonData.session.id;",
@@ -127,7 +111,6 @@
                   "}",
                   "if (sessionId) {",
                   "    pm.collectionVariables.set(\"sessionId\", String(sessionId));",
-                  "    console.log(\"[Auth] Saved sessionId: \" + sessionId);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -135,9 +118,7 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [
               {
@@ -147,31 +128,20 @@
               },
               {
                 "key": "X-Device-Info",
-                "value": "Postman/Testing",
-                "description": "Optional: human-readable device label"
+                "value": "Postman/Testing"
               }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phoneNumber\": \"0987654321\",\n  \"email\": \"owner@owlexa.com\",\n  \"password\": \"Password123\",\n  \"fullName\": \"Nguyen Van Owner\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/register/owner",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "register",
-                "owner"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register", "owner"]
             },
-            "description": "Đăng ký tài khoản **Owner** mới.\n\nSau khi đăng ký thành công, server trả về `accessToken` + `refreshToken` và tạo `UserSession` đầu tiên cho người dùng.\n\nTest script tự động lưu token và sessionId."
+            "description": "Đăng ký tài khoản **Owner** mới. Sau khi đăng ký thành công, server trả về `accessToken` + `refreshToken` và tạo `UserSession` đầu tiên."
           },
           "response": []
         },
@@ -183,25 +153,15 @@
               "script": {
                 "exec": [
                   "var jsonData = pm.response.json();",
-                  "",
-                  "// --- Status check (register returns 201) ---",
                   "pm.test(\"Status 200 or 201\", function () {",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
                   "});",
-                  "",
-                  "// --- Save accessToken ---",
                   "if (jsonData && jsonData.accessToken) {",
                   "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
-                  "    console.log(\"[Auth] Saved accessToken\");",
                   "}",
-                  "",
-                  "// --- Save refreshToken ---",
                   "if (jsonData && jsonData.refreshToken) {",
                   "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
-                  "    console.log(\"[Auth] Saved refreshToken\");",
                   "}",
-                  "",
-                  "// --- Save sessionId (from SessionResponse) ---",
                   "var sessionId = null;",
                   "if (jsonData && jsonData.session) {",
                   "    sessionId = jsonData.session.sessionId || jsonData.session.id;",
@@ -210,7 +170,6 @@
                   "}",
                   "if (sessionId) {",
                   "    pm.collectionVariables.set(\"sessionId\", String(sessionId));",
-                  "    console.log(\"[Auth] Saved sessionId: \" + sessionId);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -218,43 +177,23 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [
-              {
-                "key": "X-Device-Type",
-                "value": "WEB",
-                "description": "DeviceType enum: WEB | MOBILE | DESKTOP | TABLET"
-              },
-              {
-                "key": "X-Device-Info",
-                "value": "Postman/Testing",
-                "description": "Optional: human-readable device label"
-              }
+              { "key": "X-Device-Type", "value": "WEB" },
+              { "key": "X-Device-Info", "value": "Postman/Testing" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"phoneNumber\": \"0977654321\",\n  \"email\": \"student@owlexa.com\",\n  \"password\": \"Password123\",\n  \"fullName\": \"Nguyen Van Student\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/register/student",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "register",
-                "student"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register", "student"]
             },
-            "description": "Đăng ký tài khoản **Student** mới.\n\nSau khi đăng ký thành công, server trả về `accessToken` + `refreshToken` và tạo `UserSession` đầu tiên.\n\nTest script tự động lưu token và sessionId."
+            "description": "Đăng ký tài khoản **Student** mới."
           },
           "response": []
         },
@@ -266,68 +205,35 @@
               "script": {
                 "exec": [
                   "var jsonData = pm.response.json();",
-                  "",
-                  "pm.test(\"Status 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "if (jsonData && jsonData.accessToken) {",
-                  "    pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
-                  "    console.log(\"[Auth] Refreshed accessToken saved!\");",
-                  "}",
-                  "if (jsonData && jsonData.refreshToken) {",
-                  "    pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
-                  "    console.log(\"[Auth] Refreshed refreshToken saved!\");",
-                  "}",
-                  "",
-                  "// Update sessionId if returned",
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "if (jsonData && jsonData.accessToken) pm.collectionVariables.set(\"accessToken\", jsonData.accessToken);",
+                  "if (jsonData && jsonData.refreshToken) pm.collectionVariables.set(\"refreshToken\", jsonData.refreshToken);",
                   "var sessionId = null;",
-                  "if (jsonData && jsonData.session) {",
-                  "    sessionId = jsonData.session.sessionId || jsonData.session.id;",
-                  "} else if (jsonData && jsonData.sessionId) {",
-                  "    sessionId = jsonData.sessionId;",
-                  "}",
-                  "if (sessionId) {",
-                  "    pm.collectionVariables.set(\"sessionId\", String(sessionId));",
-                  "    console.log(\"[Auth] Updated sessionId: \" + sessionId);",
-                  "}"
+                  "if (jsonData && jsonData.session) sessionId = jsonData.session.sessionId || jsonData.session.id;",
+                  "else if (jsonData && jsonData.sessionId) sessionId = jsonData.sessionId;",
+                  "if (sessionId) pm.collectionVariables.set(\"sessionId\", String(sessionId));"
                 ],
                 "type": "text/javascript"
               }
             }
           ],
           "request": {
-            "auth": {
-              "type": "noauth"
-            },
+            "auth": { "type": "noauth" },
             "method": "POST",
             "header": [
-              {
-                "key": "X-Device-Type",
-                "value": "WEB",
-                "description": "DeviceType enum: WEB | MOBILE | DESKTOP | TABLET"
-              }
+              { "key": "X-Device-Type", "value": "WEB" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/refresh-token",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "refresh-token"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh-token"]
             },
-            "description": "Làm mới `accessToken` bằng `refreshToken` còn hiệu lực.\n\n- `refreshToken` được lấy tự động từ collection variable `{{refreshToken}}`.\n- Session liên kết sẽ được cập nhật `lastActiveAt`.\n- Trả về cặp token mới."
+            "description": "Làm mới `accessToken` bằng `refreshToken` còn hiệu lực."
           },
           "response": []
         },
@@ -338,18 +244,12 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
                   "var jsonData = pm.response.json();",
-                  "// Lưu sessionId đầu tiên nếu chưa có",
                   "if (Array.isArray(jsonData) && jsonData.length > 0) {",
-                  "    var firstSession = jsonData[0];",
-                  "    var sid = firstSession.sessionId || firstSession.id;",
+                  "    var sid = (jsonData[0].sessionId || jsonData[0].id);",
                   "    if (sid && !pm.collectionVariables.get(\"sessionId\")) {",
                   "        pm.collectionVariables.set(\"sessionId\", String(sid));",
-                  "        console.log(\"[Auth] Saved first sessionId: \" + sid);",
                   "    }",
                   "}"
                 ],
@@ -362,15 +262,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/sessions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "sessions"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions"]
             },
-            "description": "Lấy danh sách tất cả `UserSession` đang hoạt động của user hiện tại.\n\n**Yêu cầu:** Bearer token (`Authorization: Bearer {{accessToken}}`).\n\n**Trả về:** Mảng `SessionResponse[]` gồm các trường:\n- `sessionId` / `id`\n- `deviceType` (WEB | MOBILE | DESKTOP | TABLET)\n- `deviceInfo`\n- `active`\n- `createdAt`, `lastActiveAt`"
+            "description": "Lấy danh sách tất cả `UserSession` đang hoạt động của user hiện tại."
           },
           "response": []
         },
@@ -383,8 +278,7 @@
                 "exec": [
                   "pm.test(\"Status 200 or 204\", function () {",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
-                  "});",
-                  "console.log(\"[Auth] Session revoked: \" + pm.collectionVariables.get(\"sessionId\"));"
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -395,16 +289,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/sessions/{{sessionId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "sessions",
-                "{{sessionId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions", "{{sessionId}}"]
             },
-            "description": "Thu hồi (vô hiệu hoá) một `UserSession` cụ thể theo `sessionId`.\n\n**Yêu cầu:** Bearer token.\n\nDùng khi muốn đăng xuất khỏi một thiết bị cụ thể mà không ảnh hưởng đến các session khác."
+            "description": "Thu hồi một `UserSession` cụ thể theo `sessionId`."
           },
           "response": []
         },
@@ -418,11 +306,9 @@
                   "pm.test(\"Status 200 or 204\", function () {",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
                   "});",
-                  "// Clear local tokens",
                   "pm.collectionVariables.set(\"accessToken\", \"\");",
                   "pm.collectionVariables.set(\"refreshToken\", \"\");",
-                  "pm.collectionVariables.set(\"sessionId\", \"\");",
-                  "console.log(\"[Auth] All sessions revoked. Tokens cleared.\");"
+                  "pm.collectionVariables.set(\"sessionId\", \"\");"
                 ],
                 "type": "text/javascript"
               }
@@ -433,15 +319,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/auth/sessions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "sessions"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions"]
             },
-            "description": "Đăng xuất khỏi **tất cả** thiết bị — thu hồi toàn bộ `UserSession` active.\n\n**Yêu cầu:** Bearer token.\n\nTest script tự động xoá `accessToken`, `refreshToken`, `sessionId` khỏi collection variables."
+            "description": "Đăng xuất khỏi **tất cả** thiết bị — thu hồi toàn bộ `UserSession` active."
           },
           "response": []
         },
@@ -457,8 +338,7 @@
                   "});",
                   "pm.collectionVariables.set(\"accessToken\", \"\");",
                   "pm.collectionVariables.set(\"refreshToken\", \"\");",
-                  "pm.collectionVariables.set(\"sessionId\", \"\");",
-                  "console.log(\"[Auth] Current session logged out. Tokens cleared.\");"
+                  "pm.collectionVariables.set(\"sessionId\", \"\");"
                 ],
                 "type": "text/javascript"
               }
@@ -470,23 +350,14 @@
             "body": {
               "mode": "raw",
               "raw": "{}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/auth/logout",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "auth",
-                "logout"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
             },
-            "description": "Đăng xuất khỏi session hiện tại (session được xác định qua `accessToken`).\n\n**Yêu cầu:** Bearer token.\n\nTest script tự động xoá token khỏi collection variables."
+            "description": "Đăng xuất khỏi session hiện tại."
           },
           "response": []
         }
@@ -503,15 +374,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/admin/stats",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin",
-                "stats"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "stats"]
             },
-            "description": "Lấy dữ liệu thống kê tổng hợp của hệ thống."
+            "description": "Lấy dữ liệu thống kê tổng hợp của toàn hệ thống (tất cả centers)."
           },
           "response": []
         }
@@ -529,21 +395,15 @@
               "script": {
                 "exec": [
                   "var jsonData = null;",
-                  "try {",
-                  "  jsonData = pm.response.json();",
-                  "} catch (e) {",
-                  "  jsonData = null;",
-                  "}",
-                  "",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
                   "var centerId = null;",
                   "if (jsonData) {",
                   "  centerId = jsonData.id || jsonData.centerId || (jsonData.data && (jsonData.data.id || jsonData.data.centerId));",
                   "}",
-                  "",
                   "if (centerId) {",
                   "  pm.collectionVariables.set(\"centerId\", String(centerId));",
                   "  pm.collectionVariables.set(\"tenantId\", String(centerId));",
-                  "  console.log(\"Saved centerId and tenantId to collection variables!\");",
+                  "  console.log(\"Saved centerId and tenantId!\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -556,21 +416,12 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Owlexa Center Ho Chi Minh\",\n  \"subdomain\": \"hcm-center\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/centers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "centers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "centers"]
             },
             "description": "Tạo một cơ sở mới. subdomain chỉ chứa chữ thường, số và gạch ngang."
           },
@@ -583,13 +434,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/centers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "centers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "centers"]
             },
             "description": "Lấy danh sách tất cả cơ sở."
           },
@@ -601,15 +447,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/owner/centers/1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "centers",
-                "1"
-              ]
+              "raw": "{{baseUrl}}/owner/centers/{{centerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "centers", "{{centerId}}"]
             },
             "description": "Lấy chi tiết một cơ sở dựa trên ID."
           },
@@ -623,22 +463,12 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Owlexa Center HCM Updated\",\n  \"subdomain\": \"hcm-center-updated\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{baseUrl}}/owner/centers/1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "centers",
-                "1"
-              ]
+              "raw": "{{baseUrl}}/owner/centers/{{centerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "centers", "{{centerId}}"]
             },
             "description": "Cập nhật thông tin cơ sở dựa trên ID."
           },
@@ -650,15 +480,9 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/owner/centers/1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "centers",
-                "1"
-              ]
+              "raw": "{{baseUrl}}/owner/centers/{{centerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "centers", "{{centerId}}"]
             },
             "description": "Xóa một cơ sở dựa trên ID."
           },
@@ -679,15 +503,10 @@
                 "exec": [
                   "var jsonData = null;",
                   "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
-                  "",
-                  "var teacherUserId = null;",
-                  "if (jsonData) {",
-                  "  teacherUserId = jsonData.userId || jsonData.teacherUserId || (jsonData.data && (jsonData.data.userId || jsonData.data.teacherUserId));",
-                  "}",
-                  "",
+                  "var teacherUserId = jsonData ? (jsonData.userId || jsonData.teacherUserId || (jsonData.data && jsonData.data.userId)) : null;",
                   "if (teacherUserId) {",
                   "  pm.collectionVariables.set(\"teacherUserId\", String(teacherUserId));",
-                  "  console.log(\"Saved teacherUserId to collection variables!\");",
+                  "  console.log(\"Saved teacherUserId!\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -700,21 +519,12 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fullName\": \"Tran Van Teacher\",\n  \"email\": \"teacher.tran@owlexa.com\",\n  \"phoneNumber\": \"0934567890\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/teachers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "teachers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "teachers"]
             },
             "description": "Thêm một giáo viên mới. Số điện thoại phải là định dạng Việt Nam hợp lệ (10 chữ số bắt đầu bằng 0)."
           },
@@ -727,13 +537,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/teachers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "teachers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "teachers"]
             },
             "description": "Lấy danh sách tất cả giáo viên."
           },
@@ -747,22 +552,12 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"teachers\": [\n    {\n      \"fullName\": \"Teacher Alpha\",\n      \"email\": \"alpha.teacher@owlexa.com\",\n      \"phoneNumber\": \"0945678901\"\n    },\n    {\n      \"fullName\": \"Teacher Beta\",\n      \"email\": \"beta.teacher@owlexa.com\",\n      \"phoneNumber\": \"0956789012\"\n    }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/teachers/bulk",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "teachers",
-                "bulk"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "teachers", "bulk"]
             },
             "description": "Thêm hàng loạt giáo viên cùng lúc."
           },
@@ -776,22 +571,12 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fullName\": \"Tran Van Teacher Updated\",\n  \"email\": \"teacher.tran.updated@owlexa.com\",\n  \"phoneNumber\": \"0934567890\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{baseUrl}}/owner/teachers/1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "teachers",
-                "1"
-              ]
+              "raw": "{{baseUrl}}/owner/teachers/{{teacherId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "teachers", "{{teacherId}}"]
             },
             "description": "Cập nhật thông tin giáo viên dựa trên ID giáo viên."
           },
@@ -803,15 +588,9 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/owner/teachers/1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "teachers",
-                "1"
-              ]
+              "raw": "{{baseUrl}}/owner/teachers/{{teacherId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "teachers", "{{teacherId}}"]
             },
             "description": "Xóa giáo viên theo ID."
           },
@@ -825,27 +604,35 @@
       "item": [
         {
           "name": "Create Cashier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var cashierId = jsonData ? (jsonData.id || jsonData.userId || jsonData.cashierId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (cashierId) {",
+                  "  pm.collectionVariables.set(\"cashierId\", String(cashierId));",
+                  "  console.log(\"Saved cashierId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fullName\": \"Le Thi Cashier\",\n  \"email\": \"cashier.le@owlexa.com\",\n  \"phoneNumber\": \"0967890123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/cashiers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "cashiers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "cashiers"]
             },
             "description": "Thêm một thu ngân mới."
           },
@@ -858,15 +645,43 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/cashiers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "cashiers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "cashiers"]
             },
             "description": "Lấy danh sách tất cả thu ngân."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Cashier",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Le Thi Cashier Updated\",\n  \"email\": \"cashier.le.updated@owlexa.com\",\n  \"phoneNumber\": \"0967890123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/cashiers/{{cashierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "cashiers", "{{cashierId}}"]
+            },
+            "description": "Cập nhật thông tin thu ngân."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Cashier",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/cashiers/{{cashierId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "cashiers", "{{cashierId}}"]
+            },
+            "description": "Xóa thu ngân."
           },
           "response": []
         }
@@ -884,20 +699,11 @@
               "script": {
                 "exec": [
                   "var jsonData = null;",
-                  "try {",
-                  "  jsonData = pm.response.json();",
-                  "} catch (e) {",
-                  "  jsonData = null;",
-                  "}",
-                  "",
-                  "var studentUserId = null;",
-                  "if (jsonData) {",
-                  "  studentUserId = jsonData.userId || jsonData.studentUserId || (jsonData.data && (jsonData.data.userId || jsonData.data.studentUserId));",
-                  "}",
-                  "",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var studentUserId = jsonData ? (jsonData.userId || jsonData.studentUserId || (jsonData.data && jsonData.data.userId)) : null;",
                   "if (studentUserId) {",
                   "  pm.collectionVariables.set(\"studentUserId\", String(studentUserId));",
-                  "  console.log(\"Saved studentUserId to collection variables!\");",
+                  "  console.log(\"Saved studentUserId!\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -910,21 +716,12 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"fullName\": \"Nguyen Van Student\",\n  \"email\": \"student.single@owlexa.com\",\n  \"phoneNumber\": \"0978901234\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/students",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "students"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "students"]
             },
             "description": "Thêm một học sinh mới."
           },
@@ -937,13 +734,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/students",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "students"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "students"]
             },
             "description": "Lấy danh sách học sinh."
           },
@@ -957,24 +749,47 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"students\": [\n    {\n      \"fullName\": \"Student Alpha\",\n      \"email\": \"alpha.student@owlexa.com\",\n      \"phoneNumber\": \"0978901234\"\n    },\n    {\n      \"fullName\": \"Student Beta\",\n      \"email\": \"beta.student@owlexa.com\",\n      \"phoneNumber\": \"0989012345\"\n    }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/students/bulk",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "students",
-                "bulk"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "students", "bulk"]
             },
             "description": "Thêm hàng loạt học sinh cùng lúc."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Student",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Nguyen Van Student Updated\",\n  \"email\": \"student.updated@owlexa.com\",\n  \"phoneNumber\": \"0978901234\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/students/{{studentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "students", "{{studentId}}"]
+            },
+            "description": "Cập nhật thông tin học sinh."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Student",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/students/{{studentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "students", "{{studentId}}"]
+            },
+            "description": "Xóa học sinh."
           },
           "response": []
         }
@@ -982,7 +797,7 @@
     },
     {
       "name": "Owner - Classes",
-      "description": "Class management APIs for the current center.",
+      "description": "Quản lý Lớp học (Yêu cầu quyền OWNER).",
       "item": [
         {
           "name": "Create Class",
@@ -993,15 +808,10 @@
                 "exec": [
                   "var jsonData = null;",
                   "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
-                  "",
-                  "var classId = null;",
-                  "if (jsonData) {",
-                  "  classId = jsonData.id || jsonData.classId || (jsonData.data && (jsonData.data.id || jsonData.data.classId));",
-                  "}",
-                  "",
+                  "var classId = jsonData ? (jsonData.id || jsonData.classId || (jsonData.data && jsonData.data.id)) : null;",
                   "if (classId) {",
                   "  pm.collectionVariables.set(\"classId\", String(classId));",
-                  "  console.log(\"Saved classId to collection variables!\");",
+                  "  console.log(\"Saved classId!\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1014,23 +824,14 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"VSTEP B2 Evening\",\n  \"vstepLevel\": \"B2\",\n  \"maxStudent\": 12,\n  \"monthlyFee\": 1500000\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/classes",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes"]
             },
-            "description": "Create a class in the active center."
+            "description": "Tạo một lớp học mới trong center hiện tại."
           },
           "response": []
         },
@@ -1041,15 +842,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes"]
             },
-            "description": "List all classes in the active center."
+            "description": "Lấy danh sách tất cả lớp học."
           },
           "response": []
         },
@@ -1061,24 +857,14 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"VSTEP B2 Evening Updated\",\n  \"vstepLevel\": \"B2\",\n  \"maxStudent\": 15,\n  \"monthlyFee\": 1800000\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}"]
             },
-            "description": "Update class by classId."
+            "description": "Cập nhật thông tin lớp học."
           },
           "response": []
         },
@@ -1089,16 +875,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}"]
             },
-            "description": "Delete a class by classId."
+            "description": "Xóa một lớp học."
           },
           "response": []
         }
@@ -1106,35 +886,41 @@
     },
     {
       "name": "Owner - Enrollments",
-      "description": "Manage students inside classes.",
+      "description": "Quản lý học sinh trong lớp học (Yêu cầu quyền OWNER).",
       "item": [
         {
           "name": "Enroll Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var enrollmentId = jsonData ? (jsonData.id || jsonData.enrollmentId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (enrollmentId) {",
+                  "  pm.collectionVariables.set(\"enrollmentId\", String(enrollmentId));",
+                  "  console.log(\"Saved enrollmentId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"studentId\": {{studentUserId}}\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "raw": "{\n  \"studentUserId\": {{studentUserId}}\n}",
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/enrollments",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "enrollments"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "enrollments"]
             },
-            "description": "Enroll a student into a class."
+            "description": "Thêm một học sinh vào lớp học."
           },
           "response": []
         },
@@ -1145,17 +931,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/enrollments",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "enrollments"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "enrollments"]
             },
-            "description": "List active students in a class."
+            "description": "Lấy danh sách học sinh đang học trong một lớp."
           },
           "response": []
         },
@@ -1166,19 +945,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/enrollments/{{studentUserId}}/drop",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "enrollments",
-                "{{studentUserId}}",
-                "drop"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "enrollments", "{{studentUserId}}", "drop"]
             },
-            "description": "Mark a student as dropped from a class."
+            "description": "Đánh dấu học sinh là đã nghỉ học (drop) khỏi lớp."
           },
           "response": []
         }
@@ -1186,7 +956,7 @@
     },
     {
       "name": "Owner - Schedules",
-      "description": "Manage class schedules.",
+      "description": "Quản lý thời khóa biểu lớp học (Yêu cầu quyền OWNER).",
       "item": [
         {
           "name": "Create Schedule",
@@ -1197,15 +967,10 @@
                 "exec": [
                   "var jsonData = null;",
                   "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
-                  "",
-                  "var scheduleId = null;",
-                  "if (jsonData) {",
-                  "  scheduleId = jsonData.id || jsonData.scheduleId || (jsonData.data && (jsonData.data.id || jsonData.data.scheduleId));",
-                  "}",
-                  "",
+                  "var scheduleId = jsonData ? (jsonData.id || jsonData.scheduleId || (jsonData.data && jsonData.data.id)) : null;",
                   "if (scheduleId) {",
                   "  pm.collectionVariables.set(\"scheduleId\", String(scheduleId));",
-                  "  console.log(\"Saved scheduleId to collection variables!\");",
+                  "  console.log(\"Saved scheduleId!\");",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -1218,25 +983,14 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"teacherUserId\": {{teacherUserId}},\n  \"dayOfWeek\": 2,\n  \"startTime\": \"18:30:00\",\n  \"endTime\": \"20:00:00\",\n  \"room\": \"A101\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "schedules"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "schedules"]
             },
-            "description": "Create a schedule for a class."
+            "description": "Tạo thời khóa biểu cho một lớp học. dayOfWeek: 1=Thứ 2, 7=Chủ nhật."
           },
           "response": []
         },
@@ -1247,17 +1001,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "schedules"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "schedules"]
             },
-            "description": "List all schedules of a class."
+            "description": "Lấy tất cả thời khóa biểu của một lớp."
           },
           "response": []
         },
@@ -1268,19 +1015,10 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules/teacher/{{teacherUserId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "schedules",
-                "teacher",
-                "{{teacherUserId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "schedules", "teacher", "{{teacherUserId}}"]
             },
-            "description": "List all schedules for a teacher."
+            "description": "Lấy thời khóa biểu của một giáo viên trong lớp."
           },
           "response": []
         },
@@ -1292,26 +1030,14 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"teacherUserId\": {{teacherUserId}},\n  \"dayOfWeek\": 3,\n  \"startTime\": \"19:00:00\",\n  \"endTime\": \"20:30:00\",\n  \"room\": \"A102\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules/{{scheduleId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "schedules",
-                "{{scheduleId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "schedules", "{{scheduleId}}"]
             },
-            "description": "Update a schedule by scheduleId."
+            "description": "Cập nhật thời khóa biểu."
           },
           "response": []
         },
@@ -1322,116 +1048,54 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/schedules/{{scheduleId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "schedules",
-                "{{scheduleId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "schedules", "{{scheduleId}}"]
             },
-            "description": "Delete a schedule."
+            "description": "Xóa thời khóa biểu."
           },
           "response": []
         }
       ]
     },
     {
-      "name": "Attendance",
-      "description": "Attendance endpoints.",
-      "item": [
-        {
-          "name": "Mark Attendance",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sessionDate\": \"2026-06-19\",\n  \"records\": [\n    {\n      \"studentUserId\": {{studentUserId}},\n      \"status\": \"PRESENT\",\n      \"note\": \"On time\"\n    }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/attendance/schedules/{{scheduleId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "attendance",
-                "schedules",
-                "{{scheduleId}}"
-              ]
-            },
-            "description": "Mark attendance for one class session."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Attendance By Schedule",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/attendance/schedules/{{scheduleId}}?sessionDate=2026-06-19",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "attendance",
-                "schedules",
-                "{{scheduleId}}"
-              ],
-              "query": [
-                {
-                  "key": "sessionDate",
-                  "value": "2026-06-19"
-                }
-              ]
-            },
-            "description": "View attendance by schedule and session date."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Fee Records",
-      "description": "Tuition fee endpoints.",
+      "name": "Owner - Fee Records",
+      "description": "Quản lý phiếu thu học phí (Yêu cầu quyền OWNER).",
       "item": [
         {
           "name": "Generate Fee Records For Class",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "if (jsonData && Array.isArray(jsonData) && jsonData.length > 0) {",
+                  "  var feeId = jsonData[0].id || jsonData[0].feeRecordId || (jsonData[0].data && jsonData[0].data.id);",
+                  "  if (feeId) {",
+                  "    pm.collectionVariables.set(\"feeRecordId\", String(feeId));",
+                  "    console.log(\"Saved feeRecordId!\");",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"month\": \"2026-06\",\n  \"dueDate\": \"2026-06-25\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "options": { "raw": { "language": "json" } }
             },
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/fee-records/generate",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "fee-records",
-                "generate"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "fee-records", "generate"]
             },
-            "description": "Generate tuition fee records for active students in a class."
+            "description": "Tạo phiếu thu học phí cho tất cả học sinh đang học trong lớp. month format: YYYY-MM."
           },
           "response": []
         },
@@ -1442,42 +1106,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/classes/{{classId}}/fee-records?month=2026-06",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "classes",
-                "{{classId}}",
-                "fee-records"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "fee-records"],
               "query": [
-                {
-                  "key": "month",
-                  "value": "2026-06"
-                }
+                { "key": "month", "value": "2026-06" }
               ]
             },
-            "description": "View fee records by class and month."
-          },
-          "response": []
-        },
-        {
-          "name": "Get My Fee Records",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/fee-records/me",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "fee-records",
-                "me"
-              ]
-            },
-            "description": "Student views their own fee records."
+            "description": "Xem phiếu thu theo lớp và tháng."
           },
           "response": []
         },
@@ -1488,16 +1123,921 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/owner/fee-records/overdue",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "owner",
-                "fee-records",
-                "overdue"
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "fee-records", "overdue"]
+            },
+            "description": "Xem danh sách phiếu thu quá hạn của center."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Payments",
+      "description": "Quản lý thanh toán học phí (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Collect Cash Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var paymentId = jsonData ? (jsonData.id || jsonData.paymentId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (paymentId) {",
+                  "  pm.collectionVariables.set(\"paymentId\", String(paymentId));",
+                  "  console.log(\"Saved paymentId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1500000,\n  \"note\": \"Thu tien mat thang 06/2026\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/fee-record/{{feeRecordId}}/payments/cash",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "fee-record", "{{feeRecordId}}", "payments", "cash"]
+            },
+            "description": "Thu tiền mặt cho một phiếu thu học phí. Trả về thông tin Payment đã tạo."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payments By Fee Record",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/fee-record/{{feeRecordId}}/payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "fee-record", "{{feeRecordId}}", "payments"]
+            },
+            "description": "Xem danh sách thanh toán của một phiếu thu."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "payments"]
+            },
+            "description": "Xem tất cả thanh toán của center."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Documents",
+      "description": "Quản lý tài liệu lớp học (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Create Document For Class",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var docId = jsonData ? (jsonData.id || jsonData.documentId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (docId) {",
+                  "  pm.collectionVariables.set(\"documentId\", String(docId));",
+                  "  console.log(\"Saved documentId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bai tap On Tap Unit 1\",\n  \"type\": \"WORKSHEET\",\n  \"url\": \"https://example.com/docs/worksheet-unit1.pdf\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "documents"]
+            },
+            "description": "Tạo tài liệu cho lớp học. type: WORKSHEET | READING | HOMEWORK | OTHER."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Documents By Class",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/classes/{{classId}}/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "classes", "{{classId}}", "documents"]
+            },
+            "description": "Xem danh sách tài liệu của một lớp."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Dashboard",
+      "description": "Bảng điều khiển thống kê (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/dashboard/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "dashboard", "stats"]
+            },
+            "description": "Lấy dữ liệu thống kê tổng hợp của center hiện tại: tổng học sinh, giáo viên, lớp học, học phí (đã đóng/chưa đóng), và doanh thu."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Owner - Mock Tests",
+      "description": "Quản lý bài thi thử (Yêu cầu quyền OWNER).",
+      "item": [
+        {
+          "name": "Create Mock Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var testId = jsonData ? (jsonData.id || jsonData.testId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (testId) {",
+                  "  pm.collectionVariables.set(\"mockTestId\", String(testId));",
+                  "  console.log(\"Saved mockTestId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"VSTEP Mock Test 1\",\n  \"description\": \"Bai thi thu VSTEP B2\",\n  \"level\": \"B2\",\n  \"duration\": 120,\n  \"totalQuestions\": 5,\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests"]
+            },
+            "description": "Tạo bài thi thử mới. level: A1 | A2 | B1 | B2 | C1 | C2. duration: thời gian làm bài (phút)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Mock Tests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests"]
+            },
+            "description": "Lấy danh sách tất cả bài thi thử của center."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Mock Test",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"VSTEP Mock Test 1 Updated\",\n  \"description\": \"Bai thi thu VSTEP B2 - cap nhat\",\n  \"level\": \"B2\",\n  \"duration\": 150,\n  \"totalQuestions\": 5,\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}"]
+            },
+            "description": "Cập nhật thông tin bài thi thử."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Mock Test",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}"]
+            },
+            "description": "Xóa bài thi thử."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Questions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}", "questions"]
+            },
+            "description": "Lấy danh sách câu hỏi của một bài thi."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var questionId = jsonData ? (jsonData.id || jsonData.questionId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (questionId) {",
+                  "  pm.collectionVariables.set(\"questionId\", String(questionId));",
+                  "  console.log(\"Saved questionId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionText\": \"What is the capital of France?\",\n  \"optionA\": \"London\",\n  \"optionB\": \"Paris\",\n  \"optionC\": \"Berlin\",\n  \"optionD\": \"Madrid\",\n  \"correctAnswer\": \"B\",\n  \"explanation\": \"Paris is the capital city of France.\",\n  \"sortOrder\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}", "questions"]
+            },
+            "description": "Thêm câu hỏi vào bài thi. correctAnswer: A | B | C | D."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Question",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionText\": \"What is the capital of France? (Updated)\",\n  \"optionA\": \"London\",\n  \"optionB\": \"Paris\",\n  \"optionC\": \"Berlin\",\n  \"optionD\": \"Madrid\",\n  \"correctAnswer\": \"B\",\n  \"explanation\": \"Paris is the capital city of France.\",\n  \"sortOrder\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}/questions/{{questionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}", "questions", "{{questionId}}"]
+            },
+            "description": "Cập nhật câu hỏi."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Question",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}/questions/{{questionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}", "questions", "{{questionId}}"]
+            },
+            "description": "Xóa câu hỏi khỏi bài thi."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/{{mockTestId}}/attempts",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "{{mockTestId}}", "attempts"]
+            },
+            "description": "Xem danh sách lượt thi của một bài thi."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/owner/mock-tests/attempts/{{attemptId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["owner", "mock-tests", "attempts", "{{attemptId}}"]
+            },
+            "description": "Xem chi tiết một lượt thi cụ thể."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Classes",
+      "description": "Xem lớp học của giáo viên (Yêu cầu quyền TEACHER).",
+      "item": [
+        {
+          "name": "Get My Classes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/classes/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "classes", "me"]
+            },
+            "description": "Lấy danh sách lớp học mà giáo viên đang dạy."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Classes With Students",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/classes/with-students",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "classes", "with-students"]
+            },
+            "description": "Lấy danh sách lớp học kèm theo danh sách học sinh của mỗi lớp."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Schedules",
+      "description": "Xem lịch giảng dạy của giáo viên (Yêu cầu quyền TEACHER).",
+      "item": [
+        {
+          "name": "Get My Schedules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/schedules/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "schedules", "me"]
+            },
+            "description": "Lấy thời khóa biểu giảng dạy của giáo viên hiện tại."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Mock Test Attempts",
+      "description": "Xem kết quả thi thử của học sinh (Yêu cầu quyền TEACHER).",
+      "item": [
+        {
+          "name": "Get Attempts By Class",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/mock-tests/attempts?classId={{classId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "mock-tests", "attempts"],
+              "query": [
+                { "key": "classId", "value": "{{classId}}" }
               ]
             },
-            "description": "View overdue fee records for the center."
+            "description": "Lấy danh sách lượt thi thử theo lớp. classId là tuỳ chọn."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/mock-tests/attempts/{{attemptId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "mock-tests", "attempts", "{{attemptId}}"]
+            },
+            "description": "Xem chi tiết một lượt thi cụ thể."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Essay Rubrics",
+      "description": "Quản lý rubric (thang điểm) chấm essay (Yêu cầu quyền TEACHER).",
+      "item": [
+        {
+          "name": "Get My Rubrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/essay-rubrics/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "essay-rubrics", "me"]
+            },
+            "description": "Lấy danh sách rubric của giáo viên hiện tại."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Rubric",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var rubricId = jsonData ? (jsonData.id || jsonData.rubricId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (rubricId) {",
+                  "  pm.collectionVariables.set(\"rubricId\", String(rubricId));",
+                  "  console.log(\"Saved rubricId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"classId\": {{classId}},\n  \"title\": \"Essay Rubric B2\",\n  \"description\": \"Thang diem bai essay B2\",\n  \"maxScore\": 100,\n  \"criteria\": [\n    {\n      \"name\": \"Content\",\n      \"description\": \"Noi dung bai viet\",\n      \"weight\": 0.4,\n      \"maxScore\": 40\n    },\n    {\n      \"name\": \"Vocabulary\",\n      \"description\": \"Su dung tu vung\",\n      \"weight\": 0.2,\n      \"maxScore\": 20\n    },\n    {\n      \"name\": \"Grammar\",\n      \"description\": \"Ngu phap\",\n      \"weight\": 0.2,\n      \"maxScore\": 20\n    },\n    {\n      \"name\": \"Structure\",\n      \"description\": \"Cu truc bai viet\",\n      \"weight\": 0.2,\n      \"maxScore\": 20\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teacher/essay-rubrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "essay-rubrics"]
+            },
+            "description": "Tạo rubric (thang điểm) để chấm essay. Tổng weight của criteria phải = 1.0."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Teacher - Essays",
+      "description": "Quản lý bài essay của học sinh trong lớp (Yêu cầu quyền TEACHER).",
+      "item": [
+        {
+          "name": "Get Class Essays",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teacher/classes/{{classId}}/essays",
+              "host": ["{{baseUrl}}"],
+              "path": ["teacher", "classes", "{{classId}}", "essays"]
+            },
+            "description": "Xem danh sách bài essay của học sinh trong một lớp."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Student - Schedules",
+      "description": "Xem lịch học của học sinh (Yêu cầu quyền STUDENT).",
+      "item": [
+        {
+          "name": "Get My Schedules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/schedules/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "schedules", "me"]
+            },
+            "description": "Lấy thời khóa biểu học tập của học sinh hiện tại."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Student - Fee Records",
+      "description": "Xem học phí cá nhân (Yêu cầu quyền STUDENT).",
+      "item": [
+        {
+          "name": "Get My Fee Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fee-records/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["fee-records", "me"]
+            },
+            "description": "Xem danh sách phiếu thu học phí cá nhân."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Student - Payments",
+      "description": "Xem lịch sử thanh toán cá nhân (Yêu cầu quyền STUDENT).",
+      "item": [
+        {
+          "name": "Get My Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/payments/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "payments", "me"]
+            },
+            "description": "Xem danh sách thanh toán của học sinh hiện tại."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Student - Documents",
+      "description": "Xem tài liệu học tập (Yêu cầu quyền STUDENT).",
+      "item": [
+        {
+          "name": "Get My Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "documents"]
+            },
+            "description": "Xem danh sách tài liệu được giao cho học sinh hiện tại (tài liệu từ các lớp đang học)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Student - Essays",
+      "description": "Nộp và xem bài essay (Yêu cầu quyền STUDENT).",
+      "item": [
+        {
+          "name": "Submit Essay",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var essayId = jsonData ? (jsonData.id || jsonData.essayId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (essayId) {",
+                  "  pm.collectionVariables.set(\"essayId\", String(essayId));",
+                  "  console.log(\"Saved essayId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rubricId\": {{rubricId}},\n  \"content\": \"This is my essay content...\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/essays/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["essays", "submit"]
+            },
+            "description": "Nộp một bài essay. rubricId là ID của rubric (thang điểm) được giáo viên tạo."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Essays",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/essays/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "essays", "me"]
+            },
+            "description": "Xem danh sách bài essay đã nộp của học sinh hiện tại."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Student - Mock Tests",
+      "description": "Làm bài thi thử (Yêu cầu quyền STUDENT).",
+      "item": [
+        {
+          "name": "Get Available Tests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/mock-tests",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "mock-tests"]
+            },
+            "description": "Lấy danh sách bài thi thử khả dụng cho học sinh."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Test Questions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/mock-tests/{{mockTestId}}/questions",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "mock-tests", "{{mockTestId}}", "questions"]
+            },
+            "description": "Lấy danh sách câu hỏi của một bài thi (không có đáp án đúng)."
+          },
+          "response": []
+        },
+        {
+          "name": "Start Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var attemptId = jsonData ? (jsonData.id || jsonData.attemptId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (attemptId) {",
+                  "  pm.collectionVariables.set(\"attemptId\", String(attemptId));",
+                  "  console.log(\"Saved attemptId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mock-tests/{{mockTestId}}/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["mock-tests", "{{mockTestId}}", "start"]
+            },
+            "description": "Bắt đầu làm bài thi. Server tạo một MockTestAttempt và trả về attemptId."
+          },
+          "response": []
+        },
+        {
+          "name": "Save Answer",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"B\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mock-tests/{{mockTestId}}/answers/{{questionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["mock-tests", "{{mockTestId}}", "answers", "{{questionId}}"]
+            },
+            "description": "Lưu đáp án cho một câu hỏi trong lượt thi. answer: A | B | C | D. Có thể gọi nhiều lần."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = null;",
+                  "try { jsonData = pm.response.json(); } catch (e) { jsonData = null; }",
+                  "var attemptId = jsonData ? (jsonData.id || jsonData.attemptId || (jsonData.data && jsonData.data.id)) : null;",
+                  "if (attemptId) {",
+                  "  pm.collectionVariables.set(\"attemptId\", String(attemptId));",
+                  "  console.log(\"Saved attemptId!\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"testId\": {{mockTestId}},\n  \"answers\": [\n    {\"questionId\": 1, \"answer\": \"B\"},\n    {\"questionId\": 2, \"answer\": \"A\"}\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/mock-tests/{{mockTestId}}/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["mock-tests", "{{mockTestId}}", "submit"]
+            },
+            "description": "Nộp bài thi. Server chấm điểm và trả về kết quả. Trả về 200 kể cả khi chưa submit."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/student/mock-tests/results",
+              "host": ["{{baseUrl}}"],
+              "path": ["student", "mock-tests", "results"]
+            },
+            "description": "Lấy lịch sử kết quả thi thử của học sinh."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Result Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/mock-tests/results/{{attemptId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["mock-tests", "results", "{{attemptId}}"]
+            },
+            "description": "Xem chi tiết kết quả một lượt thi (có điểm số)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attempt Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/mock-tests/attempts/{{attemptId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["mock-tests", "attempts", "{{attemptId}}"]
+            },
+            "description": "Xem chi tiết một lượt thi (bao gồm đáp án đã chọn)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "description": "Điểm danh buổi học (Yêu cầu quyền TEACHER/OWNER).",
+      "item": [
+        {
+          "name": "Mark Attendance",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionDate\": \"2026-06-19\",\n  \"records\": [\n    {\n      \"studentUserId\": {{studentUserId}},\n      \"status\": \"PRESENT\",\n      \"note\": \"On time\"\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/attendance/schedules/{{scheduleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "schedules", "{{scheduleId}}"]
+            },
+            "description": "Điểm danh cho một buổi học. status: PRESENT | ABSENT | LATE | EXCUSED."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attendance By Schedule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/attendance/schedules/{{scheduleId}}?date=2026-06-19",
+              "host": ["{{baseUrl}}"],
+              "path": ["attendance", "schedules", "{{scheduleId}}"],
+              "query": [
+                { "key": "date", "value": "2026-06-19" }
+              ]
+            },
+            "description": "Xem danh sách điểm danh của một buổi học theo ngày."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Essay Grading",
+      "description": "Chấm điểm và xem kết quả essay (Yêu cầu quyền TEACHER/STUDENT).",
+      "item": [
+        {
+          "name": "Get Essay Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/essays/{{essayId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["essays", "{{essayId}}"]
+            },
+            "description": "Xem chi tiết một bài essay (nội dung, rubric, feedback)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grading Result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/essays/{{essayId}}/grading-result",
+              "host": ["{{baseUrl}}"],
+              "path": ["essays", "{{essayId}}", "grading-result"]
+            },
+            "description": "Xem kết quả chấm điểm (điểm tổng, điểm theo từng tiêu chí)."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Manual Feedback",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feedback\": \"Bai viet tot, can cai thien phan mo ta chi tiet hon.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/essays/{{essayId}}/manual-feedback",
+              "host": ["{{baseUrl}}"],
+              "path": ["essays", "{{essayId}}", "manual-feedback"]
+            },
+            "description": "Thêm nhận xét thủ công cho một bài essay (dành cho giáo viên)."
           },
           "response": []
         }
@@ -1532,8 +2072,7 @@
           "    if (pm.request.url && typeof pm.request.url.getPath === \"function\") {",
           "        path = pm.request.url.getPath().join(\"/\");",
           "    }",
-          "",
-          "    if (path.indexOf(\"owner/\") === 0 || path.indexOf(\"attendance\") === 0 || path.indexOf(\"fee-records\") === 0) {",
+          "    if (path.indexOf(\"owner/\") === 0 || path.indexOf(\"attendance\") === 0 || path.indexOf(\"fee-records\") === 0 || path.indexOf(\"student/\") === 0 || path.indexOf(\"teacher/\") === 0 || path.indexOf(\"essays\") === 0 || path.indexOf(\"mock-tests\") === 0) {",
           "        pm.request.headers.upsert({ key: \"X-Tenant-ID\", value: String(tenantId) });",
           "    }",
           "}"
@@ -1544,9 +2083,7 @@
       "listen": "test",
       "script": {
         "type": "text/javascript",
-        "exec": [
-          ""
-        ]
+        "exec": [""]
       }
     }
   ],
@@ -1567,6 +2104,11 @@
       "type": "string"
     },
     {
+      "key": "sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "centerId",
       "value": "",
       "type": "string"
@@ -1577,7 +2119,7 @@
       "type": "string"
     },
     {
-      "key": "classId",
+      "key": "teacherId",
       "value": "",
       "type": "string"
     },
@@ -1587,7 +2129,27 @@
       "type": "string"
     },
     {
+      "key": "cashierId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "studentId",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "studentUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "classId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "enrollmentId",
       "value": "",
       "type": "string"
     },
@@ -1597,7 +2159,42 @@
       "type": "string"
     },
     {
-      "key": "sessionId",
+      "key": "feeRecordId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "paymentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mockTestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "questionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attemptId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rubricId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "essayId",
       "value": "",
       "type": "string"
     }
