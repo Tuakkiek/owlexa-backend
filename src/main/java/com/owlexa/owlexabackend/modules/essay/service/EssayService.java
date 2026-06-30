@@ -19,7 +19,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
@@ -298,10 +298,10 @@ public class EssayService {
                 .id(submission.getId())
                 .studentId(submission.getStudentUser().getId())
                 .studentFullName(submission.getStudentUser().getFullName())
-                .classId(submission.getClazz().getId())
-                .className(submission.getClazz().getName())
-                .rubricId(submission.getRubric().getId())
-                .rubricTitle(submission.getRubric().getTitle())
+                .classId(submission.getClazz() != null ? submission.getClazz().getId() : null)
+                .className(submission.getClazz() != null ? submission.getClazz().getName() : null)
+                .rubricId(submission.getRubric() != null ? submission.getRubric().getId() : null)
+                .rubricTitle(submission.getRubric() != null ? submission.getRubric().getTitle() : null)
                 .content(submission.getContent())
                 .status(submission.getStatus())
                 .submittedAt(submission.getSubmittedAt())
@@ -344,7 +344,7 @@ public class EssayService {
     }
 
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }

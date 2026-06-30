@@ -1,34 +1,39 @@
 package com.owlexa.owlexabackend.modules.class_management.entity;
+
+import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
+import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.user.entity.User;
 
 @Entity
-@Table(
-        name = "schedules",
-        uniqueConstraints = @UniqueConstraint(
-                columnNames = {"class_id", "day_of_week", "start_time", "center_id"}
-        )
-)
+@Table(name = "schedules")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
+@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
+@EntityListeners(TenantEntityListener.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Schedule {
+public class Schedule implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_id", nullable = false)
     private Class clazz;
 
@@ -37,11 +42,12 @@ public class Schedule {
     private Center center;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_user_id", nullable = false)
+    @JoinColumn(name = "teacher_user_id")
     private User teacherUser;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week", nullable = false)
-    private Integer dayOfWeek;
+    private DayOfWeek dayOfWeek;
 
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;
@@ -49,15 +55,18 @@ public class Schedule {
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
-    @Column(nullable = false)
+    @Column(name = "room", length = 50)
     private String room;
 
     @Column(name = "is_active", nullable = false)
-    @Builder.Default
-    private Boolean isActive = true;
+    private boolean isActive;
 
     @CreationTimestamp
-    @Column(name = "create_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Override
+    public Long getCenterId() {
+        return center != null ? center.getId() : null;
+    }
 }

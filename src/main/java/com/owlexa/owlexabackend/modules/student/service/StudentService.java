@@ -12,7 +12,7 @@ import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BulkStudentValidationException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -368,7 +368,7 @@ public class StudentService {
 
     // Required current centerId
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }

@@ -1,11 +1,16 @@
 package com.owlexa.owlexabackend.modules.payment.entity;
+
+import com.owlexa.owlexabackend.common.context.TenantAware;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.aspectj.weaver.loadtime.definition.Definition;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
+import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,13 +19,14 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 
 @Data
 @Entity
-@Table(
-        name = "payments"
-)
+@Table(name = "payments")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
+@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
+@EntityListeners(TenantEntityListener.class)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Payment {
+public class Payment implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,7 +46,7 @@ public class Payment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "collected_by_user_id", nullable = false)
-    private User collectdByUser;
+    private User collectedByUser;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
@@ -58,4 +64,9 @@ public class Payment {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Override
+    public Long getCenterId() {
+        return center != null ? center.getId() : null;
+    }
 }

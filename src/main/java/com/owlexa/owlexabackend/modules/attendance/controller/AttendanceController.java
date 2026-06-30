@@ -29,8 +29,8 @@ public class AttendanceController {
     @GetMapping("/schedules/{scheduleId}")
     public List<AttendanceResponse> findAllBySchedule(
             @PathVariable Long scheduleId,
-            @RequestParam LocalDate sessionDate
+            @RequestParam LocalDate date
     ) {
-        return attendanceService.findAllBySchedule(scheduleId, sessionDate);
+        return attendanceService.findAllBySchedule(scheduleId, date);
     }
 }

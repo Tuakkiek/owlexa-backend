@@ -1,12 +1,13 @@
 package com.owlexa.owlexabackend.modules.attendance.dto.response;
+
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -23,10 +24,10 @@ public class AttendanceResponse {
     private String studentPhoneNumber;
     private String studentFullName;
 
-    private LocalDate sessionDate;
+    private LocalDate date;
     private AttendanceStatus status;
     private String note;
 
-    private Long notedByUserId;
-    private Instant createdAt;
+    private Long markedByUserId;
+    private LocalDateTime createdAt;
 }

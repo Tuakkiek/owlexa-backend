@@ -10,7 +10,7 @@ import com.owlexa.owlexabackend.modules.document.entity.StudentDocument;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
@@ -47,7 +47,7 @@ public class StudentDocumentService {
                 .filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.ACTIVE)
                 .map(ClassEnrollment::getClazz)
                 .flatMap(clazz -> studentDocumentRepository
-                        .findAllByClazzIdAndCenterIdOrderByUploadedAtDesc(clazz.getId(), centerId)
+                        .findAllByClazzIdAndCenterIdOrderByCreatedAtDesc(clazz.getId(), centerId)
                         .stream())
                 .map(this::toResponse)
                 .toList();
@@ -75,11 +75,10 @@ public class StudentDocumentService {
 
         StudentDocument document = StudentDocument.builder()
                 .title(request.getTitle().trim())
-                .type(request.getType())
-                .url(request.getUrl().trim())
+                .documentType(request.getType())
+                .fileUrl(request.getUrl().trim())
                 .clazz(clazz)
                 .center(center)
-                .uploadedByUser(currentUser)
                 .build();
 
         return toResponse(studentDocumentRepository.save(document));
@@ -97,7 +96,7 @@ public class StudentDocumentService {
             throw new AccessDeniedException("You do not have permission to manage this class");
         }
 
-        return studentDocumentRepository.findAllByClazzIdAndCenterIdOrderByUploadedAtDesc(classId, centerId)
+        return studentDocumentRepository.findAllByClazzIdAndCenterIdOrderByCreatedAtDesc(classId, centerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -107,11 +106,11 @@ public class StudentDocumentService {
         return StudentDocumentResponse.builder()
                 .id(document.getId())
                 .title(document.getTitle())
-                .type(document.getType())
-                .uploadedAt(document.getUploadedAt())
-                .url(document.getUrl())
-                .classId(document.getClazz().getId())
-                .className(document.getClazz().getName())
+                .type(document.getDocumentType())
+                .uploadedAt(document.getCreatedAt())
+                .url(document.getFileUrl())
+                .classId(document.getClazzId())
+                .className(document.getClazz() != null ? document.getClazz().getName() : null)
                 .build();
     }
 
@@ -130,7 +129,7 @@ public class StudentDocumentService {
     }
 
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }
