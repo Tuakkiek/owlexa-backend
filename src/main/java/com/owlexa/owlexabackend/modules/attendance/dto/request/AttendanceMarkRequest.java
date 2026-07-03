@@ -1,4 +1,5 @@
 package com.owlexa.owlexabackend.modules.attendance.dto.request;
+
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -16,8 +17,8 @@ import java.util.List;
 @Builder
 public class AttendanceMarkRequest {
 
-    @NotNull(message = "sessionDate is required")
-    private LocalDate sessionDate;
+    @NotNull(message = "date is required")
+    private LocalDate date;
 
     @NotNull(message = "records is required")
     @Valid

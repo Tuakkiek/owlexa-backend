@@ -8,7 +8,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -64,7 +64,7 @@ public class CashierService {
                 throw new BadRequestException("User is not CASHIER");
             }
             // Check if the user belongs to that center.
-            boolean existsMembership = membershipRepository.existsByUserIdAndCenterId(cashierUser.getId(), centerId);
+            boolean existsMembership = membershipRepository.existsByUser_IdAndCenter_Id(cashierUser.getId(), centerId);
             // If the cashier it not already in the center, add the cashier in the center
             if (!existsMembership) {
                 createMembership(cashierUser, center, currentUser);
@@ -95,7 +95,7 @@ public class CashierService {
 
         assertOwnerAndCenterMembership(currentUser, centerId);
 
-        return membershipRepository.findAllByCenterIdAndUserRole(centerId, Role.CASHIER)
+        return membershipRepository.findAllByCenter_IdAndUserRole(centerId, Role.CASHIER)
                 .stream()
                 .map(Membership::getUser)
                 .map(user -> toResponse(user, centerId, null))
@@ -111,7 +111,7 @@ public class CashierService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(cashierId, centerId, Role.CASHIER)
+                .findByUser_IdAndCenter_IdAndUserRole(cashierId, centerId, Role.CASHIER)
                 .orElseThrow(() -> new ResourceNotFoundException("Cashier not found in this center"));
 
         User cashier = membership.getUser();
@@ -150,7 +150,7 @@ public class CashierService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(cashierId, centerId, Role.CASHIER)
+                .findByUser_IdAndCenter_IdAndUserRole(cashierId, centerId, Role.CASHIER)
                         .orElseThrow(() -> new ResourceNotFoundException("Cashier not found in this center"));
 
         membershipRepository.delete(membership);
@@ -167,7 +167,7 @@ public class CashierService {
 
     // required current USER
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }
@@ -180,7 +180,7 @@ public class CashierService {
             throw new AccessDeniedException("Only OWNER can manage cashier");
         }
 
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }

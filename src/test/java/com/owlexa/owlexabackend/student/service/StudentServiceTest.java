@@ -8,7 +8,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -56,7 +56,7 @@ public class StudentServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
-        TenantFilter.clearCurrentCenterId();
+        TenantContext.clear();
     }
 
     private void loginAs(String phoneNumber) {
@@ -71,7 +71,7 @@ public class StudentServiceTest {
     }
 
     private void setCurrentCenterId(Long centerId) {
-        TenantFilter.setCurrentCenterIdForTest(centerId);
+        TenantContext.setCurrentTenantId(centerId);
     }
 
     private User user(Long id, String phoneNumber, Role role) {
@@ -136,7 +136,7 @@ public class StudentServiceTest {
         when(userRepository.findByPhoneNumber("0901234567"))
                 .thenReturn(Optional.of(owner));
 
-        when(membershipRepository.existsByUserIdAndCenterId(
+        when(membershipRepository.existsByUser_IdAndCenter_Id(
                 1L,
                 10L
         ))
@@ -202,10 +202,10 @@ public class StudentServiceTest {
         existingStudent.setEmail("student@example.com");
 
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
-        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L)).thenReturn(true);
+        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, 10L)).thenReturn(true);
         when(centerRepository.findById(10L)).thenReturn(Optional.of(center));
         when(userRepository.findByPhoneNumber("0987654321")).thenReturn(Optional.of(existingStudent));
-        when(membershipRepository.existsByUserIdAndCenterId(100L, 10L)).thenReturn(true);
+        when(membershipRepository.existsByUser_IdAndCenter_Id(100L, 10L)).thenReturn(true);
 
         StudentRequest request = request("Nguyen Van A", "student@example.com", "0987654321");
 
@@ -230,7 +230,7 @@ public class StudentServiceTest {
         Center center = center(10L, "Owlexa HCM", "owlexa-hcm", owner);
 
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
-        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L)).thenReturn(true);
+        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, 10L)).thenReturn(true);
         when(centerRepository.findById(10L)).thenReturn(Optional.of(center));
         when(userRepository.findByPhoneNumber("0987654321")).thenReturn(Optional.of(teacher));
 
@@ -253,7 +253,7 @@ public class StudentServiceTest {
 
         when(userRepository.findByPhoneNumber("0901234567"))
                 .thenReturn(Optional.of(owner));
-        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L))
+        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, 10L))
                 .thenReturn(true);
         when(centerRepository.findById(10L))
                 .thenReturn(Optional.empty());

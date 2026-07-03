@@ -132,7 +132,7 @@ ON DUPLICATE KEY UPDATE
 -- ============================================================
 -- 7) Schedules
 -- ============================================================
-INSERT INTO schedules (id, class_id, center_id, teacher_user_id, day_of_week, start_time, end_time, room, is_active, create_at)
+INSERT INTO schedules (id, class_id, center_id, teacher_user_id, day_of_week, start_time, end_time, room, is_active, created_at)
 VALUES
   (4000, 200, 100, 2, 1, '18:00:00', '19:30:00', 'Room 101', TRUE, NOW()),
   (4001, 200, 100, 2, 3, '18:00:00', '19:30:00', 'Room 101', TRUE, NOW()),
@@ -146,12 +146,12 @@ ON DUPLICATE KEY UPDATE
   end_time = VALUES(end_time),
   room = VALUES(room),
   is_active = VALUES(is_active),
-  create_at = VALUES(create_at);
+  created_at = VALUES(created_at);
 
 -- ============================================================
 -- 8) Attendances
 -- ============================================================
-INSERT INTO attendances (id, schedule_id, student_user_id, center_id, session_date, status, noted_by_user_id, note, created_at)
+INSERT INTO attendances (id, schedule_id, student_user_id, center_id, date, status, marked_by_user_id, note, created_at)
 VALUES
   (5000, 4000, 10, 100, CURDATE(), 'PRESENT', 2, 'Demo attendance - present', NOW()),
   (5001, 4000, 11, 100, CURDATE(), 'ABSENT', 2, 'Demo attendance - absent', NOW()),

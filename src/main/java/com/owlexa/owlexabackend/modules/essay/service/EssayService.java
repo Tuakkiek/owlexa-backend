@@ -19,7 +19,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
@@ -59,7 +59,7 @@ public class EssayService {
         assertCenterMembership(currentUser, centerId);
 
         return essayRubricRepository
-                .findAllByCreatedByUserIdAndCenterId(currentUser.getId(), centerId)
+                .findAllByCreatedByUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
                 .map(this::toRubricResponse)
                 .toList();
@@ -123,7 +123,7 @@ public class EssayService {
         if (!rubric.getCenter().getId().equals(centerId)) {
             throw new AccessDeniedException("You do not have permission to use this rubric");
         }
-        if (!classEnrollmentRepository.existsByClazzIdAndStudentUserIdAndStatus(
+        if (!classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
                 rubric.getClazz().getId(),
                 currentUser.getId(),
                 EnrollmentStatus.ACTIVE
@@ -154,7 +154,7 @@ public class EssayService {
         assertCenterMembership(currentUser, centerId);
 
         return essaySubmissionRepository
-                .findAllByStudentUserIdAndCenterIdOrderByCreatedAtDesc(currentUser.getId(), centerId)
+                .findAllByStudentUser_IdAndCenter_IdOrderByCreatedAtDesc(currentUser.getId(), centerId)
                 .stream()
                 .map(this::toSubmissionResponse)
                 .toList();
@@ -165,7 +165,7 @@ public class EssayService {
         EssaySubmission submission = findVisibleSubmission(essayId);
         return EssayDetailResponse.builder()
                 .essay(toSubmissionResponse(submission))
-                .gradingResult(essayGradingResultRepository.findBySubmissionId(essayId)
+                .gradingResult(essayGradingResultRepository.findBySubmission_Id(essayId)
                         .map(this::toGradingResponse)
                         .orElse(null))
                 .build();
@@ -174,7 +174,7 @@ public class EssayService {
     @Transactional(readOnly = true)
     public EssayGradingResultResponse getGradingResult(Long essayId) {
         findVisibleSubmission(essayId);
-        return essayGradingResultRepository.findBySubmissionId(essayId)
+        return essayGradingResultRepository.findBySubmission_Id(essayId)
                 .map(this::toGradingResponse)
                 .orElse(null);
     }
@@ -188,7 +188,7 @@ public class EssayService {
             throw new AccessDeniedException("You do not have permission to view essays for this class");
         }
 
-        return essaySubmissionRepository.findAllByClazzIdAndCenterIdOrderByCreatedAtDesc(classId, centerId)
+        return essaySubmissionRepository.findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(classId, centerId)
                 .stream()
                 .map(this::toSubmissionResponse)
                 .toList();
@@ -207,7 +207,7 @@ public class EssayService {
             throw new AccessDeniedException("You do not have permission to review this essay");
         }
 
-        EssayGradingResult result = essayGradingResultRepository.findBySubmissionId(essayId)
+        EssayGradingResult result = essayGradingResultRepository.findBySubmission_Id(essayId)
                 .orElseThrow(() -> new ResourceNotFoundException("Grading result not found for essay: " + essayId));
         result.setFeedback(feedback == null ? "" : feedback.trim());
         submission.setStatus(EssaySubmissionStatus.REVIEWED);
@@ -266,7 +266,7 @@ public class EssayService {
     }
 
     private boolean teacherTeachesClass(Long teacherUserId, Long classId, Long centerId) {
-        return scheduleRepository.findAllByTeacherUserIdAndCenterId(teacherUserId, centerId)
+        return scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(teacherUserId, centerId)
                 .stream()
                 .anyMatch(schedule -> schedule.getClazz().getId().equals(classId));
     }
@@ -298,10 +298,10 @@ public class EssayService {
                 .id(submission.getId())
                 .studentId(submission.getStudentUser().getId())
                 .studentFullName(submission.getStudentUser().getFullName())
-                .classId(submission.getClazz().getId())
-                .className(submission.getClazz().getName())
-                .rubricId(submission.getRubric().getId())
-                .rubricTitle(submission.getRubric().getTitle())
+                .classId(submission.getClazz() != null ? submission.getClazz().getId() : null)
+                .className(submission.getClazz() != null ? submission.getClazz().getName() : null)
+                .rubricId(submission.getRubric() != null ? submission.getRubric().getId() : null)
+                .rubricTitle(submission.getRubric() != null ? submission.getRubric().getTitle() : null)
                 .content(submission.getContent())
                 .status(submission.getStatus())
                 .submittedAt(submission.getSubmittedAt())
@@ -344,7 +344,7 @@ public class EssayService {
     }
 
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }
@@ -352,7 +352,7 @@ public class EssayService {
     }
 
     private void assertCenterMembership(User currentUser, Long centerId) {
-        if (!membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId)) {
+        if (!membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId)) {
             throw new AccessDeniedException("User is not a member of this center");
         }
     }

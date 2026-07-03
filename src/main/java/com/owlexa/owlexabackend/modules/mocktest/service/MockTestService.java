@@ -21,7 +21,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
@@ -66,7 +66,7 @@ public class MockTestService {
         Long centerId = requiredCurrentCenterId();
         assertOwnerAndCenterAccess(currentUser, centerId);
 
-        return mockTestRepository.findAllByCenterIdOrderByCreatedAtDesc(centerId)
+        return mockTestRepository.findAllByCenter_IdOrderByCreatedAtDesc(centerId)
                 .stream()
                 .map(test -> toResponse(test, false))
                 .toList();
@@ -78,7 +78,7 @@ public class MockTestService {
         Long centerId = requiredCurrentCenterId();
         assertStudentAccess(currentUser, centerId);
 
-        return mockTestRepository.findAllByCenterIdOrderByCreatedAtDesc(centerId)
+        return mockTestRepository.findAllByCenter_IdOrderByCreatedAtDesc(centerId)
                 .stream()
                 .filter(test -> Boolean.TRUE.equals(test.getIsActive()))
                 .map(test -> toResponse(test, false))
@@ -120,7 +120,7 @@ public class MockTestService {
         mockTest.setDuration(request.getDuration() == null ? mockTest.getDuration() : request.getDuration());
         mockTest.setTotalQuestions(request.getTotalQuestions() == null ? mockTest.getTotalQuestions() : request.getTotalQuestions());
         if (request.getIsActive() != null) {
-            mockTest.setIsActive(request.getIsActive());
+            mockTest.setActive(request.getIsActive());
         }
 
         return toResponse(mockTestRepository.save(mockTest), false);
@@ -133,7 +133,7 @@ public class MockTestService {
         assertOwnerAndCenterAccess(currentUser, centerId);
 
         MockTest mockTest = findOwnedTest(testId, centerId);
-        mockTest.setIsActive(false);
+        mockTest.setActive(false);
         mockTestRepository.save(mockTest);
     }
 
@@ -144,7 +144,7 @@ public class MockTestService {
         assertOwnerAndCenterAccess(currentUser, centerId);
 
         MockTest mockTest = findOwnedTest(testId, centerId);
-        return questionRepository.findAllByMockTestIdOrderBySortOrderAscIdAsc(mockTest.getId())
+        return questionRepository.findAllByMockTest_IdOrderBySortOrderAscIdAsc(mockTest.getId())
                 .stream()
                 .map(this::toQuestionResponse)
                 .toList();
@@ -157,7 +157,7 @@ public class MockTestService {
         assertStudentAccess(currentUser, centerId);
 
         MockTest mockTest = findActiveTestInCenter(testId, centerId);
-        return questionRepository.findAllByMockTestIdOrderBySortOrderAscIdAsc(mockTest.getId())
+        return questionRepository.findAllByMockTest_IdOrderBySortOrderAscIdAsc(mockTest.getId())
                 .stream()
                 .map(question -> toQuestionResponse(question, false))
                 .toList();
@@ -180,7 +180,7 @@ public class MockTestService {
                 .correctAnswer(request.getCorrectAnswer().trim().toUpperCase())
                 .explanation(trimToNull(request.getExplanation()))
                 .sortOrder(request.getSortOrder() == null
-                        ? questionRepository.findAllByMockTestIdOrderBySortOrderAscIdAsc(mockTest.getId()).size()
+                        ? questionRepository.findAllByMockTest_IdOrderBySortOrderAscIdAsc(mockTest.getId()).size()
                         : request.getSortOrder())
                 .build();
 
@@ -225,7 +225,7 @@ public class MockTestService {
         assertOwnerAndCenterAccess(currentUser, centerId);
 
         MockTest mockTest = findOwnedTest(testId, centerId);
-        return attemptRepository.findAllByMockTestIdOrderByStartedAtDesc(mockTest.getId())
+        return attemptRepository.findAllByMockTest_IdOrderByStartedAtDesc(mockTest.getId())
                 .stream()
                 .map(attempt -> toAttemptResponse(attempt, true))
                 .toList();
@@ -263,7 +263,7 @@ public class MockTestService {
         Long centerId = requiredCurrentCenterId();
         assertStudentAccess(currentUser, centerId);
 
-        return attemptRepository.findAllByStudentUserIdAndStatusOrderByStartedAtDesc(currentUser.getId(), MockTestAttemptStatus.COMPLETED)
+        return attemptRepository.findAllByStudentUser_IdAndStatusOrderByStartedAtDesc(currentUser.getId(), MockTestAttemptStatus.COMPLETED)
                 .stream()
                 .filter(attempt -> attempt.getCenter().getId().equals(centerId))
                 .map(attempt -> toAttemptResponse(attempt, true))
@@ -293,13 +293,13 @@ public class MockTestService {
         assertStudentAccess(currentUser, centerId);
 
         MockTest mockTest = findActiveTestInCenter(testId, centerId);
-        List<MockTestQuestion> questions = questionRepository.findAllByMockTestIdOrderBySortOrderAscIdAsc(mockTest.getId());
+        List<MockTestQuestion> questions = questionRepository.findAllByMockTest_IdOrderBySortOrderAscIdAsc(mockTest.getId());
         if (questions.isEmpty()) {
             throw new BadRequestException("Mock test does not have any questions yet");
         }
 
         MockTestAttempt existing = attemptRepository
-                .findTopByStudentUserIdAndMockTestIdAndStatusOrderByStartedAtDesc(currentUser.getId(), mockTest.getId(), MockTestAttemptStatus.IN_PROGRESS)
+                .findTopByStudentUser_IdAndMockTest_IdAndStatusOrderByStartedAtDesc(currentUser.getId(), mockTest.getId(), MockTestAttemptStatus.IN_PROGRESS)
                 .orElse(null);
         if (existing != null) {
             return toAttemptResponse(existing, false);
@@ -354,7 +354,7 @@ public class MockTestService {
 
         MockTestAttempt attempt = findCurrentAttempt(currentUser.getId(), testId, centerId);
         MockTest mockTest = attempt.getMockTest();
-        List<MockTestQuestion> questions = questionRepository.findAllByMockTestIdOrderBySortOrderAscIdAsc(mockTest.getId());
+        List<MockTestQuestion> questions = questionRepository.findAllByMockTest_IdOrderBySortOrderAscIdAsc(mockTest.getId());
         Map<Long, MockTestSubmitAnswerRequest> submittedAnswers = (request.getAnswers() == null ? List.<MockTestSubmitAnswerRequest>of() : request.getAnswers())
                 .stream()
                 .filter(item -> item.getQuestionId() != null)
@@ -441,7 +441,7 @@ public class MockTestService {
         }
 
         return attemptRepository
-                .findAllByStudentUserIdInAndCenterIdAndStatusOrderByStartedAtDesc(
+                .findAllByStudentUser_IdInAndCenter_IdAndStatusOrderByStartedAtDesc(
                         studentIds,
                         centerId,
                         MockTestAttemptStatus.COMPLETED
@@ -474,7 +474,7 @@ public class MockTestService {
     }
 
     private MockTestAttemptAnswer upsertAnswer(MockTestAttempt attempt, MockTestQuestion question, String answerValue) {
-        MockTestAttemptAnswer answer = answerRepository.findByAttemptIdAndQuestionId(attempt.getId(), question.getId())
+        MockTestAttemptAnswer answer = answerRepository.findByAttempt_IdAndQuestionId(attempt.getId(), question.getId())
                 .orElseGet(() -> MockTestAttemptAnswer.builder()
                         .attempt(attempt)
                         .questionId(question.getId())
@@ -494,7 +494,7 @@ public class MockTestService {
     }
 
     private MockTestQuestion findQuestionInTest(Long testId, Long questionId, Long centerId) {
-        MockTestQuestion question = questionRepository.findByIdAndMockTestId(questionId, testId)
+        MockTestQuestion question = questionRepository.findByIdAndMockTest_Id(questionId, testId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
         if (!question.getMockTest().getCenter().getId().equals(centerId)) {
             throw new AccessDeniedException("You do not have permission to access this question");
@@ -526,7 +526,7 @@ public class MockTestService {
 
     private MockTestAttempt findCurrentAttempt(Long studentUserId, Long testId, Long centerId) {
         return attemptRepository
-                .findTopByStudentUserIdAndMockTestIdAndStatusOrderByStartedAtDesc(studentUserId, testId, MockTestAttemptStatus.IN_PROGRESS)
+                .findTopByStudentUser_IdAndMockTest_IdAndStatusOrderByStartedAtDesc(studentUserId, testId, MockTestAttemptStatus.IN_PROGRESS)
                 .orElseThrow(() -> new BadRequestException("Please start the test first"));
     }
 
@@ -534,7 +534,7 @@ public class MockTestService {
         int questionCount = test.getQuestions() == null ? 0 : test.getQuestions().size();
         int attemptCount = 0;
         if (includeCounts) {
-            attemptCount = attemptRepository.findAllByMockTestIdOrderByStartedAtDesc(test.getId()).size();
+            attemptCount = attemptRepository.findAllByMockTest_IdOrderByStartedAtDesc(test.getId()).size();
         }
 
         return MockTestResponse.builder()
@@ -571,7 +571,7 @@ public class MockTestService {
     }
 
     private MockTestAttemptResponse toAttemptResponse(MockTestAttempt attempt, boolean includeCorrectAnswer) {
-        List<MockTestAttemptAnswerResponse> answers = answerRepository.findAllByAttemptIdOrderByQuestionIdAsc(attempt.getId())
+        List<MockTestAttemptAnswerResponse> answers = answerRepository.findAllByAttempt_IdOrderByQuestionIdAsc(attempt.getId())
                 .stream()
                 .map(answer -> MockTestAttemptAnswerResponse.builder()
                         .questionId(answer.getQuestionId())
@@ -611,7 +611,7 @@ public class MockTestService {
     }
 
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }
@@ -640,7 +640,7 @@ public class MockTestService {
     }
 
     private void assertCenterAccess(User currentUser, Long centerId) {
-        boolean isMember = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean isMember = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         boolean isCenterOwner = centerRepository.findById(centerId)
                 .map(center -> center.getOwner() != null && Objects.equals(center.getOwner().getId(), currentUser.getId()))
                 .orElse(false);
@@ -656,7 +656,7 @@ public class MockTestService {
     }
 
     private List<Long> getTeacherClassIds(Long teacherUserId, Long centerId) {
-        return scheduleRepository.findAllByTeacherUserIdAndCenterId(teacherUserId, centerId)
+        return scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(teacherUserId, centerId)
                 .stream()
                 .map(schedule -> schedule.getClazz().getId())
                 .distinct()
@@ -666,7 +666,7 @@ public class MockTestService {
     private List<Long> getActiveStudentIdsInClasses(List<Long> classIds) {
         return classIds.stream()
                 .flatMap(classId -> classEnrollmentRepository
-                        .findAllByClazzIdAndStatus(classId, EnrollmentStatus.ACTIVE)
+                        .findAllByClazz_IdAndStatus(classId, EnrollmentStatus.ACTIVE)
                         .stream())
                 .map(ClassEnrollment::getStudentUser)
                 .map(User::getId)

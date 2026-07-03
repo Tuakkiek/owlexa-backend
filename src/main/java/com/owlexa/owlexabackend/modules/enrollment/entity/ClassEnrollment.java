@@ -1,53 +1,63 @@
 package com.owlexa.owlexabackend.modules.enrollment.entity;
+
+import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
+import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
 import java.time.Instant;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.user.entity.User;
 
 @Entity
-@Table(
-        name = "class_enrollments",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"class_id", "student_user_id"})
-)
+@Table(name = "class_enrollments")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
+@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
+@EntityListeners(TenantEntityListener.class)
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 @Builder
-public class ClassEnrollment {
+public class ClassEnrollment implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_id", nullable = false)
-    private Class clazz;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_user_id", nullable = false)
     private User studentUser;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_id", nullable = false)
+    private Class clazz;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "enrolled_by_user_id", nullable = false)
+    @JoinColumn(name = "enrolled_by_user_id")
     private User enrolledByUser;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    @Builder.Default
-    private EnrollmentStatus status = EnrollmentStatus.ACTIVE;
+    private EnrollmentStatus status;
 
     @CreationTimestamp
     @Column(name = "enrolled_at", nullable = false, updatable = false)
     private Instant enrolledAt;
+
+    @Override
+    public Long getCenterId() {
+        return center != null ? center.getId() : null;
+    }
 }

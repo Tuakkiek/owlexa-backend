@@ -42,7 +42,7 @@ import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BulkTeacherValidationException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -96,7 +96,7 @@ public class TeacherService {
                 throw new BadRequestException("User is not TEACHER");
             }
 
-            boolean existsMembership = membershipRepository.existsByUserIdAndCenterId(teacherUser.getId(), centerId);
+            boolean existsMembership = membershipRepository.existsByUser_IdAndCenter_Id(teacherUser.getId(), centerId);
             if (!existsMembership) {
                 createMembership(teacherUser, center, currentUser);
             }
@@ -124,7 +124,7 @@ public class TeacherService {
 
         assertCenterMembership(currentUser, centerId);
 
-        return membershipRepository.findAllByCenterIdAndUserRole(centerId, Role.TEACHER)
+        return membershipRepository.findAllByCenter_IdAndUserRole(centerId, Role.TEACHER)
                 .stream()
                 .map(Membership::getUser)
                 .map(user -> toResponse(user, centerId, null))
@@ -140,7 +140,7 @@ public class TeacherService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(teacherId, centerId, Role.TEACHER)
+                .findByUser_IdAndCenter_IdAndUserRole(teacherId, centerId, Role.TEACHER)
                 .orElseThrow(() -> new ResourceNotFoundException("Teacher not found in this center"));
 
         User teacher = membership.getUser();
@@ -178,7 +178,7 @@ public class TeacherService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(teacherId, centerId, Role.TEACHER)
+                .findByUser_IdAndCenter_IdAndUserRole(teacherId, centerId, Role.TEACHER)
                 .orElseThrow(() -> new ResourceNotFoundException("Teacher not found in this center"));
 
         membershipRepository.delete(membership);
@@ -268,7 +268,7 @@ public class TeacherService {
                 User teacherUser = existingUser.get();
 
                 boolean existsMembership =
-                        membershipRepository.existsByUserIdAndCenterId(teacherUser.getId(), centerId);
+                        membershipRepository.existsByUser_IdAndCenter_Id(teacherUser.getId(), centerId);
 
                 BulkTeacherResult result = new BulkTeacherResult();
                 result.setPhoneNumber(item.getPhoneNumber());
@@ -349,7 +349,7 @@ public class TeacherService {
     }
 
     private void assertCenterMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }
@@ -363,7 +363,7 @@ public class TeacherService {
     }
 
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }

@@ -12,7 +12,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
@@ -50,7 +50,7 @@ public class ClassService {
         Center center = centerRepository.findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
 
-        if (classRepository.existsByNameAndCenterId(request.getName().trim(), centerId)) {
+        if (classRepository.existsByNameAndCenter_Id(request.getName().trim(), centerId)) {
             throw new DuplicateResourceException("Class name is already exists in this center");
         }
 
@@ -74,7 +74,7 @@ public class ClassService {
 
         assertCenterMembership(currentUser, centerId);
 
-        List<Class> classes = classRepository.findAllByCenterId(centerId);
+        List<Class> classes = classRepository.findAllByCenter_Id(centerId);
 
         List<ClassResponse> result = new ArrayList<>();
 
@@ -95,7 +95,7 @@ public class ClassService {
         }
 
         List<Long> classIds = scheduleRepository
-                .findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+                .findAllByTeacherUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
                 .map(s -> s.getClazz().getId())
                 .distinct()
@@ -118,7 +118,7 @@ public class ClassService {
         }
 
         List<Long> classIds = scheduleRepository
-                .findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+                .findAllByTeacherUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
                 .map(schedule -> schedule.getClazz().getId())
                 .distinct()
@@ -130,7 +130,45 @@ public class ClassService {
                             .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
                     List<StudentResponse> students = classEnrollmentRepository
-                            .findAllByClazzIdAndStatus(classId, EnrollmentStatus.ACTIVE)
+                            .findAllByClazz_IdAndStatus(classId, EnrollmentStatus.ACTIVE)
+                            .stream()
+                            .map(ClassEnrollment::getStudentUser)
+                            .map(student -> StudentResponse.builder()
+                                    .userId(student.getId())
+                                    .phoneNumber(student.getPhoneNumber())
+                                    .fullName(student.getFullName())
+                                    .centerId(centerId)
+                                    .temporaryPassword(null)
+                                    .build())
+                            .toList();
+
+                    return TeacherClassStudentsResponse.builder()
+                            .id(clazz.getId())
+                            .className(clazz.getName())
+                            .studentCount((long) students.size())
+                            .students(students)
+                            .build();
+                })
+                .toList();
+    }
+
+    // Find all classes with students — for OWNER attendance overview
+    @Transactional(readOnly = true)
+    public List<TeacherClassStudentsResponse> findAllClassesWithStudentsForOwner() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.OWNER) {
+            throw new AccessDeniedException("Only OWNER can access all classes");
+        }
+
+        List<Class> allClasses = classRepository.findAllByCenter_Id(centerId);
+
+        return allClasses.stream()
+                .filter(clazz -> Boolean.TRUE.equals(clazz.getIsActive()))
+                .map(clazz -> {
+                    List<StudentResponse> students = classEnrollmentRepository
+                            .findAllByClazz_IdAndStatus(clazz.getId(), EnrollmentStatus.ACTIVE)
                             .stream()
                             .map(ClassEnrollment::getStudentUser)
                             .map(student -> StudentResponse.builder()
@@ -167,7 +205,7 @@ public class ClassService {
 
         String newName = request.getName();
         if(!existingClass.getName().equalsIgnoreCase(request.getName())
-            && classRepository.existsByNameAndCenterId(newName, centerId)) {
+            && classRepository.existsByNameAndCenter_Id(newName, centerId)) {
             throw new DuplicateResourceException("Class name is already exists in this center");
         }
 
@@ -222,7 +260,7 @@ public class ClassService {
     }
     // Required current center ID
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
         }
@@ -238,7 +276,7 @@ public class ClassService {
 
     // Asser Center Membership
     private void assertCenterMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }

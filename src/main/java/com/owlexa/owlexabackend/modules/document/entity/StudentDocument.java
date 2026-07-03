@@ -1,61 +1,72 @@
 package com.owlexa.owlexabackend.modules.document.entity;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+
+import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
+import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
 import java.time.Instant;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.user.entity.User;
 
 @Entity
 @Table(name = "student_documents")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
+@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
+@EntityListeners(TenantEntityListener.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudentDocument {
+public class StudentDocument implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String title;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private DocumentType type;
-
-    @Column(nullable = false, length = 1000)
-    private String url;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_id", nullable = false)
-    private Class clazz;
+    @JoinColumn(name = "student_user_id", nullable = false)
+    private User studentUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by_user_id", nullable = false)
-    private User uploadedByUser;
+    @JoinColumn(name = "clazz_id")
+    private Class clazz;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "document_type", nullable = false)
+    private DocumentType documentType;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column(name = "file_url", nullable = false)
+    private String fileUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
     @CreationTimestamp
-    @Column(name = "uploaded_at", nullable = false, updatable = false)
-    private Instant uploadedAt;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Override
+    public Long getCenterId() {
+        return center != null ? center.getId() : null;
+    }
+
+    public Long getClazzId() {
+        return clazz != null ? clazz.getId() : null;
+    }
 }

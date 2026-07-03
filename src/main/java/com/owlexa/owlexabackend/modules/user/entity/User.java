@@ -1,17 +1,26 @@
 package com.owlexa.owlexabackend.modules.user.entity;
-import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
+import com.owlexa.owlexabackend.common.context.TenantAware;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
+import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
+
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
+@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
+@EntityListeners(TenantEntityListener.class)
 @Data
-public class User {
+public class User implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -37,7 +46,11 @@ public class User {
     @EqualsAndHashCode.Exclude
     private Set<UserPermission> userPermissions = new HashSet<>();
 
-    // Helper
+    @Override
+    public Long getCenterId() {
+        return null;
+    }
+
     public void grantPermission(Permission permission) {
         UserPermission link = new UserPermission();
         link.setUser(this);
@@ -48,7 +61,7 @@ public class User {
     public void revokePermission(String permissionCode) {
         userPermissions.removeIf(link ->
                 link.getPermission() != null
-                        && link.getPermission().getCode() !=null
+                        && link.getPermission().getCode() != null
                         && link.getPermission().getCode().equalsIgnoreCase(permissionCode)
         );
     }

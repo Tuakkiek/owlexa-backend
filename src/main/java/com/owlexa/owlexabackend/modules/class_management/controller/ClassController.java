@@ -15,6 +15,13 @@ public class ClassController {
 
     private final ClassService classService;
 
+    // ── OWNER: View all classes with students ────────────────────────────────
+
+    @GetMapping("/owner/classes/with-students")
+    public List<com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudentsResponse> findAllClassesWithStudentsForOwner() {
+        return classService.findAllClassesWithStudentsForOwner();
+    }
+
     // ── OWNER: Manage classes ────────────────────────────────────────────────
 
     @PostMapping("/owner/classes")

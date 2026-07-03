@@ -8,7 +8,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.filter.TenantFilter;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
@@ -36,6 +36,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -73,7 +74,7 @@ public class ScheduleService {
         }
 
         boolean teacherInCenter = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(teacher.getId(), centerId, Role.TEACHER)
+                .findByUser_IdAndCenter_IdAndUserRole(teacher.getId(), centerId, Role.TEACHER)
                 .isPresent();
 
         if(!teacherInCenter) {
@@ -82,7 +83,7 @@ public class ScheduleService {
 
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
-        if (scheduleRepository.existsByClazzIdAndDayOfWeekAndStartTimeAndCenterId(
+        if (scheduleRepository.existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(
                 classId,
                 request.getDayOfWeek(),
                 request.getEndTime(),
@@ -95,7 +96,7 @@ public class ScheduleService {
                 .clazz(clazz)
                 .center(clazz.getCenter())
                 .teacherUser(teacher)
-                .dayOfWeek(request.getDayOfWeek())
+                .dayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()))
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .room(request.getRoom().trim())
@@ -122,7 +123,7 @@ public class ScheduleService {
             throw new AccessDeniedException("You do not have permission to view this class");
         }
 
-        return scheduleRepository.findAllByClazzIdAndCenterId(classId, centerId)
+        return scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -143,7 +144,7 @@ public class ScheduleService {
             throw new BadRequestException("User is not TEACHER");
         }
 
-        return scheduleRepository.findAllByTeacherUserIdAndCenterId(teacherUserId, centerId)
+        return scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(teacherUserId, centerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -159,8 +160,25 @@ public class ScheduleService {
             throw new AccessDeniedException("Only TEACHER can access their own schedules");
         }
 
-        return scheduleRepository.findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+        return scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // Find all active schedules in center — for OWNER attendance overview
+    @Transactional(readOnly = true)
+    public List<ScheduleResponse> findAllForOwner() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.OWNER) {
+            throw new AccessDeniedException("Only OWNER can access all schedules");
+        }
+
+        return scheduleRepository.findAllByCenter_Id(centerId)
+                .stream()
+                .filter(s -> s.isActive())
                 .map(this::toResponse)
                 .toList();
     }
@@ -176,13 +194,13 @@ public class ScheduleService {
         }
 
         List<Long> enrolledClassIds = classEnrollmentRepository
-                .findAllByStudentUserIdAndCenterId(currentUser.getId(), centerId)
+                .findAllByStudentUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
                 .map(e -> e.getClazz().getId())
                 .toList();
 
         return enrolledClassIds.stream()
-                .flatMap(classId -> scheduleRepository.findAllByClazzIdAndCenterId(classId, centerId).stream())
+                .flatMap(classId -> scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId).stream())
                 .map(this::toResponse)
                 .toList();
     }
@@ -197,7 +215,7 @@ public class ScheduleService {
             throw new AccessDeniedException("Only TEACHER can access their own classes");
         }
 
-        return scheduleRepository.findAllByTeacherUserIdAndCenterId(currentUser.getId(), centerId)
+        return scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
                 .map(s -> s.getClazz().getId())
                 .distinct()
@@ -206,7 +224,7 @@ public class ScheduleService {
 
     // Update
     @Transactional
-    public ScheduleResponse update(Long scheduleId, ScheduleRequest request) {
+    public ScheduleResponse update(Long classId, Long scheduleId, ScheduleRequest request) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
@@ -229,7 +247,7 @@ public class ScheduleService {
         }
 
         boolean teacherInCenter = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(
+                .findByUser_IdAndCenter_IdAndUserRole(
                         request.getTeacherUserId(),
                         centerId,
                         Role.TEACHER
@@ -241,7 +259,7 @@ public class ScheduleService {
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
         schedule.setTeacherUser(teacher);
-        schedule.setDayOfWeek(request.getDayOfWeek());
+        schedule.setDayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()));
         schedule.setStartTime(request.getStartTime());
         schedule.setEndTime(request.getEndTime());
         schedule.setRoom(request.getRoom().trim());
@@ -271,6 +289,29 @@ public class ScheduleService {
         scheduleRepository.delete(schedule);
     }
 
+    // Toggle active
+    @Transactional
+    public ScheduleResponse toggleActive(Long scheduleId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Schedule schedule = scheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Schedule not found with id: " + scheduleId
+                ));
+
+        if (!schedule.getCenter().getId().equals(centerId)) {
+            throw new AccessDeniedException("You do not have permission to manage this schedule");
+        }
+
+        schedule.setActive(!schedule.isActive());
+        schedule = scheduleRepository.save(schedule);
+
+        return toResponse(schedule);
+    }
+
     // Helper
     // Validate time range
     private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
@@ -289,12 +330,12 @@ public class ScheduleService {
                 .teacherUserId(schedule.getTeacherUser().getId())
                 .teacherUserFullName(schedule.getTeacherUser().getFullName())
                 .teacherPhoneNumber(schedule.getTeacherUser().getPhoneNumber())
-                .dayOfWeek(schedule.getDayOfWeek())
+                .dayOfWeek(schedule.getDayOfWeek().getValue())
                 .startTime(schedule.getStartTime())
                 .endTime(schedule.getEndTime())
                 .room(schedule.getRoom())
-                .isActive(schedule.getIsActive())
-                .createAt(schedule.getCreatedAt())
+                .isActive(schedule.isActive())
+                .createdAt(schedule.getCreatedAt())
                 .build();
     }
 
@@ -314,7 +355,7 @@ public class ScheduleService {
 
     // Required current centerId
     private Long requiredCurrentCenterId() {
-        Long centerId = TenantFilter.getCurrentCenterId();
+        Long centerId = TenantContext.getCurrentTenantId();
 
         if (centerId == null) {
             throw new BadRequestException("Missing X-Tenant-ID header");
@@ -332,7 +373,7 @@ public class ScheduleService {
 
     // Assert center membership
     private void assertCenterAndMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
 
         if(!hasMembership) {
             throw new AccessDeniedException("User not found a member of this center");
