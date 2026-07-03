@@ -64,7 +64,7 @@ public class CenterService {
         Center savedCenter = centerRepository.save(center);
 
         boolean exists = membershipRepository
-                .existsByUserIdAndCenterId(owner.getId(), savedCenter.getId());
+                .existsByUser_IdAndCenter_Id(owner.getId(), savedCenter.getId());
 
         if (!exists) {
             Membership membership = new Membership();
@@ -88,7 +88,7 @@ public class CenterService {
             throw new AccessDeniedException("Only OWNER can view centers");
         }
 
-        return centerRepository.findAllByOwnerId(owner.getId()).stream()
+        return centerRepository.findAllByOwner_Id(owner.getId()).stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -149,12 +149,12 @@ public class CenterService {
 
         assertOwnerOfCenter(currentUser, center);
 
-        attendanceRepository.deleteByCenterId(id);
-        classEnrollmentRepository.deleteByCenterId(id);
-        feeRecordRepository.deleteByCenterId(id);
-        scheduleRepository.deleteByCenterId(id);
-        classRepository.deleteByCenterId(id);
-        membershipRepository.deleteByCenterId(id);
+        attendanceRepository.deleteByCenter_Id(id);
+        classEnrollmentRepository.deleteByCenter_Id(id);
+        feeRecordRepository.deleteByCenter_Id(id);
+        scheduleRepository.deleteByCenter_Id(id);
+        classRepository.deleteByCenter_Id(id);
+        membershipRepository.deleteByCenter_Id(id);
 
         centerRepository.delete(center);
     }

@@ -7,24 +7,24 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MembershipRepository extends JpaRepository<Membership, Long> {
-    boolean existsByUserIdAndCenterId(Long userId, Long centerId);
+    boolean existsByUser_IdAndCenter_Id(Long userId, Long centerId);
 
-    List<Membership> findAllByCenterId(Long centerId);
+    List<Membership> findAllByCenter_Id(Long centerId);
 
-    List<Membership> findAllByUserId(Long userId);
+    List<Membership> findAllByUser_Id(Long userId);
 
-    List<Membership> findAllByCenterIdAndUserRole(Long centerId, Role role);
+    List<Membership> findAllByCenter_IdAndUserRole(Long centerId, Role role);
 
-    Optional<Membership> findByUserIdAndCenterId(Long userId, Long centerId);
+    Optional<Membership> findByUser_IdAndCenter_Id(Long userId, Long centerId);
 
-    Optional<Membership> findByUserIdAndCenterIdAndUserRole(
+    Optional<Membership> findByUser_IdAndCenter_IdAndUserRole(
             Long userId,
             Long centerId,
             Role userRole
     );
 
-    void deleteByCenterId(Long centerId);
+    void deleteByCenter_Id(Long centerId);
 
-    long countByCenterIdAndUserRole(Long centerId, Role userRole);
+    long countByCenter_IdAndUserRole(Long centerId, Role userRole);
 }
     

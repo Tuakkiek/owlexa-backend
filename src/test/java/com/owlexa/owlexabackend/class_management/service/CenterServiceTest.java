@@ -121,7 +121,7 @@ class CenterServiceTest {
             savedCenter.setCreatedAt(Instant.now());
             return savedCenter;
         });
-        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L)).thenReturn(false);
+        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, 10L)).thenReturn(false);
         when(membershipRepository.save(any(Membership.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CenterResponse response = centerService.create(request);
@@ -164,7 +164,7 @@ class CenterServiceTest {
             savedCenter.setCreatedAt(Instant.now());
             return savedCenter;
         });
-        when(membershipRepository.existsByUserIdAndCenterId(1L, 10L)).thenReturn(true);
+        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, 10L)).thenReturn(true);
 
         CenterResponse response = centerService.create(request);
 
@@ -214,7 +214,7 @@ class CenterServiceTest {
         Center center2 = center(11L, "Owlexa Hanoi", "owlexa-hanoi", owner);
 
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
-        when(centerRepository.findAllByOwnerId(1L)).thenReturn(List.of(center1, center2));
+        when(centerRepository.findAllByOwner_Id(1L)).thenReturn(List.of(center1, center2));
 
         List<CenterResponse> responses = centerService.findAll();
 
@@ -239,7 +239,7 @@ class CenterServiceTest {
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining("Only OWNER can view centers");
 
-        verify(centerRepository, never()).findAllByOwnerId(any());
+        verify(centerRepository, never()).findAllByOwner_Id(any());
     }
 
     @Test

@@ -42,12 +42,12 @@ public class StudentDocumentService {
         Long centerId = requiredCurrentCenterId();
         assertCenterMembership(currentUser, centerId);
 
-        return classEnrollmentRepository.findAllByStudentUserIdAndCenterId(currentUser.getId(), centerId)
+        return classEnrollmentRepository.findAllByStudentUser_IdAndCenter_Id(currentUser.getId(), centerId)
                 .stream()
                 .filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.ACTIVE)
                 .map(ClassEnrollment::getClazz)
                 .flatMap(clazz -> studentDocumentRepository
-                        .findAllByClazzIdAndCenterIdOrderByCreatedAtDesc(clazz.getId(), centerId)
+                        .findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(clazz.getId(), centerId)
                         .stream())
                 .map(this::toResponse)
                 .toList();
@@ -96,7 +96,7 @@ public class StudentDocumentService {
             throw new AccessDeniedException("You do not have permission to manage this class");
         }
 
-        return studentDocumentRepository.findAllByClazzIdAndCenterIdOrderByCreatedAtDesc(classId, centerId)
+        return studentDocumentRepository.findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(classId, centerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -137,7 +137,7 @@ public class StudentDocumentService {
     }
 
     private void assertCenterMembership(User currentUser, Long centerId) {
-        if (!membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId)) {
+        if (!membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId)) {
             throw new AccessDeniedException("User is not a member of this center");
         }
     }

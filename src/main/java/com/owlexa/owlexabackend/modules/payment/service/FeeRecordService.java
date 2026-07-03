@@ -81,12 +81,12 @@ public class FeeRecordService {
 
         validateMonth(request.getMonth());
 
-        if (feeRecordRepository.existsByClazzIdAndMonth(classId, request.getMonth())) {
+        if (feeRecordRepository.existsByClazz_IdAndMonth(classId, request.getMonth())) {
             throw new DuplicateResourceException("Fee records already exist for this class and month");
         }
 
         List<ClassEnrollment> activeEnrollments = classEnrollmentRepository
-                .findAllByClazzIdAndStatus(classId, EnrollmentStatus.ACTIVE);
+                .findAllByClazz_IdAndStatus(classId, EnrollmentStatus.ACTIVE);
 
         if (activeEnrollments.isEmpty()) {
             throw new BadRequestException("Class has no active students");
@@ -130,7 +130,7 @@ public class FeeRecordService {
 
         validateMonth(month);
 
-        return feeRecordRepository.findAllByClazzIdAndMonth(classId, month)
+        return feeRecordRepository.findAllByClazz_IdAndMonth(classId, month)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -139,7 +139,7 @@ public class FeeRecordService {
     @Transactional(readOnly = true)
     public List<FeeRecordResponse> findMyFees() {
         User currentUser = getCurrentUser();
-        return feeRecordRepository.findAllByStudentUserIdOrderByCreatedAtDesc(currentUser.getId())
+        return feeRecordRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(currentUser.getId())
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -153,7 +153,7 @@ public class FeeRecordService {
         assertCenterMembership(currentUser, centerId);
 
         return feeRecordRepository
-                .findAllByCenterIdAndStatusAndDueDateBefore(centerId, FeeStatus.UNPAID, java.time.LocalDate.now())
+                .findAllByCenter_IdAndStatusAndDueDateBefore(centerId, FeeStatus.UNPAID, java.time.LocalDate.now())
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -217,7 +217,7 @@ public class FeeRecordService {
     }
 
     private void assertCenterMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }

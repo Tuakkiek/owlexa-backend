@@ -102,11 +102,11 @@ public class EnrollmentService {
             throw new BadRequestException("User is not a student");
         }
 
-        if (classEnrollmentRepository.existsByClazzIdAndStudentUserId(classId, student.getId())) {
+        if (classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(classId, student.getId())) {
             throw new DuplicateResourceException("Student is already exists in this class");
         }
 
-        long activeEnrollmentCount = classEnrollmentRepository.countByClazzIdAndStatus(
+        long activeEnrollmentCount = classEnrollmentRepository.countByClazz_IdAndStatus(
                 classId, EnrollmentStatus.ACTIVE
         );
 
@@ -114,7 +114,7 @@ public class EnrollmentService {
             throw new BadRequestException("Class is full");
         }
 
-        var existingEnrollment = classEnrollmentRepository.findByClazzIdAndStudentUserId(classId, student.getId());
+        var existingEnrollment = classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(classId, student.getId());
 
         ClassEnrollment enrollment;
         if (existingEnrollment.isPresent()) {
@@ -154,7 +154,7 @@ public class EnrollmentService {
             throw new AccessDeniedException("You do not have permission to manage to view this class");
         }
 
-        return classEnrollmentRepository.findAllByClazzIdAndStatus(classId, EnrollmentStatus.ACTIVE)
+        return classEnrollmentRepository.findAllByClazz_IdAndStatus(classId, EnrollmentStatus.ACTIVE)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -174,7 +174,7 @@ public class EnrollmentService {
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository
-                .findByClazzIdAndStudentUserId(classId, studentUserId)
+                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Enrollment not found for studentId: " + studentUserId
                 ));
@@ -199,7 +199,7 @@ public class EnrollmentService {
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository
-                .findByClazzIdAndStudentUserId(classId, studentUserId)
+                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found for studentId: " +studentUserId));
 
         classEnrollmentRepository.delete(enrollment);
@@ -252,7 +252,7 @@ public class EnrollmentService {
     }
 
     private void assertCenterMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
 
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");

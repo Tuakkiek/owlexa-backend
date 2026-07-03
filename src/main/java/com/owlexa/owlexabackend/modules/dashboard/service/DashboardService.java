@@ -50,12 +50,12 @@ public class DashboardService {
             throw new AccessDeniedException("Only OWNER can access dashboard stats");
         }
 
-        long totalStudents = membershipRepository.countByCenterIdAndUserRole(centerId, Role.STUDENT);
-        long totalTeachers = membershipRepository.countByCenterIdAndUserRole(centerId, Role.TEACHER);
-        long totalClasses  = classRepository.countByCenterId(centerId);
-        long totalFeeRecords  = feeRecordRepository.countByCenterId(centerId);
-        long unpaidFeeRecords = feeRecordRepository.countByCenterIdAndStatus(centerId, FeeStatus.UNPAID);
-        long paidFeeRecords   = feeRecordRepository.countByCenterIdAndStatus(centerId, FeeStatus.PAID);
+        long totalStudents = membershipRepository.countByCenter_IdAndUserRole(centerId, Role.STUDENT);
+        long totalTeachers = membershipRepository.countByCenter_IdAndUserRole(centerId, Role.TEACHER);
+        long totalClasses  = classRepository.countByCenter_Id(centerId);
+        long totalFeeRecords  = feeRecordRepository.countByCenter_Id(centerId);
+        long unpaidFeeRecords = feeRecordRepository.countByCenter_IdAndStatus(centerId, FeeStatus.UNPAID);
+        long paidFeeRecords   = feeRecordRepository.countByCenter_IdAndStatus(centerId, FeeStatus.PAID);
         var  totalRevenue     = paymentRepository.sumAmountByCenterId(centerId);
 
         return DashboardStatsResponse.builder()
