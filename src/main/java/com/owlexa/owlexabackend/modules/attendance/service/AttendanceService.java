@@ -62,7 +62,7 @@ public class AttendanceService {
                 throw new BadRequestException("User is not a STUDENT");
             }
 
-            boolean activeEnrollment = classEnrollmentRepository.existsByClazzIdAndStudentUserIdAndStatus(
+            boolean activeEnrollment = classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
                     schedule.getClazz().getId(),
                     student.getId(),
                     EnrollmentStatus.ACTIVE
@@ -75,7 +75,7 @@ public class AttendanceService {
             }
 
             Attendance attendance = attendanceRepository
-                    .findByScheduleIdAndStudentUserIdAndDate(
+                    .findBySchedule_IdAndStudentUser_IdAndDate(
                             scheduleId,
                             student.getId(),
                             request.getDate()
@@ -112,7 +112,7 @@ public class AttendanceService {
             throw new AccessDeniedException("You do not have permission to view this schedule");
         }
 
-        return attendanceRepository.findAllByScheduleIdAndDate(scheduleId, date)
+        return attendanceRepository.findAllBySchedule_IdAndDate(scheduleId, date)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -125,7 +125,7 @@ public class AttendanceService {
 
         assertCenterMembership(currentUser, centerId);
 
-        List<Attendance> attendances = attendanceRepository.findAllByScheduleIdAndDate(classId, date);
+        List<Attendance> attendances = attendanceRepository.findAllBySchedule_IdAndDate(classId, date);
 
         return attendances.stream()
                 .map(this::toResponse)
@@ -134,7 +134,7 @@ public class AttendanceService {
 
     private void assertCanMarkAttendance(User currentUser, Long centerId, Schedule schedule) {
         if (currentUser.getRole() == Role.OWNER) {
-            boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+            boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
             if (!hasMembership) {
                 throw new AccessDeniedException("User is not a member of this center");
             }
@@ -142,7 +142,7 @@ public class AttendanceService {
         }
 
         if (currentUser.getRole() == Role.TEACHER) {
-            boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+            boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
             if (!hasMembership) {
                 throw new AccessDeniedException("User is not a member of this center");
             }
@@ -193,7 +193,7 @@ public class AttendanceService {
     }
 
     private void assertCenterMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }

@@ -5,11 +5,11 @@ import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import java.util.List;
 
 public interface ClassRepository extends JpaRepository<Class, Long> {
-    List<Class> findAllByCenterId(Long centerId);
+    List<Class> findAllByCenter_Id(Long centerId);
 
-    long countByCenterId(Long centerId);
+    long countByCenter_Id(Long centerId);
 
-    boolean existsByNameAndCenterId(String name, Long centerId);
+    boolean existsByNameAndCenter_Id(String name, Long centerId);
 
-    void deleteByCenterId(Long centerId);
+    void deleteByCenter_Id(Long centerId);
 }

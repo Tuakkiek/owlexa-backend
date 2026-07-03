@@ -11,5 +11,5 @@ public interface CenterRepository extends JpaRepository<Center, Long> {
 
     Optional<Center> findBySubdomain(String subdomain);
 
-    List<Center> findAllByOwnerId(Long ownerId);
+    List<Center> findAllByOwner_Id(Long ownerId);
 }

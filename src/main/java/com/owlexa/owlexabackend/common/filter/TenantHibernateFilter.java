@@ -102,7 +102,7 @@ public class TenantHibernateFilter extends OncePerRequestFilter {
         }
 
         if (user != null) {
-            List<Membership> memberships = membershipRepository.findAllByUserId(user.getId());
+            List<Membership> memberships = membershipRepository.findAllByUser_Id(user.getId());
             if (memberships.size() == 1) {
                 return memberships.get(0).getCenter().getId();
             }

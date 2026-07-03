@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MockTestQuestionRepository extends JpaRepository<MockTestQuestion, Long> {
-    List<MockTestQuestion> findAllByMockTestIdOrderBySortOrderAscIdAsc(Long mockTestId);
+    List<MockTestQuestion> findAllByMockTest_IdOrderBySortOrderAscIdAsc(Long mockTestId);
 
-    Optional<MockTestQuestion> findByIdAndMockTestId(Long id, Long mockTestId);
+    Optional<MockTestQuestion> findByIdAndMockTest_Id(Long id, Long mockTestId);
 
-    void deleteAllByMockTestId(Long mockTestId);
+    void deleteAllByMockTest_Id(Long mockTestId);
 }

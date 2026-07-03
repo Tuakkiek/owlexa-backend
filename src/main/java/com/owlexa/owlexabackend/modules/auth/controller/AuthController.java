@@ -3,6 +3,7 @@ import com.owlexa.owlexabackend.modules.auth.dto.request.LoginRequest;
 import com.owlexa.owlexabackend.modules.auth.dto.request.RegisterOwnerRequest;
 import com.owlexa.owlexabackend.modules.auth.dto.request.RegisterStudentRequest;
 import com.owlexa.owlexabackend.modules.auth.dto.response.AuthResponse;
+import com.owlexa.owlexabackend.modules.auth.dto.response.RefreshTokenResponse;
 import com.owlexa.owlexabackend.modules.auth.dto.response.SessionResponse;
 import com.owlexa.owlexabackend.modules.auth.service.AuthService;
 import com.owlexa.owlexabackend.common.util.CookieUtil;
@@ -34,14 +35,17 @@ public class AuthController {
     }
 
     @PostMapping("/refresh-token")
-    public AuthResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
+    public RefreshTokenResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = cookieUtil.extractRefreshTokenFromCookie(request)
             .orElseThrow(() -> new BadRequestException("Cookie không tồn tại hoặc đã hết hạn"));
         AuthService.RefreshResult result = authService.refreshToken(refreshToken);
         if (result.isNewRefreshTokenGenerated()) {
-            cookieUtil.setRefreshTokenCookie(response, result.getNewRefreshToken());
+            cookieUtil.setRefreshTokenCookie(response, result.getRefreshToken());
         }
-        return result.getAuthResponse();
+        return RefreshTokenResponse.builder()
+                .refreshToken(result.getRefreshToken())
+                .auth(result.getAuthResponse())
+                .build();
     }
 
     @PostMapping("/register/student")

@@ -111,7 +111,7 @@ class TenantHibernateFilterTest {
         membership.setUser(user);
 
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(user));
-        when(membershipRepository.findAllByUserId(10L)).thenReturn(List.of(membership));
+        when(membershipRepository.findAllByUser_Id(10L)).thenReturn(List.of(membership));
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("0901234567", null, List.of())

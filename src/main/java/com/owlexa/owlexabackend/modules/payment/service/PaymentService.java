@@ -88,7 +88,7 @@ public class PaymentService {
                 .feeRecord(feeRecord)
                 .center(feeRecord.getCenter())
                 .studentUser(feeRecord.getStudentUser())
-                .collectdByUser(currentUser)
+                .collectedByUser(currentUser)
                 .amount(request.getAmount())
                 .method(PaymentMethod.CASH)
                 .note(normalizeText(request.getNote()))
@@ -120,7 +120,7 @@ public class PaymentService {
             throw new BadRequestException("You do not have permission to manage this feeRecord");
         }
 
-        return paymentRepository.findAllByFeeRecordOrderByCreatedAtDesc(feeRecordId)
+        return paymentRepository.findAllByFeeRecordOrderByCreatedAtDesc(feeRecord)
                 .stream()
                 .map(payment -> toResponse(payment, feeRecord))
                 .toList();
@@ -131,7 +131,7 @@ public class PaymentService {
     public List<PaymentResponse> findMyPayments() {
         User currentUser = getCurrentUser();
 
-        return paymentRepository.findAllByStudentUserIdOrderByCreatedAtDesc(currentUser.getId())
+        return paymentRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(currentUser.getId())
                 .stream()
                 .map(payment -> toResponse(payment, payment.getFeeRecord()))
                 .toList();
@@ -145,7 +145,7 @@ public class PaymentService {
 
         assertCenterMembership(currentUser, centerId);
 
-        return paymentRepository.findAllByCenterIdOrderByCreatedAtDesc(centerId)
+        return paymentRepository.findAllByCenter_IdOrderByCreatedAtDesc(centerId)
                 .stream()
                 .map(payment -> toResponse(payment, payment.getFeeRecord()))
                 .toList();
@@ -169,7 +169,7 @@ public class PaymentService {
                 .method(payment.getMethod())
                 .sepayRef(payment.getSepayRef())
                 .note(payment.getNote())
-                .collectedByUserId(payment.getCollectdByUser() != null ? payment.getCollectdByUser().getId() : null)
+                .collectedByUserId(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getId() : null)
                 .createdAt(payment.getCreatedAt())
                 .feeRecordAmount(feeRecord.getAmount())
                 .feeRecordPaidAmount(feeRecord.getPaidAmount())
@@ -244,7 +244,7 @@ public class PaymentService {
 
     // Assert center membership
     private void assertCenterMembership(User currentUser, Long centerId) {
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
 
         if (!hasMembership) {
             throw new AccessDeniedException("User is not member of this center");

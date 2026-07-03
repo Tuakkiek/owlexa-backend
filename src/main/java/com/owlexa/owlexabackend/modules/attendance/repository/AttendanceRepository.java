@@ -10,25 +10,25 @@ import java.util.Optional;
 
 public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
-    List<Attendance> findAllByScheduleIdAndDate(Long scheduleId, LocalDate date);
+    List<Attendance> findAllBySchedule_IdAndDate(Long scheduleId, LocalDate date);
 
-    Optional<Attendance> findByScheduleIdAndStudentUserIdAndDate(
+    Optional<Attendance> findBySchedule_IdAndStudentUser_IdAndDate(
             Long scheduleId,
             Long studentUserId,
             LocalDate date
     );
 
-    boolean existsByScheduleIdAndStudentUserIdAndDate(
+    boolean existsBySchedule_IdAndStudentUser_IdAndDate(
             Long scheduleId,
             Long studentUserId,
             LocalDate date
     );
 
-    long countByScheduleIdAndDateAndStatus(
+    long countBySchedule_IdAndDateAndStatus(
             Long scheduleId,
             LocalDate date,
             AttendanceStatus status
     );
 
-    void deleteByCenterId(Long centerId);
+    void deleteByCenter_Id(Long centerId);
 }

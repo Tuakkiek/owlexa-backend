@@ -15,6 +15,13 @@ public class ScheduleController {
 
     private final ScheduleService scheduleService;
 
+    // ── OWNER: View all schedules in center ───────────────────────────────────
+
+    @GetMapping("/owner/schedules/me")
+    public List<ScheduleResponse> findAllForOwner() {
+        return scheduleService.findAllForOwner();
+    }
+
     // ── OWNER: Manage schedules ──────────────────────────────────────────────
 
     @PostMapping("/owner/classes/{classId}/schedules")
@@ -42,7 +49,7 @@ public class ScheduleController {
             @PathVariable Long scheduleId,
             @Valid @RequestBody ScheduleRequest request
     ) {
-        return scheduleService.update(scheduleId, request);
+        return scheduleService.update(classId, scheduleId, request);
     }
 
     @DeleteMapping("/owner/classes/{classId}/schedules/{scheduleId}")
@@ -52,6 +59,14 @@ public class ScheduleController {
             @PathVariable Long scheduleId
     ) {
         scheduleService.delete(scheduleId);
+    }
+
+    @PatchMapping("/owner/classes/{classId}/schedules/{scheduleId}/toggle")
+    public ScheduleResponse toggleActive(
+            @PathVariable Long classId,
+            @PathVariable Long scheduleId
+    ) {
+        return scheduleService.toggleActive(scheduleId);
     }
 
     // ── TEACHER: View own schedule ───────────────────────────────────────────

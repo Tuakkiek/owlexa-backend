@@ -39,7 +39,7 @@ public class AuthorizationService {
         User currentUser = getCurrentUser();
         String normalizedCode = permissionCode.trim().toUpperCase(Locale.ROOT);
 
-        return userPermissionRepository.existsByUserIdAndPermissionCode(
+        return userPermissionRepository.existsByUser_IdAndPermissionCode(
                 currentUser.getId(),
                 normalizedCode
         );

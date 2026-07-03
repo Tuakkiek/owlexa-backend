@@ -8,8 +8,11 @@ import com.owlexa.owlexabackend.modules.auth.dto.response.SessionResponse;
 import com.owlexa.owlexabackend.modules.user.entity.DeviceType;
 import com.owlexa.owlexabackend.modules.user.entity.Permission;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.entity.UserSession;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
@@ -37,6 +40,7 @@ public class AuthService {
 
     private final UserRepository         userRepository;
     private final UserSessionRepository  sessionRepository;
+    private final MembershipRepository   membershipRepository;
     private final PasswordEncoder        passwordEncoder;
     private final JwtUtil                jwtUtil;
     private final PermissionRepository   permissionRepository;
@@ -70,6 +74,7 @@ public class AuthService {
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .user(user)
+                .center(resolveCenter(user))
                 .refreshTokenHash(jwtUtil.hashToken(refreshToken))
                 .deviceName(resolveDeviceName(request.getDeviceName(), httpRequest))
                 .deviceType(resolveDeviceType(request.getDeviceType(), httpRequest))
@@ -153,6 +158,7 @@ public class AuthService {
                 .authResponse(authResponse)
                 .newRefreshTokenGenerated(true)
                 .newRefreshToken(newRefreshToken)
+                .refreshToken(newRefreshToken)
                 .build();
     }
 
@@ -256,6 +262,7 @@ public class AuthService {
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .user(user)
+                .center(resolveCenter(user))
                 .refreshTokenHash(jwtUtil.hashToken(refreshToken))
                 .deviceName(resolveDeviceName(null, httpRequest))
                 .deviceType(resolveDeviceType(null, httpRequest))
@@ -303,6 +310,14 @@ public class AuthService {
     // HELPERS
     // ═══════════════════════════════════════════════════════════════
 
+    private Center resolveCenter(User user) {
+        return membershipRepository.findAllByUser_Id(user.getId())
+                .stream()
+                .findFirst()
+                .map(Membership::getCenter)
+                .orElse(null);
+    }
+
     private void verifyPassword(String rawPassword, User user) {
         boolean bcryptMatch    = passwordEncoder.matches(rawPassword, user.getPassword());
         boolean legacyMatch    = rawPassword != null && rawPassword.equals(user.getPassword());
@@ -313,6 +328,11 @@ public class AuthService {
 
     private AuthResponse buildAuthResponse(String accessToken,
                                            String sessionId, User user, String role) {
+        String centerName = membershipRepository.findAllByUser_Id(user.getId())
+                .stream()
+                .findFirst()
+                .map(m -> m.getCenter().getName())
+                .orElse(null);
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .sessionId(sessionId)
@@ -320,7 +340,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .roleName(role)
-                .centerName(null)
+                .centerName(centerName)
                 .build();
     }
 
@@ -469,5 +489,6 @@ public class AuthService {
         private final AuthResponse authResponse;
         private final boolean newRefreshTokenGenerated;
         private final String newRefreshToken;
+        private final String refreshToken;
     }
 }

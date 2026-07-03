@@ -9,29 +9,29 @@ import java.util.Optional;
 
 public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
-    List<FeeRecord> findAllByClazzIdAndMonth(Long classId, String month);
+    List<FeeRecord> findAllByClazz_IdAndMonth(Long classId, String month);
 
-    List<FeeRecord> findAllByCenterIdAndMonth(Long centerId, String month);
+    List<FeeRecord> findAllByCenter_IdAndMonth(Long centerId, String month);
 
-    List<FeeRecord> findAllByStudentUserIdOrderByCreatedAtDesc(Long studentUserId);
+    List<FeeRecord> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
 
-    List<FeeRecord> findAllByCenterIdAndStatusAndDueDateBefore(
+    List<FeeRecord> findAllByCenter_IdAndStatusAndDueDateBefore(
             Long centerId,
             FeeStatus status,
             LocalDate dueDate
     );
 
-    Optional<FeeRecord> findByStudentUserIdAndClazzIdAndMonth(
+    Optional<FeeRecord> findByStudentUser_IdAndClazz_IdAndMonth(
             Long studentUserId,
             Long classId,
             String month
     );
 
-    boolean existsByClazzIdAndMonth(Long classId, String month);
+    boolean existsByClazz_IdAndMonth(Long classId, String month);
 
-    long countByCenterId(Long centerId);
+    long countByCenter_Id(Long centerId);
 
-    long countByCenterIdAndStatus(Long centerId, FeeStatus status);
+    long countByCenter_IdAndStatus(Long centerId, FeeStatus status);
 
-    void deleteByCenterId(Long centerId);
+    void deleteByCenter_Id(Long centerId);
 }

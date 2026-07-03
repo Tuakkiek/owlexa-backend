@@ -68,7 +68,7 @@ public class StudentService {
             if (studentUser.getRole() != Role.STUDENT) {
                 throw new BadRequestException("User is not a STUDENT");
             }
-            boolean membership = membershipRepository.existsByUserIdAndCenterId(studentUser.getId(), centerId);
+            boolean membership = membershipRepository.existsByUser_IdAndCenter_Id(studentUser.getId(), centerId);
 
             if (!membership) {
                 createMembership(studentUser, center, currentUser);
@@ -100,7 +100,7 @@ public class StudentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(studentId, centerId, Role.STUDENT)
+                .findByUser_IdAndCenter_IdAndUserRole(studentId, centerId, Role.STUDENT)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in this center"));
 
         User student = membership.getUser();
@@ -218,7 +218,7 @@ public class StudentService {
                 User studentUser = existingUser.get();
 
                 boolean existsMembership =
-                        membershipRepository.existsByUserIdAndCenterId(studentUser.getId(), centerId);
+                        membershipRepository.existsByUser_IdAndCenter_Id(studentUser.getId(), centerId);
 
                 BulkStudentResult result = new BulkStudentResult();
                 result.setPhoneNumber(phoneNumber);
@@ -267,7 +267,7 @@ public class StudentService {
 
         assertOwnerAndCenterMembership(currentUser, centerId);
 
-        return membershipRepository.findAllByCenterIdAndUserRole(centerId, Role.STUDENT)
+        return membershipRepository.findAllByCenter_IdAndUserRole(centerId, Role.STUDENT)
                 .stream()
                 .map(Membership::getUser)
                 .map(user -> toResponse(user, centerId, null))
@@ -283,7 +283,7 @@ public class StudentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Membership membership = membershipRepository
-                .findByUserIdAndCenterIdAndUserRole(studentId, centerId, Role.STUDENT)
+                .findByUser_IdAndCenter_IdAndUserRole(studentId, centerId, Role.STUDENT)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found in this center"));
 
         membershipRepository.delete(membership);
@@ -344,7 +344,7 @@ public class StudentService {
             throw new AccessDeniedException("Only OWNER can add student to center");
         }
 
-        boolean hasMembership = membershipRepository.existsByUserIdAndCenterId(currentUser.getId(), centerId);
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }

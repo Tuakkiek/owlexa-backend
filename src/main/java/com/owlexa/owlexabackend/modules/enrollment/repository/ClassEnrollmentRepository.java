@@ -8,19 +8,19 @@ import java.util.Optional;
 
 public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment, Long> {
 
-    List<ClassEnrollment> findAllByClazzIdAndStatus(Long classId, EnrollmentStatus status);
+    List<ClassEnrollment> findAllByClazz_IdAndStatus(Long classId, EnrollmentStatus status);
 
-    List<ClassEnrollment> findAllByClazzIdAndCenterId(Long clazzId, Long centerId);
+    List<ClassEnrollment> findAllByClazz_IdAndCenter_Id(Long clazzId, Long centerId);
 
-    Optional<ClassEnrollment> findByClazzIdAndStudentUserId(Long clazzId, Long studentUserId);
+    Optional<ClassEnrollment> findByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId);
 
-    boolean existsByClazzIdAndStudentUserId(Long clazzId, Long studentUserId);
+    boolean existsByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId);
 
-    long countByClazzIdAndStatus(Long classId, EnrollmentStatus status);
+    long countByClazz_IdAndStatus(Long classId, EnrollmentStatus status);
 
-    boolean existsByClazzIdAndStudentUserIdAndStatus(Long classId, Long studentUserId, EnrollmentStatus status);
+    boolean existsByClazz_IdAndStudentUser_IdAndStatus(Long classId, Long studentUserId, EnrollmentStatus status);
 
-    List<ClassEnrollment> findAllByStudentUserIdAndCenterId(Long studentUserId, Long centerId);
+    List<ClassEnrollment> findAllByStudentUser_IdAndCenter_Id(Long studentUserId, Long centerId);
 
-    void deleteByCenterId(Long centerId);
+    void deleteByCenter_Id(Long centerId);
 }
