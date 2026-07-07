@@ -10,6 +10,7 @@ import com.owlexa.owlexabackend.modules.document.entity.StudentDocument;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -68,7 +69,7 @@ public class StudentDocumentService {
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
         Center center = centerRepository.findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
@@ -93,7 +94,7 @@ public class StudentDocumentService {
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         return studentDocumentRepository.findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(classId, centerId)

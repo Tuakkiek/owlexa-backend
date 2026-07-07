@@ -14,6 +14,7 @@ import com.owlexa.owlexabackend.modules.user.entity.UserSession;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.PermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
@@ -48,6 +50,9 @@ class AuthServiceTest {
 
     @Mock
     private UserSessionRepository sessionRepository;
+
+    @Mock
+    private MembershipRepository membershipRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -91,6 +96,8 @@ class AuthServiceTest {
             user.setId(1L);
             return user;
         });
+
+        lenient().when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
 
         AuthService.LoginResult result = authService.registerStudent(request, httpRequest);
         AuthResponse response = result.getAuthResponse();
@@ -151,6 +158,8 @@ class AuthServiceTest {
             user.setId(2L);
             return user;
         });
+
+        lenient().when(membershipRepository.findAllByUser_Id(2L)).thenReturn(List.of());
 
         AuthService.LoginResult result = authService.registerOwner(request, httpRequest);
         AuthResponse response = result.getAuthResponse();
@@ -223,6 +232,7 @@ class AuthServiceTest {
         when(jwtUtil.generateAccessToken(eq("0901234567"), eq("STUDENT"), anyString()))
                 .thenReturn("access-token");
         when(jwtUtil.hashToken("refresh-token")).thenReturn("hashed-refresh-token");
+        lenient().when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
 
         AuthService.LoginResult result = authService.login(request, httpRequest);
         AuthResponse response = result.getAuthResponse();
@@ -270,6 +280,7 @@ class AuthServiceTest {
         when(jwtUtil.generateAccessToken(eq("0901234567"), eq("STUDENT"), anyString()))
                 .thenReturn("access-token");
         when(jwtUtil.hashToken("refresh-token")).thenReturn("hashed-refresh-token");
+        lenient().when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
 
         authService.login(request, httpRequest);
 
@@ -307,6 +318,7 @@ class AuthServiceTest {
         when(jwtUtil.generateAccessToken(eq("0901234567"), eq("STUDENT"), anyString()))
                 .thenReturn("access-token");
         when(jwtUtil.hashToken("refresh-token")).thenReturn("hashed-refresh-token");
+        lenient().when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
 
         authService.login(request, httpRequest);
 
@@ -340,6 +352,7 @@ class AuthServiceTest {
         when(jwtUtil.generateRefreshToken("0901234567", "session-123")).thenReturn("new-refresh-token");
         when(jwtUtil.generateAccessToken("0901234567", "STUDENT", "session-123")).thenReturn("new-access-token");
         when(jwtUtil.hashToken("new-refresh-token")).thenReturn("hashed-new-refresh-token");
+        lenient().when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
 
         AuthService.RefreshResult result = authService.refreshToken(requestToken);
         AuthResponse response = result.getAuthResponse();

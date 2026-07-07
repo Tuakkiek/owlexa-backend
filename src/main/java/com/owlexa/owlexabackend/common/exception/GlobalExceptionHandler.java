@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -69,11 +70,41 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<Map<String, Object>> handleBusinessRule(BusinessRuleException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorBody(
+                422,
+                ex.getMessage(),
+                null
+        ));
+    }
+
+    @ExceptionHandler(TenancyViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleTenancyViolation(TenancyViolationException ex) {
+        log.warn("Tenancy violation attempt: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorBody(
+                403,
+                "Resource not found",
+                null
+        ));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Access denied: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorBody(
                 403,
                 ex.getMessage(),
+                null
+        ));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException ex) {
+        log.warn("Authentication failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody(
+                401,
+                "Authentication required",
                 null
         ));
     }
@@ -89,11 +120,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleOther(Exception ex) {
-        log.error("Unhandled exception: ", ex);
+        String traceId = java.util.UUID.randomUUID().toString();
+        log.error("Unhandled exception [traceId={}]: ", traceId, ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(
                 500,
                 "Internal server error",
-                null
+                java.util.Map.of("traceId", traceId)
         ));
     }
 
