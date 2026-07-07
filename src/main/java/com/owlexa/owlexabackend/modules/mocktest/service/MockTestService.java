@@ -21,6 +21,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -241,7 +242,7 @@ public class MockTestService {
         if (currentUser.getRole() == Role.OWNER) {
             assertOwnerAndCenterAccess(currentUser, centerId);
             if (!attempt.getCenter().getId().equals(centerId)) {
-                throw new AccessDeniedException("You do not have permission to view this attempt");
+                throw new TenancyViolationException("Attempt " + attemptId + " belongs to another center");
             }
             return toAttemptResponse(attempt, true);
         }
@@ -399,7 +400,7 @@ public class MockTestService {
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found with id: " + attemptId));
 
         if (!attempt.getStudentUser().getId().equals(currentUser.getId()) || !attempt.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this attempt");
+            throw new TenancyViolationException("Attempt " + attemptId + " does not belong to current center");
         }
 
         return toAttemptResponse(attempt, true);
@@ -415,7 +416,7 @@ public class MockTestService {
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found with id: " + attemptId));
 
         if (!attempt.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this attempt");
+            throw new TenancyViolationException("Attempt " + attemptId + " belongs to another center");
         }
 
         return toAttemptResponse(attempt, true);
@@ -461,7 +462,7 @@ public class MockTestService {
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found with id: " + attemptId));
 
         if (!attempt.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this attempt");
+            throw new TenancyViolationException("Attempt " + attemptId + " belongs to another center");
         }
 
         List<Long> classIds = getTeacherClassIds(currentUser.getId(), centerId);
@@ -497,7 +498,7 @@ public class MockTestService {
         MockTestQuestion question = questionRepository.findByIdAndMockTest_Id(questionId, testId)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
         if (!question.getMockTest().getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to access this question");
+            throw new TenancyViolationException("Question " + questionId + " belongs to another center");
         }
         return question;
     }
@@ -519,7 +520,7 @@ public class MockTestService {
         MockTest mockTest = mockTestRepository.findById(testId)
                 .orElseThrow(() -> new ResourceNotFoundException("Mock test not found with id: " + testId));
         if (!mockTest.getCenter().getId().equals(centerId) || !Boolean.TRUE.equals(mockTest.getIsActive())) {
-            throw new AccessDeniedException("You do not have permission to access this mock test");
+            throw new TenancyViolationException("Mock test " + testId + " belongs to another center");
         }
         return mockTest;
     }
@@ -651,7 +652,7 @@ public class MockTestService {
 
     private void assertOwnedTest(MockTest test, Long centerId) {
         if (!test.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to access this mock test");
+            throw new TenancyViolationException("Mock test " + test.getId() + " belongs to another center");
         }
     }
 

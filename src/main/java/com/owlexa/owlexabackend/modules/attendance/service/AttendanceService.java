@@ -2,7 +2,9 @@ package com.owlexa.owlexabackend.modules.attendance.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.attendance.dto.request.AttendanceMarkRequest;
 import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceResponse;
 import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
@@ -45,7 +47,7 @@ public class AttendanceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Schedule not found with id: " + scheduleId));
 
         if (!schedule.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this schedule");
+            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
         }
 
         assertCanMarkAttendance(currentUser, centerId, schedule);
@@ -69,7 +71,7 @@ public class AttendanceService {
             );
 
             if (!activeEnrollment) {
-                throw new BadRequestException(
+                throw new BusinessRuleException(
                         "Student is not actively enrolled in this class: " + student.getId()
                 );
             }
@@ -109,7 +111,7 @@ public class AttendanceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Schedule not found with id: " + scheduleId));
 
         if (!schedule.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this schedule");
+            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
         }
 
         return attendanceRepository.findAllBySchedule_IdAndDate(scheduleId, date)
