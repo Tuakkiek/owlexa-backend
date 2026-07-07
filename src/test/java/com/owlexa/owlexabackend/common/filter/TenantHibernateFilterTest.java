@@ -1,171 +1,145 @@
 package com.owlexa.owlexabackend.common.filter;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.user.entity.Membership;
-import com.owlexa.owlexabackend.modules.user.entity.Role;
-import com.owlexa.owlexabackend.modules.user.entity.User;
-import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
-import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.hibernate.Filter;
 import org.hibernate.Session;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.util.List;
-import java.util.Optional;
+import java.io.IOException;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+/**
+ * Test cho TenantHibernateFilter theo kiến trúc mới (sau refactor):
+ *
+ *   JWT request flow:
+ *   DomainResolverFilter (resolve subdomain → resolvedCenterId)
+ *       → JwtFilter (parse JWT → set SecurityContext → set TenantContext từ user.centerId)
+ *           → TenantHibernateFilter (enable Hibernate Filter nếu TenantContext có value)
+ *               → Controller
+ *
+ *   TenantHibernateFilter KHÔNG tự resolve center.
+ *   Nó chỉ đọc TenantContext (do JwtFilter set) và enable filter Hibernate tương ứng.
+ *   Việc clear ThreadLocal ở finally là bắt buộc để chống leak khi Tomcat dùng thread pool.
+ */
 @ExtendWith(MockitoExtension.class)
 class TenantHibernateFilterTest {
 
     @Mock
-    private CenterRepository centerRepository;
-    @Mock
-    private UserRepository userRepository;
-    @Mock
-    private MembershipRepository membershipRepository;
-    @Mock
     private EntityManager entityManager;
+
     @Mock
     private Session session;
+
+    @Mock
+    private Filter hibernateFilter;
 
     private TenantHibernateFilter filter;
 
     @BeforeEach
-    void setUp() {
-        filter = new TenantHibernateFilter(centerRepository, userRepository, membershipRepository);
-        setEntityManager(field -> {
-            if (field.getName().equals("entityManager")) {
-                try {
-                    field.setAccessible(true);
-                    field.set(filter, entityManager);
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        });
-    }
+    void setUp() throws Exception {
+        filter = new TenantHibernateFilter();
 
-    private void setEntityManager(java.util.function.Consumer<java.lang.reflect.Field> setter) {
-        try {
-            var field = TenantHibernateFilter.class.getDeclaredField("entityManager");
-            field.setAccessible(true);
-            field.set(filter, entityManager);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        // Inject mock EntityManager vào field private (vì @PersistenceContext không hoạt động trong unit test)
+        var field = TenantHibernateFilter.class.getDeclaredField("entityManager");
+        field.setAccessible(true);
+        field.set(filter, entityManager);
     }
 
     @AfterEach
     void tearDown() {
-        SecurityContextHolder.clearContext();
         TenantContext.clear();
     }
 
     @Test
-    void doFilterInternal_whenHeaderPresent_shouldEnableTenantFilter() throws Exception {
+    @DisplayName("TenantContext có value → bật Hibernate Filter với tenantId tương ứng")
+    void doFilterInternal_whenTenantContextHasValue_shouldEnableTenantFilter() throws ServletException, IOException {
+        TenantContext.setCurrentTenantId(77L);
         when(entityManager.unwrap(Session.class)).thenReturn(session);
-
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("X-Tenant-ID", "77");
-        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(session.enableFilter(TenantHibernateFilter.FILTER_NAME)).thenReturn(hibernateFilter);
 
         FilterChain chain = (req, res) -> {
+            // Trong lúc controller chạy, filter đã được enable
             assertThat(TenantContext.getCurrentTenantId()).isEqualTo(77L);
         };
 
-        filter.doFilterInternal(request, response, chain);
+        filter.doFilterInternal(mockRequest(), mockResponse(), chain);
 
-        verify(session).enableFilter("tenantFilter");
-        verify(session.enableFilter("tenantFilter")).setParameter("tenantId", 77L);
+        verify(session).enableFilter(TenantHibernateFilter.FILTER_NAME);
+        verify(hibernateFilter).setParameter(TenantHibernateFilter.PARAM_NAME, 77L);
     }
 
     @Test
-    void doFilterInternal_whenUserHasSingleMembership_shouldUseMembershipCenter() throws Exception {
-        User user = new User();
-        user.setId(10L);
-        user.setPhoneNumber("0901234567");
-        user.setRole(Role.OWNER);
-
-        Center center = new Center();
-        center.setId(77L);
-
-        Membership membership = new Membership();
-        membership.setCenter(center);
-        membership.setUser(user);
-
-        when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(user));
-        when(membershipRepository.findAllByUser_Id(10L)).thenReturn(List.of(membership));
-
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("0901234567", null, List.of())
-        );
-
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
+    @DisplayName("TenantContext null (public endpoint) → KHÔNG bật Hibernate Filter")
+    void doFilterInternal_whenTenantContextIsNull_shouldNotEnableFilter() throws ServletException, IOException {
         FilterChain chain = (req, res) -> {
-            assertThat(TenantContext.getCurrentTenantId()).isEqualTo(77L);
-        };
-
-        filter.doFilterInternal(request, response, chain);
-    }
-
-    @Test
-    void doFilterInternal_whenAdminUser_shouldBypassFilter() throws Exception {
-        User adminUser = new User();
-        adminUser.setId(1L);
-        adminUser.setPhoneNumber("admin");
-        adminUser.setRole(Role.ADMIN);
-
-        when(userRepository.findByPhoneNumber("admin")).thenReturn(Optional.of(adminUser));
-
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("admin", null, List.of())
-        );
-
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        FilterChain chain = (req, res) -> {
+            // Đảm bảo controller vẫn chạy bình thường, không bị filter áp đặt
             assertThat(TenantContext.getCurrentTenantId()).isNull();
         };
 
-        filter.doFilterInternal(request, response, chain);
+        filter.doFilterInternal(mockRequest(), mockResponse(), chain);
 
         verify(entityManager, never()).unwrap(Session.class);
+        verify(session, never()).enableFilter(TenantHibernateFilter.FILTER_NAME);
     }
 
     @Test
-    void doFilterInternal_shouldClearContextAfterRequest() throws Exception {
+    @DisplayName("Sau request, TenantContext PHẢI được clear (chống leak thread pool)")
+    void doFilterInternal_shouldClearTenantContextAfterRequest() throws ServletException, IOException {
+        TenantContext.setCurrentTenantId(99L);
         when(entityManager.unwrap(Session.class)).thenReturn(session);
+        when(session.enableFilter(TenantHibernateFilter.FILTER_NAME)).thenReturn(hibernateFilter);
 
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.addHeader("X-Tenant-ID", "99");
-        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = (req, res) -> { /* no-op */ };
 
-        FilterChain chain = (req, res) -> {
-            assertThat(TenantContext.getCurrentTenantId()).isEqualTo(99L);
+        filter.doFilterInternal(mockRequest(), mockResponse(), chain);
+
+        assertThat(TenantContext.getCurrentTenantId())
+                .as("TenantContext phải null sau request, nếu không request kế tiếp dùng lại thread sẽ đọc nhầm tenant")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("Ngay cả khi controller throw exception, TenantContext vẫn phải được clear trong finally")
+    void doFilterInternal_shouldClearTenantContextEvenWhenFilterChainThrows() {
+        TenantContext.setCurrentTenantId(123L);
+        when(entityManager.unwrap(Session.class)).thenReturn(session);
+        when(session.enableFilter(TenantHibernateFilter.FILTER_NAME)).thenReturn(hibernateFilter);
+
+        FilterChain throwingChain = (req, res) -> {
+            throw new RuntimeException("Controller failure");
         };
 
-        filter.doFilterInternal(request, response, chain);
+        try {
+            filter.doFilterInternal(mockRequest(), mockResponse(), throwingChain);
+        } catch (Exception ignored) {
+            // Mong đợi exception được propagate lên
+        }
 
-        assertThat(TenantContext.getCurrentTenantId()).isNull();
+        assertThat(TenantContext.getCurrentTenantId())
+                .as("Nếu finally không chạy, bug nghiêm trọng: thread pool leak tenantId")
+                .isNull();
+    }
+
+    private HttpServletRequest mockRequest() {
+        return new org.springframework.mock.web.MockHttpServletRequest();
+    }
+
+    private HttpServletResponse mockResponse() {
+        return new org.springframework.mock.web.MockHttpServletResponse();
     }
 }

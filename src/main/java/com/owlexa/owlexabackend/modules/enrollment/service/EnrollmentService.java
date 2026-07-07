@@ -37,8 +37,10 @@ import com.owlexa.owlexabackend.modules.mocktest.entity.MockTest;
 import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestQuestion;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
@@ -90,7 +92,7 @@ public class EnrollmentService {
 
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         User student = userRepository.findById(request.getStudentId())
@@ -111,7 +113,7 @@ public class EnrollmentService {
         );
 
         if (activeEnrollmentCount >= clazz.getMaxStudents()) {
-            throw new BadRequestException("Class is full");
+            throw new BusinessRuleException("Class is full");
         }
 
         var existingEnrollment = classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(classId, student.getId());
@@ -151,7 +153,7 @@ public class EnrollmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage to view this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         return classEnrollmentRepository.findAllByClazz_IdAndStatus(classId, EnrollmentStatus.ACTIVE)
@@ -170,7 +172,7 @@ public class EnrollmentService {
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
         if(!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository
@@ -194,8 +196,8 @@ public class EnrollmentService {
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
-        if(!clazz.getCenter().getId().equals(classId)) {
-            throw new AccessDeniedException("You do not permission to manage this class");
+        if(!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository

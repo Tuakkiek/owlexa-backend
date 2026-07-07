@@ -18,7 +18,9 @@ import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmissionStatus;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -77,7 +79,10 @@ public class EssayService {
 
         Class clazz = classRepository.findById(request.getClassId())
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + request.getClassId()));
-        if (!clazz.getCenter().getId().equals(centerId) || !teacherTeachesClass(currentUser.getId(), clazz.getId(), centerId)) {
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + request.getClassId() + " belongs to another center");
+        }
+        if (!teacherTeachesClass(currentUser.getId(), clazz.getId(), centerId)) {
             throw new AccessDeniedException("You do not have permission to create rubric for this class");
         }
 
@@ -121,14 +126,14 @@ public class EssayService {
         EssayRubric rubric = essayRubricRepository.findById(request.getRubricId())
                 .orElseThrow(() -> new ResourceNotFoundException("Rubric not found with id: " + request.getRubricId()));
         if (!rubric.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to use this rubric");
+            throw new TenancyViolationException("Rubric " + request.getRubricId() + " belongs to another center");
         }
         if (!classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
                 rubric.getClazz().getId(),
                 currentUser.getId(),
                 EnrollmentStatus.ACTIVE
         )) {
-            throw new AccessDeniedException("You are not enrolled in this class");
+            throw new BusinessRuleException("You are not enrolled in this class");
         }
 
         EssaySubmission submission = EssaySubmission.builder()
@@ -202,8 +207,10 @@ public class EssayService {
 
         EssaySubmission submission = essaySubmissionRepository.findById(essayId)
                 .orElseThrow(() -> new ResourceNotFoundException("Essay not found with id: " + essayId));
-        if (!submission.getCenter().getId().equals(centerId)
-                || !teacherTeachesClass(currentUser.getId(), submission.getClazz().getId(), centerId)) {
+        if (!submission.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Essay " + essayId + " belongs to another center");
+        }
+        if (!teacherTeachesClass(currentUser.getId(), submission.getClazz().getId(), centerId)) {
             throw new AccessDeniedException("You do not have permission to review this essay");
         }
 
@@ -253,7 +260,7 @@ public class EssayService {
         EssaySubmission submission = essaySubmissionRepository.findById(essayId)
                 .orElseThrow(() -> new ResourceNotFoundException("Essay not found with id: " + essayId));
         if (!submission.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this essay");
+            throw new TenancyViolationException("Essay " + essayId + " belongs to another center");
         }
         if (currentUser.getRole() == Role.STUDENT && submission.getStudentUser().getId().equals(currentUser.getId())) {
             return submission;

@@ -39,6 +39,7 @@ import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
@@ -76,7 +77,7 @@ public class FeeRecordService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         validateMonth(request.getMonth());
@@ -125,7 +126,7 @@ public class FeeRecordService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         validateMonth(month);

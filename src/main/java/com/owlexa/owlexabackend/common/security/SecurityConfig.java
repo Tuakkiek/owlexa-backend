@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.common.security;
 
+import com.owlexa.owlexabackend.common.filter.DomainResolverFilter;
 import com.owlexa.owlexabackend.common.filter.TenantHibernateFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,7 @@ public class SecurityConfig {
 
     private final TenantHibernateFilter tenantHibernateFilter;
     private final JwtFilter jwtFilter;
+    private final DomainResolverFilter domainResolverFilter;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -48,7 +50,8 @@ public class SecurityConfig {
                                 "/auth/login",
                                 "/auth/register/student",
                                 "/auth/register/owner",
-                                "/auth/refresh-token"
+                                "/auth/refresh-token",
+                                "/public/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/auth/logout",
@@ -62,8 +65,9 @@ public class SecurityConfig {
                         .requestMatchers("/cashier/**").hasAnyAuthority("CASHIER")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(tenantHibernateFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(domainResolverFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(jwtFilter, DomainResolverFilter.class)
+                .addFilterAfter(tenantHibernateFilter, JwtFilter.class)
                 .build();
     }
 

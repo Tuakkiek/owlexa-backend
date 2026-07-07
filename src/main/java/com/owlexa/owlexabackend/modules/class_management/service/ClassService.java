@@ -12,6 +12,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -200,7 +201,7 @@ public class ClassService {
         Class existingClass = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
         if(!existingClass.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to edit this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         String newName = request.getName();
@@ -231,7 +232,7 @@ public class ClassService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
         if(!existingClass.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to delete this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         classRepository.delete(existingClass);

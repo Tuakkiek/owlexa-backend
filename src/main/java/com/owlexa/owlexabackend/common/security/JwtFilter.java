@@ -12,6 +12,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import com.owlexa.owlexabackend.common.context.TenantContext;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
 @Component
 @RequiredArgsConstructor
@@ -20,6 +23,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
     private final UserSessionRepository sessionRepository;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -58,6 +62,13 @@ public class JwtFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(auth);
 
                     request.setAttribute("currentSessionId", sessionId);
+
+                    userRepository.findByPhoneNumber(phoneNumber)
+                            .ifPresent(user -> {
+                                if (user.getCenterId() != null) {
+                                    TenantContext.setCurrentTenantId(user.getCenterId());
+                                }
+                            });
                 }
             } catch (Exception e) {
                 // Token invalid hoặc expired — Spring Security sẽ trả 401 tự động

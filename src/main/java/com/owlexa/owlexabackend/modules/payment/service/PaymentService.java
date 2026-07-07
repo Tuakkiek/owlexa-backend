@@ -37,7 +37,9 @@ import com.owlexa.owlexabackend.modules.mocktest.entity.MockTest;
 import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestQuestion;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
@@ -73,7 +75,7 @@ public class PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
 
         if(!feeRecord.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this fee record");
+            throw new TenancyViolationException("Fee record " + feeRecordId + " belongs to another center");
         }
 
         validateAmount(request.getAmount());
@@ -81,7 +83,7 @@ public class PaymentService {
         BigDecimal remainingAmount = feeRecord.getAmount().subtract(feeRecord.getPaidAmount());
 
         if(request.getAmount().compareTo(remainingAmount) > 0) {
-            throw new BadRequestException("Payment amount exceeds remaining balance");
+            throw new BusinessRuleException("Payment amount exceeds remaining balance");
         }
 
         Payment payment = Payment.builder()
@@ -117,7 +119,7 @@ public class PaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
 
         if(!feeRecord.getCenter().getId().equals(centerId)) {
-            throw new BadRequestException("You do not have permission to manage this feeRecord");
+            throw new TenancyViolationException("Fee record " + feeRecordId + " belongs to another center");
         }
 
         return paymentRepository.findAllByFeeRecordOrderByCreatedAtDesc(feeRecord)

@@ -8,6 +8,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
@@ -63,7 +64,7 @@ public class ScheduleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with classId: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission this center");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         User teacher = userRepository.findById(request.getTeacherUserId())
@@ -120,7 +121,7 @@ public class ScheduleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
         if(!clazz.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to view this class");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         return scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId)
@@ -234,7 +235,7 @@ public class ScheduleService {
                 .orElseThrow(() -> new ResourceNotFoundException("Schedule not found with id: " + scheduleId));
 
         if(!schedule.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this schedule");
+            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
         }
 
         User teacher = userRepository.findById(request.getTeacherUserId())
@@ -283,7 +284,7 @@ public class ScheduleService {
                 ));
 
         if(!schedule.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this schedule");
+            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
         }
 
         scheduleRepository.delete(schedule);
@@ -303,7 +304,7 @@ public class ScheduleService {
                 ));
 
         if (!schedule.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("You do not have permission to manage this schedule");
+            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
         }
 
         schedule.setActive(!schedule.isActive());
