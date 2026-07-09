@@ -7,17 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * Servlet filter chạy sau JwtFilter.
- * Nhiệm vụ:
- *  1. Đọc centerId từ TenantContext.
- *  2. Bật Hibernate Filter "tenantFilter" trên EntityManager hiện tại.
- *  3. Sau khi Controller xử lý xong, clear TenantContext.
- *
- * Filter này ĐẢM BẢO mọi câu SELECT/UPDATE/DELETE
- * trên entity có @FilterDef("tenantFilter")
- * đều tự động có thêm điều kiện center_id = :tenantId.
- */
 @Component
 @Slf4j
 public class TenantHibernateFilter extends OncePerRequestFilter {

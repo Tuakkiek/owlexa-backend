@@ -1,0 +1,43 @@
+# Test profile configuration.
+# Active when @ActiveProfiles("test") is set on integration test classes.
+# Replaces MySQL with H2 in-memory DB so tests run without external infrastructure.
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:owlexa_test;DB_CLOSE_DELAY=-1;MODE=MySQL;NON_KEYWORDS=USER,MONTH,YEAR,DAY,VALUE,KEY,TABLE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    # create-drop ensures schema is fresh per JVM; @Sql cleanup handles per-test state
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Ho_Chi_Minh
+        # Use MySQL compatibility mode for H2 so existing @Column definitions
+        # (utf8, varchar lengths, etc.) match the production schema.
+        dialect: org.hibernate.dialect.H2Dialect
+
+# Disable tenant filter auto-enable side effects during context startup.
+# Each integration test is responsible for setting TenantContext explicitly
+# via BaseIntegrationTest helper methods.
+owlexa:
+  tenant:
+    auto-enable: false
+
+# JWT - test secret (must be at least 256 bits / 32 bytes for HS256)
+jwt:
+  secret: owlexa-test-secret-key-minimum-256-bits-long-not-for-production-use
+  access-token-expiration-ms: 900000
+  refresh-token-expiration-ms: 604800000
+
+# Disable Spring Boot startup banners and noisy logs during test runs
+logging:
+  level:
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.owlexa: INFO
