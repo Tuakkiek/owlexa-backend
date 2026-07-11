@@ -328,11 +328,12 @@ public class AuthService {
 
     private AuthResponse buildAuthResponse(String accessToken,
                                            String sessionId, User user, String role) {
-        String centerName = membershipRepository.findAllByUser_Id(user.getId())
+        Membership firstMembership = membershipRepository.findAllByUser_Id(user.getId())
                 .stream()
                 .findFirst()
-                .map(m -> m.getCenter().getName())
                 .orElse(null);
+        String centerName = firstMembership != null ? firstMembership.getCenter().getName() : null;
+        Long centerId = firstMembership != null ? firstMembership.getCenter().getId() : null;
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .sessionId(sessionId)
@@ -341,6 +342,7 @@ public class AuthService {
                 .fullName(user.getFullName())
                 .roleName(role)
                 .centerName(centerName)
+                .centerId(centerId)
                 .build();
     }
 

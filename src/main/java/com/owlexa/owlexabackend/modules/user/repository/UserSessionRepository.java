@@ -15,6 +15,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, String
 
     boolean existsByIdAndActiveTrue(String id);
 
+    Optional<UserSession> findByIdAndActiveTrue(String id);
+
     List<UserSession> findByUser_IdAndActiveTrueOrderByLastUsedAtDesc(Long userId);
 
     Optional<UserSession> findByIdAndUser_Id(String sessionId, Long userId);

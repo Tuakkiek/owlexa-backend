@@ -15,4 +15,5 @@ public class AuthResponse {
     private String fullName;
     private String roleName;
     private String centerName;
+    private Long centerId;
 }

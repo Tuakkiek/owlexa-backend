@@ -1,4 +1,6 @@
 package com.owlexa.owlexabackend.modules.teacher.service;
+import com.owlexa.owlexabackend.modules.teacher.entity.TeacherCenterProfile;
+import com.owlexa.owlexabackend.modules.teacher.repository.TeacherCenterProfileRepository;
 import com.owlexa.owlexabackend.modules.teacher.dto.request.BulkTeacherRequest;
 import com.owlexa.owlexabackend.modules.teacher.dto.request.TeacherRequest;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.BulkTeacherError;
@@ -69,6 +71,7 @@ public class TeacherService {
     private final MembershipRepository membershipRepository;
     private final CenterRepository centerRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TeacherCenterProfileRepository teacherCenterProfileRepository;
 
     @Transactional
     public TeacherResponse create(TeacherRequest request) {
@@ -114,7 +117,9 @@ public class TeacherService {
             createMembership(teacherUser, center, currentUser);
         }
 
-        return toResponse(teacherUser, centerId, temporaryPassword);
+        boolean includeSalary = currentUser.getRole() == Role.OWNER;
+
+        return toResponse(teacherUser, centerId, temporaryPassword, includeSalary);
     }
 
     @Transactional(readOnly = true)
@@ -124,10 +129,12 @@ public class TeacherService {
 
         assertCenterMembership(currentUser, centerId);
 
+        boolean includeSalary = currentUser.getRole() == Role.OWNER;
+
         return membershipRepository.findAllByCenter_IdAndUserRole(centerId, Role.TEACHER)
                 .stream()
                 .map(Membership::getUser)
-                .map(user -> toResponse(user, centerId, null))
+                .map(user -> toResponse(user, centerId, null, includeSalary))
                 .toList();
     }
 
@@ -166,7 +173,9 @@ public class TeacherService {
 
         teacher = userRepository.save(teacher);
 
-        return toResponse(teacher, centerId, null);
+        boolean includeSalary = currentUser.getRole() == Role.OWNER;
+
+        return toResponse(teacher, centerId, null, includeSalary);
     }
 
     // Delete
@@ -320,14 +329,26 @@ public class TeacherService {
         membershipRepository.save(membership);
     }
 
-    private TeacherResponse toResponse(User user, Long centerId, String temporaryPassword) {
-        return TeacherResponse.builder()
+    private TeacherResponse toResponse(User user, Long centerId, String temporaryPassword, boolean includeSalary) {
+        TeacherResponse.TeacherResponseBuilder builder = TeacherResponse.builder()
                 .userId(user.getId())
                 .fullName(user.getFullName())
                 .phoneNumber(user.getPhoneNumber())
                 .centerId(centerId)
-                .temporaryPassword(temporaryPassword)
-                .build();
+                .temporaryPassword(temporaryPassword);
+
+        if (includeSalary) {
+            TeacherCenterProfile profile = teacherCenterProfileRepository
+                    .findByTeacher_IdAndCenter_Id(user.getId(), centerId)
+                    .orElse(null);
+
+            if (profile != null) {
+                builder.salary(profile.getSalary());
+                builder.currency(profile.getCurrency());
+            }
+        }
+
+        return builder.build();
     }
 
     private String generateTemporaryPassword() {
@@ -365,7 +386,7 @@ public class TeacherService {
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new BadRequestException("Missing X-Tenant-ID header");
+            throw new BadRequestException("Tenant context not resolved. Ensure the user has an active membership.");
         }
         return centerId;
     }
