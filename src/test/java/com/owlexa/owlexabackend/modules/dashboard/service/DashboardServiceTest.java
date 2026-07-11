@@ -152,7 +152,7 @@ class DashboardServiceTest {
 
         assertThatThrownBy(() -> service.getOwnerStats())
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 
     @Test

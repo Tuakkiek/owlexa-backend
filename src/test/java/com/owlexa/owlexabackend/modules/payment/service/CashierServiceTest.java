@@ -228,7 +228,7 @@ class CashierServiceTest {
 
         assertThatThrownBy(() -> service.create(buildRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -466,14 +466,14 @@ class CashierServiceTest {
     }
 
     @Test
-    @DisplayName("update: TenantContext null → BadRequestException 'X-Tenant-ID'")
+    @DisplayName("update: TenantContext null → BadRequestException 'Tenant context'")
     void update_whenTenantContextIsNull_shouldThrowBadRequest() {
         TenantContext.clear();
 
         assertThatThrownBy(() -> service.update(50L,
                 buildUpdateRequest("0999999999", "new@x.com", "New Name")))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 
     @Test

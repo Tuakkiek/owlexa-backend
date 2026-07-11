@@ -373,6 +373,6 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 }

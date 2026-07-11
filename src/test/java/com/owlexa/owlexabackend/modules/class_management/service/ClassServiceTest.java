@@ -377,6 +377,6 @@ class ClassServiceTest {
 
         assertThatThrownBy(() -> service.create(buildCreateRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 }

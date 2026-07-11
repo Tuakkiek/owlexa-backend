@@ -44,7 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>Test Bearer token contract: valid, missing, bad signature, expired, malformed</li>
  *   <li>Test role-based authorization at the URL-pattern level (SecurityConfig)</li>
  *   <li>Test SecurityContextHolder is populated by JwtFilter (principal, authorities)</li>
- *   <li>Document TenantContext behavior (User entity returns null centerId, so JwtFilter does not set TenantContext)</li>
+ *   <li>Document TenantContext behavior (JwtFilter resolves tenant from the session's center field)</li>
  * </ul>
  *
  * <p>Endpoints used:
