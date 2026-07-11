@@ -1,7 +1,11 @@
 package com.owlexa.owlexabackend.common.security;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.entity.UserSession;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
 import jakarta.servlet.FilterChain;
@@ -21,6 +25,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +41,7 @@ class JwtFilterTest {
     @Mock private CustomUserDetailsService userDetailsService;
     @Mock private UserSessionRepository sessionRepository;
     @Mock private UserRepository userRepository;
+    @Mock private MembershipRepository membershipRepository;
     @Mock private FilterChain filterChain;
 
     private JwtFilter filter;
@@ -47,7 +53,7 @@ class JwtFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new JwtFilter(jwtUtil, userDetailsService, sessionRepository, userRepository);
+        filter = new JwtFilter(jwtUtil, userDetailsService, sessionRepository, userRepository, membershipRepository);
         SecurityContextHolder.clearContext();
         TenantContext.clear();
     }
@@ -70,8 +76,23 @@ class JwtFilterTest {
         return org.springframework.security.core.userdetails.User
                 .withUsername(PHONE)
                 .password("")
-                .authorities(java.util.List.of())
+                .authorities(List.of())
                 .build();
+    }
+
+    private UserSession activeSessionWithCenter(Long centerId) {
+        UserSession session = UserSession.builder()
+                .id(SESSION_ID)
+                .active(true)
+                .build();
+        if (centerId != null) {
+            Center center = new Center();
+            center.setId(centerId);
+            center.setName("Test Center");
+            center.setSubdomain("test");
+            session.setCenter(center);
+        }
+        return session;
     }
 
     @Test
@@ -111,7 +132,7 @@ class JwtFilterTest {
 
         verify(filterChain).doFilter(request, response);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
-        verify(sessionRepository, never()).existsByIdAndActiveTrue(SESSION_ID);
+        verify(sessionRepository, never()).findByIdAndActiveTrue(SESSION_ID);
     }
 
     @Test
@@ -123,7 +144,7 @@ class JwtFilterTest {
         when(jwtUtil.isRefreshToken(ACCESS_TOKEN)).thenReturn(false);
         when(jwtUtil.extractSubject(ACCESS_TOKEN)).thenReturn(PHONE);
         when(jwtUtil.extractSessionId(ACCESS_TOKEN)).thenReturn(SESSION_ID);
-        when(sessionRepository.existsByIdAndActiveTrue(SESSION_ID)).thenReturn(true);
+        when(sessionRepository.findByIdAndActiveTrue(SESSION_ID)).thenReturn(Optional.of(activeSessionWithCenter(null)));
         when(userDetailsService.loadUserByUsername(PHONE)).thenReturn(mockUserDetails());
 
         filter.doFilterInternal(request, response, filterChain);
@@ -136,15 +157,15 @@ class JwtFilterTest {
     }
 
     @Test
-    @DisplayName("Access token hợp lệ nhưng session inactive → pass chain KHÔNG set context")
-    void doFilterInternal_whenSessionInactive_shouldPassChainWithoutAuth() throws ServletException, IOException {
+    @DisplayName("Access token hợp lệ nhưng session not found → pass chain KHÔNG set context")
+    void doFilterInternal_whenSessionNotFound_shouldPassChainWithoutAuth() throws ServletException, IOException {
         MockHttpServletRequest request = requestWithBearer(ACCESS_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         when(jwtUtil.isRefreshToken(ACCESS_TOKEN)).thenReturn(false);
         when(jwtUtil.extractSubject(ACCESS_TOKEN)).thenReturn(PHONE);
         when(jwtUtil.extractSessionId(ACCESS_TOKEN)).thenReturn(SESSION_ID);
-        when(sessionRepository.existsByIdAndActiveTrue(SESSION_ID)).thenReturn(false);
+        when(sessionRepository.findByIdAndActiveTrue(SESSION_ID)).thenReturn(Optional.empty());
 
         filter.doFilterInternal(request, response, filterChain);
 
@@ -165,7 +186,7 @@ class JwtFilterTest {
 
         filter.doFilterInternal(request, response, filterChain);
 
-        verify(sessionRepository, never()).existsByIdAndActiveTrue(SESSION_ID);
+        verify(sessionRepository, never()).findByIdAndActiveTrue(SESSION_ID);
         verify(filterChain).doFilter(request, response);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
@@ -182,7 +203,7 @@ class JwtFilterTest {
 
         filter.doFilterInternal(request, response, filterChain);
 
-        verify(sessionRepository, never()).existsByIdAndActiveTrue(SESSION_ID);
+        verify(sessionRepository, never()).findByIdAndActiveTrue(SESSION_ID);
         verify(filterChain).doFilter(request, response);
     }
 
@@ -209,7 +230,7 @@ class JwtFilterTest {
         when(jwtUtil.isRefreshToken(ACCESS_TOKEN)).thenReturn(false);
         when(jwtUtil.extractSubject(ACCESS_TOKEN)).thenReturn(PHONE);
         when(jwtUtil.extractSessionId(ACCESS_TOKEN)).thenReturn(SESSION_ID);
-        when(sessionRepository.existsByIdAndActiveTrue(SESSION_ID)).thenReturn(true);
+        when(sessionRepository.findByIdAndActiveTrue(SESSION_ID)).thenReturn(Optional.of(activeSessionWithCenter(null)));
         when(userDetailsService.loadUserByUsername(PHONE))
                 .thenThrow(new UsernameNotFoundException("User not found"));
 
@@ -227,7 +248,7 @@ class JwtFilterTest {
 
         org.springframework.security.authentication.UsernamePasswordAuthenticationToken existingAuth =
                 new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                        "different-user", null, java.util.List.of()
+                        "different-user", null, List.of()
                 );
         SecurityContextHolder.getContext().setAuthentication(existingAuth);
 
@@ -243,26 +264,16 @@ class JwtFilterTest {
     }
 
     @Test
-    @DisplayName("User có centerId → set TenantContext (kiểm tra cơ chế set tenant từ user)")
-    void doFilterInternal_whenUserHasCenterId_shouldSetTenantContext() throws ServletException, IOException {
+    @DisplayName("Session có center → set TenantContext từ session center")
+    void doFilterInternal_whenSessionHasCenter_shouldSetTenantContext() throws ServletException, IOException {
         MockHttpServletRequest request = requestWithBearer(ACCESS_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         when(jwtUtil.isRefreshToken(ACCESS_TOKEN)).thenReturn(false);
         when(jwtUtil.extractSubject(ACCESS_TOKEN)).thenReturn(PHONE);
         when(jwtUtil.extractSessionId(ACCESS_TOKEN)).thenReturn(SESSION_ID);
-        when(sessionRepository.existsByIdAndActiveTrue(SESSION_ID)).thenReturn(true);
+        when(sessionRepository.findByIdAndActiveTrue(SESSION_ID)).thenReturn(Optional.of(activeSessionWithCenter(42L)));
         when(userDetailsService.loadUserByUsername(PHONE)).thenReturn(mockUserDetails());
-
-        User userWithCenter = new User() {
-            @Override
-            public Long getCenterId() {
-                return 42L;
-            }
-        };
-        userWithCenter.setId(1L);
-        userWithCenter.setPhoneNumber(PHONE);
-        lenient().when(userRepository.findByPhoneNumber(PHONE)).thenReturn(Optional.of(userWithCenter));
 
         filter.doFilterInternal(request, response, filterChain);
 
@@ -270,26 +281,53 @@ class JwtFilterTest {
     }
 
     @Test
-    @DisplayName("User KHÔNG có centerId (getCenterId trả null) → TenantContext KHÔNG được set")
-    void doFilterInternal_whenUserHasNoCenterId_shouldNotSetTenantContext() throws ServletException, IOException {
+    @DisplayName("Session không có center + user có membership → set TenantContext từ membership")
+    void doFilterInternal_whenSessionHasNoCenterButUserHasMembership_shouldSetTenantContext() throws ServletException, IOException {
         MockHttpServletRequest request = requestWithBearer(ACCESS_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         when(jwtUtil.isRefreshToken(ACCESS_TOKEN)).thenReturn(false);
         when(jwtUtil.extractSubject(ACCESS_TOKEN)).thenReturn(PHONE);
         when(jwtUtil.extractSessionId(ACCESS_TOKEN)).thenReturn(SESSION_ID);
-        when(sessionRepository.existsByIdAndActiveTrue(SESSION_ID)).thenReturn(true);
+        when(sessionRepository.findByIdAndActiveTrue(SESSION_ID)).thenReturn(Optional.of(activeSessionWithCenter(null)));
         when(userDetailsService.loadUserByUsername(PHONE)).thenReturn(mockUserDetails());
 
-        User userNoCenter = new User() {
-            @Override
-            public Long getCenterId() {
-                return null;
-            }
-        };
-        userNoCenter.setId(1L);
-        userNoCenter.setPhoneNumber(PHONE);
-        lenient().when(userRepository.findByPhoneNumber(PHONE)).thenReturn(Optional.of(userNoCenter));
+        User user = new User();
+        user.setId(1L);
+        user.setPhoneNumber(PHONE);
+        when(userRepository.findByPhoneNumber(PHONE)).thenReturn(Optional.of(user));
+
+        Center center = new Center();
+        center.setId(99L);
+        center.setName("Fallback Center");
+        center.setSubdomain("fallback");
+        Membership membership = new Membership();
+        membership.setCenter(center);
+        membership.setUser(user);
+        when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of(membership));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(TenantContext.getCurrentTenantId()).isEqualTo(99L);
+    }
+
+    @Test
+    @DisplayName("Session không có center + user không có membership → TenantContext KHÔNG được set")
+    void doFilterInternal_whenNoCenterAndNoMembership_shouldNotSetTenantContext() throws ServletException, IOException {
+        MockHttpServletRequest request = requestWithBearer(ACCESS_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(jwtUtil.isRefreshToken(ACCESS_TOKEN)).thenReturn(false);
+        when(jwtUtil.extractSubject(ACCESS_TOKEN)).thenReturn(PHONE);
+        when(jwtUtil.extractSessionId(ACCESS_TOKEN)).thenReturn(SESSION_ID);
+        when(sessionRepository.findByIdAndActiveTrue(SESSION_ID)).thenReturn(Optional.of(activeSessionWithCenter(null)));
+        when(userDetailsService.loadUserByUsername(PHONE)).thenReturn(mockUserDetails());
+
+        User user = new User();
+        user.setId(1L);
+        user.setPhoneNumber(PHONE);
+        lenient().when(userRepository.findByPhoneNumber(PHONE)).thenReturn(Optional.of(user));
+        when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
 
         filter.doFilterInternal(request, response, filterChain);
 

@@ -353,7 +353,7 @@ public class EssayService {
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new BadRequestException("Missing X-Tenant-ID header");
+            throw new BadRequestException("Tenant context not resolved. Ensure the user has an active membership.");
         }
         return centerId;
     }

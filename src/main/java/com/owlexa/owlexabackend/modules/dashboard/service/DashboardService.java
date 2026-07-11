@@ -87,7 +87,7 @@ public class DashboardService {
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new AccessDeniedException("X-Tenant-ID header is required");
+            throw new AccessDeniedException("Tenant context not resolved. Ensure the user has an active membership.");
         }
         return centerId;
     }

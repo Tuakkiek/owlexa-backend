@@ -580,7 +580,7 @@ public class StudentServiceTest {
     }
 
     @Test
-    @DisplayName("bulkCreate: TenantContext null (sau khi auth OK) → BadRequestException 'X-Tenant-ID'")
+    @DisplayName("bulkCreate: TenantContext null (sau khi auth OK) → BadRequestException 'Tenant context'")
     void bulkCreate_whenTenantContextIsNull_shouldThrowBadRequest() {
         loginAs("0901234567");
         User owner = user(1L, "0901234567", Role.OWNER);
@@ -592,7 +592,7 @@ public class StudentServiceTest {
 
         assertThatThrownBy(() -> studentService.bulkCreate(request))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 
     @Test

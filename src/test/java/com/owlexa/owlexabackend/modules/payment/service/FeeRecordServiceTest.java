@@ -281,6 +281,6 @@ class FeeRecordServiceTest {
 
         assertThatThrownBy(() -> service.generateForClass(CLASS_ID, buildGenerateRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("X-Tenant-ID");
+                .hasMessageContaining("Tenant context");
     }
 }
