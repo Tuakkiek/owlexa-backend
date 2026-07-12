@@ -345,18 +345,22 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
     /** Persists an active session for the user and returns the session id (UUID string). */
     private String seedActiveSession(User user) {
         String sessionId = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .user(user)
                 .refreshTokenHash(jwtUtil.hashToken("placeholder-refresh-token"))
                 .deviceName("Test Device")
                 .deviceType(com.owlexa.owlexabackend.modules.user.entity.DeviceType.DESKTOP)
+                .deviceKey(jwtUtil.hashDeviceKey(user.getId(), "IntegrationTest/1.0"))
                 .ipAddress("127.0.0.1")
                 .userAgent("IntegrationTest/1.0")
                 .active(true)
-                .createdAt(LocalDateTime.now())
-                .lastUsedAt(LocalDateTime.now())
-                .expiredAt(LocalDateTime.now().plusDays(7))
+                .createdAt(now)
+                .lastUsedAt(now)
+                .inactiveExpireAt(now.plusDays(30))
+                .absoluteExpireAt(now.plusDays(90))
+                .rotationCount(0)
                 .build();
         sessionRepository.save(session);
         return sessionId;

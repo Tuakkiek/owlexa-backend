@@ -17,7 +17,9 @@ import java.time.LocalDateTime;
 @Table(name = "user_sessions",
         indexes = {
                 @Index(name = "idx_sessions_user_id", columnList = "user_id"),
-                @Index(name = "idx_sessions_id_active", columnList = "id, is_active")
+                @Index(name = "idx_sessions_id_active", columnList = "id, is_active"),
+                @Index(name = "idx_sessions_user_device", columnList = "user_id, device_key"),
+                @Index(name = "idx_sessions_cleanup", columnList = "is_active, last_used_at")
         }
 )
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
@@ -60,6 +62,13 @@ public class UserSession implements TenantAware {
     @Column(name = "user_agent", columnDefinition = "TEXT")
     private String userAgent;
 
+    /**
+     * Stable device identifier = SHA-256(userId + "|" + userAgent).
+     * Used to deduplicate sessions: same device → reuse, new device → create.
+     */
+    @Column(name = "device_key", length = 64)
+    private String deviceKey;
+
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
@@ -69,8 +78,41 @@ public class UserSession implements TenantAware {
     @Column(name = "last_used_at")
     private LocalDateTime lastUsedAt;
 
+    /**
+     * Sliding expiration: updated to now + inactiveTimeout on every successful refresh.
+     * Maps to existing {@code expired_at} column for backward compatibility.
+     */
     @Column(name = "expired_at", nullable = false)
-    private LocalDateTime expiredAt;
+    private LocalDateTime inactiveExpireAt;
+
+    /**
+     * Absolute expiration: set to createdAt + absoluteTimeout on login.
+     * Never extended. User MUST re-login after this date.
+     */
+    @Column(name = "absolute_expire_at", nullable = false)
+    private LocalDateTime absoluteExpireAt;
+
+    /**
+     * Number of times the refresh token has been rotated for this session.
+     * Useful for anomaly detection (e.g. 1000 rotations/hour = suspicious).
+     */
+    @Column(name = "rotation_count", nullable = false)
+    @Builder.Default
+    private int rotationCount = 0;
+
+    /**
+     * Why this session was revoked.
+     * Values: USER_LOGOUT, MANUAL_REVOKE, MANUAL_REVOKE_ALL,
+     *         REUSE_DETECTED, LIMIT_EXCEEDED, PASSWORD_CHANGED
+     */
+    @Column(name = "revoked_reason", length = 50)
+    private String revokedReason;
+
+    /**
+     * When this session was revoked. Set alongside revokedReason.
+     */
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
 
     @Override
     public Long getCenterId() {

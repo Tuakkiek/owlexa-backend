@@ -104,7 +104,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(cookie().httpOnly("refreshToken", true))
-                .andExpect(cookie().maxAge("refreshToken", 7 * 24 * 60 * 60));
+                .andExpect(cookie().maxAge("refreshToken", 30 * 24 * 60 * 60));
     }
 
     @Test
