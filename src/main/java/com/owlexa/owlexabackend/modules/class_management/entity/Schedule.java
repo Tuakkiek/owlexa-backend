@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.class_management.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.room.entity.Room;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
@@ -45,6 +46,10 @@ public class Schedule implements TenantAware {
     @JoinColumn(name = "teacher_user_id")
     private User teacherUser;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "room_id")
+    private Room room;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "day_of_week", nullable = false)
     private DayOfWeek dayOfWeek;
@@ -54,9 +59,6 @@ public class Schedule implements TenantAware {
 
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
-
-    @Column(name = "room", length = 50)
-    private String room;
 
     @Column(name = "is_active", nullable = false)
     private boolean isActive;

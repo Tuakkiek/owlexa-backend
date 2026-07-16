@@ -2,35 +2,22 @@ package com.owlexa.owlexabackend.modules.class_management.service;
 import com.owlexa.owlexabackend.modules.class_management.dto.request.ScheduleRequest;
 import com.owlexa.owlexabackend.modules.class_management.dto.response.ScheduleResponse;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.room.entity.Room;
+import com.owlexa.owlexabackend.modules.room.repository.RoomRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
-import com.owlexa.owlexabackend.modules.user.repository.PermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
-import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
-import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestQuestionRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestAttemptRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestAttemptAnswerRepository;
-import com.owlexa.owlexabackend.modules.essay.repository.EssaySubmissionRepository;
-import com.owlexa.owlexabackend.modules.essay.repository.EssayRubricRepository;
-import com.owlexa.owlexabackend.modules.essay.repository.EssayGradingResultRepository;
-import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
-import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -46,11 +33,11 @@ import java.util.List;
 public class ScheduleService {
 
     private final UserRepository userRepository;
-    private final CenterRepository centerRepository;
     private final ClassRepository classRepository;
     private final MembershipRepository membershipRepository;
     private final ScheduleRepository scheduleRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
+    private final RoomRepository roomRepository;
 
     // Create
     @Transactional
@@ -82,25 +69,45 @@ public class ScheduleService {
             throw new BadRequestException("Teacher is not member of this center");
         }
 
+        Room room = roomRepository.findByIdAndCenter_Id(request.getRoomId(), centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + request.getRoomId() + " in this center"));
+
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
         if (scheduleRepository.existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(
                 classId,
-                request.getDayOfWeek(),
+                request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()),
                 request.getEndTime(),
                 centerId
         )) {
             throw new DuplicateResourceException("Schedule already exists for this class at this time");
         }
 
+        // Conflict: teacher overlap
+        DayOfWeek day = DayOfWeek.of(request.getDayOfWeek());
+        long teacherOverlap = scheduleRepository.countOverlappingTeacherSchedules(
+                request.getTeacherUserId(), day,
+                request.getStartTime(), request.getEndTime(), centerId, null);
+        if (teacherOverlap > 0) {
+            throw new BusinessRuleException("Teacher has an overlapping schedule at this time");
+        }
+
+        // Conflict: room overlap
+        long roomOverlap = scheduleRepository.countOverlappingRoomSchedules(
+                request.getRoomId(), day,
+                request.getStartTime(), request.getEndTime(), centerId, null);
+        if (roomOverlap > 0) {
+            throw new BusinessRuleException("Room is already booked at this time");
+        }
+
         Schedule schedule = Schedule.builder()
                 .clazz(clazz)
                 .center(clazz.getCenter())
                 .teacherUser(teacher)
+                .room(room)
                 .dayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()))
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
-                .room(request.getRoom().trim())
                 .isActive(true)
                 .build();
 
@@ -257,13 +264,33 @@ public class ScheduleService {
             throw new BadRequestException("Teacher is not a member of this center");
         }
 
+        Room room = roomRepository.findByIdAndCenter_Id(request.getRoomId(), centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + request.getRoomId() + " in this center"));
+
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
+        // Conflict: teacher overlap (exclude self)
+        DayOfWeek day = request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek());
+        long teacherOverlap = scheduleRepository.countOverlappingTeacherSchedules(
+                request.getTeacherUserId(), day,
+                request.getStartTime(), request.getEndTime(), centerId, scheduleId);
+        if (teacherOverlap > 0) {
+            throw new BusinessRuleException("Teacher has an overlapping schedule at this time");
+        }
+
+        // Conflict: room overlap (exclude self)
+        long roomOverlap = scheduleRepository.countOverlappingRoomSchedules(
+                request.getRoomId(), day,
+                request.getStartTime(), request.getEndTime(), centerId, scheduleId);
+        if (roomOverlap > 0) {
+            throw new BusinessRuleException("Room is already booked at this time");
+        }
+
         schedule.setTeacherUser(teacher);
+        schedule.setRoom(room);
         schedule.setDayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()));
         schedule.setStartTime(request.getStartTime());
         schedule.setEndTime(request.getEndTime());
-        schedule.setRoom(request.getRoom().trim());
 
         schedule = scheduleRepository.save(schedule);
 
@@ -328,13 +355,15 @@ public class ScheduleService {
                 .classId(schedule.getClazz().getId())
                 .className(schedule.getClazz().getName())
                 .centerId(schedule.getCenter().getId())
-                .teacherUserId(schedule.getTeacherUser().getId())
-                .teacherUserFullName(schedule.getTeacherUser().getFullName())
-                .teacherPhoneNumber(schedule.getTeacherUser().getPhoneNumber())
+                .teacherUserId(schedule.getTeacherUser() != null ? schedule.getTeacherUser().getId() : null)
+                .teacherUserFullName(schedule.getTeacherUser() != null ? schedule.getTeacherUser().getFullName() : null)
+                .teacherPhoneNumber(schedule.getTeacherUser() != null ? schedule.getTeacherUser().getPhoneNumber() : null)
+                .roomId(schedule.getRoom() != null ? schedule.getRoom().getId() : null)
+                .roomName(schedule.getRoom() != null ? schedule.getRoom().getName() : null)
+                .roomCode(schedule.getRoom() != null ? schedule.getRoom().getCode() : null)
                 .dayOfWeek(schedule.getDayOfWeek().getValue())
                 .startTime(schedule.getStartTime())
                 .endTime(schedule.getEndTime())
-                .room(schedule.getRoom())
                 .isActive(schedule.isActive())
                 .createdAt(schedule.getCreatedAt())
                 .build();

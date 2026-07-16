@@ -1,15 +1,19 @@
 package com.owlexa.owlexabackend.modules.class_management.service;
 import com.owlexa.owlexabackend.modules.class_management.dto.request.ClassRequest;
 import com.owlexa.owlexabackend.modules.class_management.dto.response.ClassResponse;
+import com.owlexa.owlexabackend.modules.course.entity.Course;
+import com.owlexa.owlexabackend.modules.course.repository.CourseRepository;
 import com.owlexa.owlexabackend.modules.student.dto.response.StudentResponse;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudentsResponse;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
@@ -39,6 +43,7 @@ public class ClassService {
     private final MembershipRepository membershipRepository;
     private final ScheduleRepository scheduleRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
+    private final CourseRepository courseRepository;
 
     // Create
     @Transactional
@@ -55,12 +60,30 @@ public class ClassService {
             throw new DuplicateResourceException("Class name is already exists in this center");
         }
 
+        Course course = courseRepository.findById(request.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
+
+        User primaryTeacher = null;
+        if (request.getTeacherUserId() != null) {
+            primaryTeacher = userRepository.findById(request.getTeacherUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Teacher not found with id: " + request.getTeacherUserId()));
+            if (primaryTeacher.getRole() != Role.TEACHER) {
+                throw new BadRequestException("User is not a TEACHER");
+            }
+            boolean teacherInCenter = membershipRepository.existsByUser_IdAndCenter_Id(primaryTeacher.getId(), centerId);
+            if (!teacherInCenter) {
+                throw new BadRequestException("Teacher is not a member of this center");
+            }
+        }
+
         Class newClass = Class.builder()
                 .name(request.getName().trim())
+                .course(course)
+                .teacher(primaryTeacher)
+                .status(ClassStatus.PLANNING)
                 .vstepLevel(request.getVstepLevel())
                 .maxStudents(request.getMaxStudent())
                 .monthlyFee(request.getMonthlyFee())
-                .isActive(true)
                 .center(center)
                 .build();
 
@@ -215,6 +238,25 @@ public class ClassService {
         existingClass.setMaxStudents(request.getMaxStudent());
         existingClass.setMonthlyFee(request.getMonthlyFee());
 
+        Course course = courseRepository.findById(request.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
+        existingClass.setCourse(course);
+
+        if (request.getTeacherUserId() != null) {
+            User primaryTeacher = userRepository.findById(request.getTeacherUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Teacher not found with id: " + request.getTeacherUserId()));
+            if (primaryTeacher.getRole() != Role.TEACHER) {
+                throw new BadRequestException("User is not a TEACHER");
+            }
+            boolean teacherInCenter = membershipRepository.existsByUser_IdAndCenter_Id(primaryTeacher.getId(), centerId);
+            if (!teacherInCenter) {
+                throw new BadRequestException("Teacher is not a member of this center");
+            }
+            existingClass.setTeacher(primaryTeacher);
+        } else {
+            existingClass.setTeacher(null);
+        }
+
         existingClass = classRepository.save(existingClass);
 
         return toResponse(existingClass);
@@ -248,9 +290,81 @@ public class ClassService {
                 .vstepLevel(clazz.getVstepLevel())
                 .maxStudents(clazz.getMaxStudents())
                 .monthFee(clazz.getMonthlyFee())
+                .status(clazz.getStatus())
                 .isActive(clazz.getIsActive())
                 .centerId(clazz.getCenter().getId())
+                .courseId(clazz.getCourse() != null ? clazz.getCourse().getId() : null)
+                .courseName(clazz.getCourse() != null ? clazz.getCourse().getName() : null)
+                .courseCode(clazz.getCourse() != null ? clazz.getCourse().getCode() : null)
+                .teacherUserId(clazz.getTeacher() != null ? clazz.getTeacher().getId() : null)
+                .teacherFullName(clazz.getTeacher() != null ? clazz.getTeacher().getFullName() : null)
+                .teacherPhoneNumber(clazz.getTeacher() != null ? clazz.getTeacher().getPhoneNumber() : null)
                 .build();
+    }
+
+    // ── Lifecycle Transitions ─────────────────────────────────────────
+
+    @Transactional
+    public ClassResponse openForEnrollment(Long classId) {
+        Class clazz = findAndValidateOwnership(classId);
+        if (clazz.getStatus() != ClassStatus.PLANNING) {
+            throw new BusinessRuleException("Only PLANNING classes can be opened");
+        }
+        clazz.setStatus(ClassStatus.OPEN);
+        return toResponse(classRepository.save(clazz));
+    }
+
+    @Transactional
+    public ClassResponse startClass(Long classId) {
+        Class clazz = findAndValidateOwnership(classId);
+        if (clazz.getStatus() != ClassStatus.OPEN && clazz.getStatus() != ClassStatus.FULL) {
+            throw new BusinessRuleException("Only OPEN or FULL classes can start");
+        }
+        clazz.setStatus(ClassStatus.IN_PROGRESS);
+        return toResponse(classRepository.save(clazz));
+    }
+
+    @Transactional
+    public ClassResponse finishClass(Long classId) {
+        Class clazz = findAndValidateOwnership(classId);
+        if (clazz.getStatus() != ClassStatus.IN_PROGRESS) {
+            throw new BusinessRuleException("Only IN_PROGRESS classes can finish");
+        }
+        clazz.setStatus(ClassStatus.FINISHED);
+        return toResponse(classRepository.save(clazz));
+    }
+
+    @Transactional
+    public ClassResponse archiveClass(Long classId) {
+        Class clazz = findAndValidateOwnership(classId);
+        if (clazz.getStatus() != ClassStatus.FINISHED && clazz.getStatus() != ClassStatus.CANCELLED) {
+            throw new BusinessRuleException("Only FINISHED or CANCELLED classes can be archived");
+        }
+        clazz.setStatus(ClassStatus.ARCHIVED);
+        return toResponse(classRepository.save(clazz));
+    }
+
+    @Transactional
+    public ClassResponse cancelClass(Long classId) {
+        Class clazz = findAndValidateOwnership(classId);
+        if (clazz.getStatus() == ClassStatus.IN_PROGRESS || clazz.getStatus() == ClassStatus.FINISHED
+                || clazz.getStatus() == ClassStatus.ARCHIVED) {
+            throw new BusinessRuleException("Cannot cancel class with status: " + clazz.getStatus());
+        }
+        clazz.setStatus(ClassStatus.CANCELLED);
+        return toResponse(classRepository.save(clazz));
+    }
+
+    private Class findAndValidateOwnership(Long classId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+        assertOwnerAndCenterMembership(currentUser, centerId);
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class belongs to another center");
+        }
+        return clazz;
     }
     // Get current user
     private User getCurrentUser() {

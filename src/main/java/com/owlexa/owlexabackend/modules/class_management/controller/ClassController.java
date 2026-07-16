@@ -57,5 +57,32 @@ public class ClassController {
     public List<com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudentsResponse> findMyClassesWithStudentsAsTeacher() {
         return classService.findMyClassesWithStudentsAsTeacher();
     }
+
+    // ── Lifecycle Transitions ────────────────────────────────────────────────
+
+    @PatchMapping("/owner/classes/{classId}/open")
+    public ClassResponse openForEnrollment(@PathVariable Long classId) {
+        return classService.openForEnrollment(classId);
+    }
+
+    @PatchMapping("/owner/classes/{classId}/start")
+    public ClassResponse startClass(@PathVariable Long classId) {
+        return classService.startClass(classId);
+    }
+
+    @PatchMapping("/owner/classes/{classId}/finish")
+    public ClassResponse finishClass(@PathVariable Long classId) {
+        return classService.finishClass(classId);
+    }
+
+    @PatchMapping("/owner/classes/{classId}/archive")
+    public ClassResponse archiveClass(@PathVariable Long classId) {
+        return classService.archiveClass(classId);
+    }
+
+    @PatchMapping("/owner/classes/{classId}/cancel")
+    public ClassResponse cancelClass(@PathVariable Long classId) {
+        return classService.cancelClass(classId);
+    }
 }
 

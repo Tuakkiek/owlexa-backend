@@ -29,6 +29,11 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     boolean existsByClazz_IdAndMonth(Long classId, String month);
 
+    List<FeeRecord> findAllByStatusAndDueDateBefore(FeeStatus status, LocalDate date);
+
+    boolean existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
+            Long studentUserId, Long classId, FeeStatus status, LocalDate date);
+
     long countByCenter_Id(Long centerId);
 
     long countByCenter_IdAndStatus(Long centerId, FeeStatus status);

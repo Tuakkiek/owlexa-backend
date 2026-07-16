@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -15,6 +15,11 @@ public class ClassRequest {
 
     @NotBlank(message = "Class name is required")
     private String name;
+
+    @NotNull(message = "courseId is required")
+    private Long courseId;
+
+    private Long teacherUserId;
 
     @NotBlank(message = "Vstep level is required")
     private String vstepLevel;

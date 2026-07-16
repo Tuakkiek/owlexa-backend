@@ -1,7 +1,11 @@
 package com.owlexa.owlexabackend.modules.class_management.repository;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.List;
 
 public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
@@ -13,10 +17,45 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     boolean existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(
             Long classId,
-            Integer dayOfWeek,
-            java.time.LocalTime startTime,
+            DayOfWeek dayOfWeek,
+            LocalTime startTime,
             Long centerId
     );
+
+    @Query("SELECT COUNT(s) FROM Schedule s WHERE s.teacherUser.id = :teacherId " +
+           "AND s.dayOfWeek = :dayOfWeek AND s.isActive = true AND s.center.id = :centerId " +
+           "AND s.startTime < :endTime AND s.endTime > :startTime " +
+           "AND (:excludeId IS NULL OR s.id <> :excludeId)")
+    long countOverlappingTeacherSchedules(
+            @Param("teacherId") Long teacherId,
+            @Param("dayOfWeek") DayOfWeek dayOfWeek,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime,
+            @Param("centerId") Long centerId,
+            @Param("excludeId") Long excludeScheduleId);
+
+    @Query("SELECT COUNT(s) FROM Schedule s WHERE s.room.id = :roomId " +
+           "AND s.dayOfWeek = :dayOfWeek AND s.isActive = true AND s.center.id = :centerId " +
+           "AND s.startTime < :endTime AND s.endTime > :startTime " +
+           "AND (:excludeId IS NULL OR s.id <> :excludeId)")
+    long countOverlappingRoomSchedules(
+            @Param("roomId") Long roomId,
+            @Param("dayOfWeek") DayOfWeek dayOfWeek,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime,
+            @Param("centerId") Long centerId,
+            @Param("excludeId") Long excludeScheduleId);
+
+    @Query("SELECT COUNT(s) FROM Schedule s WHERE s.clazz.id IN " +
+           "(SELECT e.clazz.id FROM ClassEnrollment e WHERE e.studentUser.id = :studentId AND e.status = 'ACTIVE') " +
+           "AND s.dayOfWeek = :dayOfWeek AND s.isActive = true AND s.center.id = :centerId " +
+           "AND s.startTime < :endTime AND s.endTime > :startTime")
+    long countOverlappingStudentSchedules(
+            @Param("studentId") Long studentId,
+            @Param("dayOfWeek") DayOfWeek dayOfWeek,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime,
+            @Param("centerId") Long centerId);
 
     void deleteByCenter_Id(Long centerId);
 }
