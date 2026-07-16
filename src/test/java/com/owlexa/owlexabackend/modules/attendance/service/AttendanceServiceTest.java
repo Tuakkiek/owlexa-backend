@@ -7,6 +7,7 @@ import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.attendance.dto.request.AttendanceMarkRequest;
 import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceResponse;
+import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceStatsResponse;
 import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
@@ -57,11 +58,14 @@ class AttendanceServiceTest {
 
     private static final String TEACHER_PHONE = "0900000001";
     private static final Long TEACHER_ID = 1L;
+    private static final Long OTHER_TEACHER_ID = 2L;
     private static final Long CENTER_ID = 10L;
     private static final Long OTHER_CENTER_ID = 99L;
     private static final Long SCHEDULE_ID = 50L;
     private static final Long CLASS_ID = 200L;
     private static final Long STUDENT_ID = 100L;
+
+    private User teacher;
 
     @BeforeEach
     void setUp() {
@@ -71,14 +75,16 @@ class AttendanceServiceTest {
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
+        teacher = new User();
+        teacher.setId(TEACHER_ID);
+        teacher.setPhoneNumber(TEACHER_PHONE);
+        teacher.setFullName("Teacher One");
+        teacher.setRole(Role.TEACHER);
+
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(TEACHER_PHONE, null, List.of())
         );
 
-        User teacher = new User();
-        teacher.setId(TEACHER_ID);
-        teacher.setPhoneNumber(TEACHER_PHONE);
-        teacher.setRole(Role.TEACHER);
         lenient().when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(true);
     }
@@ -103,6 +109,25 @@ class AttendanceServiceTest {
         schedule.setId(SCHEDULE_ID);
         schedule.setCenter(center);
         schedule.setClazz(clazz);
+        schedule.setTeacherUser(teacher); // assigned to the current teacher
+        return schedule;
+    }
+
+    private Schedule buildScheduleWithTeacher(Long centerId, User assignedTeacher) {
+        Center center = new Center();
+        center.setId(centerId);
+
+        Class clazz = new Class();
+        clazz.setId(CLASS_ID);
+        clazz.setName("Class A");
+        clazz.setCenter(center);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS);
+
+        Schedule schedule = new Schedule();
+        schedule.setId(SCHEDULE_ID);
+        schedule.setCenter(center);
+        schedule.setClazz(clazz);
+        schedule.setTeacherUser(assignedTeacher);
         return schedule;
     }
 
@@ -261,7 +286,7 @@ class AttendanceServiceTest {
     }
 
     @Test
-    @DisplayName("mark: caller là STUDENT (không phải OWNER/TEACHER) → AccessDeniedException")
+    @DisplayName("mark: caller là STUDENT → AccessDeniedException")
     void mark_whenCallerIsStudent_shouldThrowAccessDenied() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(
@@ -283,12 +308,12 @@ class AttendanceServiceTest {
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER or TEACHER");
+                .hasMessageContaining("Only the assigned teacher");
     }
 
     @Test
-    @DisplayName("mark: OWNER cũng được phép mark attendance")
-    void mark_whenCallerIsOwner_shouldBeAllowed() {
+    @DisplayName("mark: OWNER không được phép mark attendance nữa → AccessDeniedException")
+    void mark_whenCallerIsOwner_shouldThrowAccessDenied() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("owner-x", null, List.of())
@@ -298,30 +323,69 @@ class AttendanceServiceTest {
         owner.setPhoneNumber("owner-x");
         owner.setRole(Role.OWNER);
         when(userRepository.findByPhoneNumber("owner-x")).thenReturn(Optional.of(owner));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, CENTER_ID)).thenReturn(true);
 
         Schedule schedule = buildSchedule(CENTER_ID);
         when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(schedule));
-        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
-                CLASS_ID, STUDENT_ID, EnrollmentStatus.ACTIVE)).thenReturn(true);
-        when(attendanceRepository.findBySchedule_IdAndStudentUser_IdAndDate(
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(Optional.empty());
-        when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> {
-            Attendance a = invocation.getArgument(0);
-            a.setId(1L);
-            return a;
-        });
 
         AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
                 .studentUserId(STUDENT_ID)
                 .status(AttendanceStatus.PRESENT)
                 .build();
 
-        List<AttendanceResponse> response = service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item)));
+        assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("OWNER is not allowed");
+    }
 
-        assertThat(response).hasSize(1);
+    @Test
+    @DisplayName("mark: teacher không phải giáo viên được phân công của schedule → AccessDeniedException")
+    void mark_whenTeacherNotAssignedToSchedule_shouldThrowAccessDenied() {
+        User otherTeacher = new User();
+        otherTeacher.setId(OTHER_TEACHER_ID);
+        otherTeacher.setPhoneNumber("0900000002");
+        otherTeacher.setFullName("Other Teacher");
+        otherTeacher.setRole(Role.TEACHER);
+
+        User assignedTeacher = new User();
+        assignedTeacher.setId(999L);
+        assignedTeacher.setPhoneNumber("0999999999");
+        assignedTeacher.setFullName("Assigned Teacher");
+        assignedTeacher.setRole(Role.TEACHER);
+
+        Schedule schedule = buildScheduleWithTeacher(CENTER_ID, assignedTeacher);
+        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(schedule));
+
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(otherTeacher.getPhoneNumber(), null, List.of())
+        );
+        when(userRepository.findByPhoneNumber(otherTeacher.getPhoneNumber())).thenReturn(Optional.of(otherTeacher));
+        when(membershipRepository.existsByUser_IdAndCenter_Id(OTHER_TEACHER_ID, CENTER_ID)).thenReturn(true);
+
+        AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
+                .studentUserId(STUDENT_ID)
+                .status(AttendanceStatus.PRESENT)
+                .build();
+
+        assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("not the assigned teacher");
+    }
+
+    @Test
+    @DisplayName("mark: schedule không có teacher được phân công → BusinessRuleException")
+    void mark_whenScheduleHasNoTeacher_shouldThrowBusinessRule() {
+        Schedule schedule = buildScheduleWithTeacher(CENTER_ID, null);
+        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(schedule));
+
+        AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
+                .studentUserId(STUDENT_ID)
+                .status(AttendanceStatus.PRESENT)
+                .build();
+
+        assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("no assigned teacher");
     }
 
     @Test
@@ -348,16 +412,91 @@ class AttendanceServiceTest {
     }
 
     @Test
-    @DisplayName("findMyClassAttendances: trả về attendance theo classId + date (không check tenancy)")
-    void findMyClassAttendances_shouldReturnAttendanceList() {
-        when(attendanceRepository.findAllBySchedule_IdAndDate(CLASS_ID, LocalDate.of(2026, 7, 10)))
+    @DisplayName("findMyAttendancesAsStudent: trả về attendance của chính student đó")
+    void findMyAttendancesAsStudent_shouldReturnOwnAttendance() {
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("student-x", null, List.of())
+        );
+        User student = new User();
+        student.setId(STUDENT_ID);
+        student.setPhoneNumber("student-x");
+        student.setRole(Role.STUDENT);
+        when(userRepository.findByPhoneNumber("student-x")).thenReturn(Optional.of(student));
+        when(attendanceRepository.findByStudentUser_IdAndSchedule_Clazz_IdAndDate(
+                STUDENT_ID, CLASS_ID, LocalDate.of(2026, 7, 10)))
+                .thenReturn(List.of(buildAttendance(STUDENT_ID)));
+
+        List<AttendanceResponse> response = service.findMyAttendancesAsStudent(CLASS_ID, LocalDate.of(2026, 7, 10));
+
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).getStudentUserId()).isEqualTo(STUDENT_ID);
+    }
+
+    @Test
+    @DisplayName("findMyAttendancesAsStudent: non-STUDENT gọi → AccessDeniedException")
+    void findMyAttendancesAsStudent_whenCallerIsNotStudent_shouldThrowAccessDenied() {
+        // Current auth context is TEACHER
+        assertThatThrownBy(() -> service.findMyAttendancesAsStudent(CLASS_ID, LocalDate.now()))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Only STUDENT");
+    }
+
+    @Test
+    @DisplayName("findMyAttendancesAsStudent: không có classId → trả về attendance hôm nay")
+    void findMyAttendancesAsStudent_withoutClassId_shouldReturnTodayAttendance() {
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("student-x", null, List.of())
+        );
+        User student = new User();
+        student.setId(STUDENT_ID);
+        student.setPhoneNumber("student-x");
+        student.setRole(Role.STUDENT);
+        when(userRepository.findByPhoneNumber("student-x")).thenReturn(Optional.of(student));
+        when(attendanceRepository.findByStudentUser_IdAndDate(STUDENT_ID, LocalDate.now()))
+                .thenReturn(List.of());
+
+        List<AttendanceResponse> response = service.findMyAttendancesAsStudent(null, null);
+
+        assertThat(response).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getStats: OWNER lấy thống kê attendance → trả về AttendanceStatsResponse")
+    void getStats_shouldReturnStatistics() {
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("owner-x", null, List.of())
+        );
+        User owner = new User();
+        owner.setId(1L);
+        owner.setPhoneNumber("owner-x");
+        owner.setRole(Role.OWNER);
+        when(userRepository.findByPhoneNumber("owner-x")).thenReturn(Optional.of(owner));
+        when(membershipRepository.existsByUser_IdAndCenter_Id(1L, CENTER_ID)).thenReturn(true);
+        when(attendanceRepository.countByClassAndDateRangeGroupByStatus(
+                CLASS_ID, LocalDate.now().minusMonths(1), LocalDate.now(), CENTER_ID))
                 .thenReturn(List.of(
-                        buildAttendance(100L), buildAttendance(101L), buildAttendance(102L)
+                        new Object[]{AttendanceStatus.PRESENT, 10L},
+                        new Object[]{AttendanceStatus.ABSENT, 3L},
+                        new Object[]{AttendanceStatus.LATE, 2L}
                 ));
 
-        List<AttendanceResponse> response = service.findMyClassAttendances(CLASS_ID, LocalDate.of(2026, 7, 10));
+        AttendanceStatsResponse response = service.getStats(CLASS_ID, null, null);
 
-        assertThat(response).hasSize(3);
+        assertThat(response.getClassId()).isEqualTo(CLASS_ID);
+        assertThat(response.getStatusCounts()).hasSize(3);
+        assertThat(response.getStatusPercentages()).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("getStats: non-OWNER gọi → AccessDeniedException")
+    void getStats_whenCallerIsNotOwner_shouldThrowAccessDenied() {
+        // Current auth context is TEACHER
+        assertThatThrownBy(() -> service.getStats(CLASS_ID, null, null))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Only OWNER");
     }
 
     @Test

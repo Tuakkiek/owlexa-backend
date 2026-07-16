@@ -1,14 +1,37 @@
 -- ================================================================
--- OWLEXA ENGLISH LEARNING CENTER - SEED DATA v4.0
--- Generated: 2026-07-10
--- Matches current Spring Boot 3 + Hibernate 7 + MySQL 8 schema
+-- OWLEXA ENGLISH LEARNING CENTER - SEED DATA v5.0
+-- Generated: 2026-07-16
+-- Rebuilt from the actual JPA entities in owlexa-backend (main branch)
+-- so it matches the schema Hibernate generates (ddl-auto=update),
+-- NOT the older sql/seed_data_v4_english.sql, which is now stale.
+--
+-- WHAT CHANGED vs v4.0 (verified against src/main/.../entity/*.java):
+--   1. NEW `courses` table (modules/course) - a global curriculum
+--      template. `classes.course_id` now REQUIRES a course
+--      (ClassRequest.courseId is @NotNull) - v4 had no such table.
+--   2. NEW `rooms` table (modules/room), scoped per center.
+--      `schedules.room_id` is now a FK to rooms (ScheduleRequest.roomId
+--      is @NotNull) - v4 stored room as a free-text varchar.
+--   3. `classes.is_active` (boolean) no longer exists. It was replaced
+--      by `classes.status` (VARCHAR, enum ClassStatus: PLANNING, OPEN,
+--      FULL, IN_PROGRESS, FINISHED, ARCHIVED, CANCELLED).
+--   4. `permissions.code` values in v4 (MANAGE_STUDENTS, VIEW_REPORTS,
+--      MARK_ATTENDANCE, ...) are never referenced anywhere in the
+--      codebase. The only permission code actually checked in code is
+--      CENTER_CREATE (CenterController + AuthService.getDefaultPermissionCode).
+--      This file uses the real codes: CENTER_CREATE, VIEW_STUDENT,
+--      EDIT_FEE, VIEW_SALARY, MANAGE_CLASS, MANAGE_TEACHER.
+--   All other tables (users, attendances, fee_records, payments,
+--   essay_*, mock_test_*, student_documents) were already correct
+--   in v4 and are carried over unchanged.
+--
 -- BCrypt password for ALL users: "password123"
 -- Hash: $2a$10$0FxtjwbmKTcDr2hLPwqb1.0DGjQWU25XP93zOodK1UjPf2t.twWvS
--- 
+--
 -- ALL CONTENT IS ENGLISH LEARNING ONLY:
 --   TOEIC, VSTEP, English Grammar, Vocabulary, Pronunciation,
 --   Business English, English Communication
--- ZERO math, literature, physics, chemistry, biology, or 
+-- ZERO math, literature, physics, chemistry, biology, or
 -- Vietnamese academic subjects.
 -- ================================================================
 
@@ -31,9 +54,12 @@ DELETE FROM student_documents;
 DELETE FROM payments;
 DELETE FROM fee_records;
 DELETE FROM attendances;
+DELETE FROM teacher_attendances;
 DELETE FROM class_enrollments;
 DELETE FROM schedules;
 DELETE FROM classes;
+DELETE FROM rooms;
+DELETE FROM courses;
 DELETE FROM teacher_center_profile;
 DELETE FROM user_permission;
 DELETE FROM permissions;
@@ -50,11 +76,14 @@ ALTER TABLE permissions AUTO_INCREMENT = 1;
 ALTER TABLE user_permission AUTO_INCREMENT = 1;
 ALTER TABLE centers AUTO_INCREMENT = 1;
 ALTER TABLE membership AUTO_INCREMENT = 1;
+ALTER TABLE courses AUTO_INCREMENT = 1;
+ALTER TABLE rooms AUTO_INCREMENT = 1;
 ALTER TABLE teacher_center_profile AUTO_INCREMENT = 1;
 ALTER TABLE classes AUTO_INCREMENT = 1;
 ALTER TABLE schedules AUTO_INCREMENT = 1;
 ALTER TABLE class_enrollments AUTO_INCREMENT = 1;
 ALTER TABLE attendances AUTO_INCREMENT = 1;
+ALTER TABLE teacher_attendances AUTO_INCREMENT = 1;
 ALTER TABLE fee_records AUTO_INCREMENT = 1;
 ALTER TABLE payments AUTO_INCREMENT = 1;
 ALTER TABLE essay_rubrics AUTO_INCREMENT = 1;
@@ -151,18 +180,26 @@ INSERT INTO users (phone_number, email, full_name, password, role) VALUES
 
 -- ================================================================
 -- 2. PERMISSIONS
+-- Codes match what the code actually checks/grants:
+--   - CenterController checks hasPermission("CENTER_CREATE")
+--   - AuthService.getDefaultPermissionCode(role) documents the
+--     intended default grant per role (CENTER_CREATE/VIEW_STUDENT/
+--     EDIT_FEE for OWNER, EDIT_FEE for CASHIER, VIEW_STUDENT for
+--     TEACHER/STUDENT, VIEW_SALARY for ADMIN).
+--   - MANAGE_CLASS / MANAGE_TEACHER aren't referenced by any
+--     @PreAuthorize-style check today, but they exist as the
+--     natural OWNER-level capabilities and are kept for the
+--     permission-management UI/API to assign.
+-- (The old v4 codes MANAGE_STUDENTS, VIEW_REPORTS, MARK_ATTENDANCE,
+--  etc. do not appear anywhere in the codebase and were removed.)
 -- ================================================================
 INSERT INTO permissions (code, description) VALUES
-('MANAGE_STUDENTS',    'Create, update, delete students'),
-('MANAGE_TEACHERS',    'Create, update, delete teachers'),
-('MANAGE_CLASSES',     'Create, update, delete classes'),
-('MANAGE_SCHEDULES',   'Manage class schedules'),
-('MANAGE_FEE_RECORDS', 'Manage fee records and payments'),
-('MANAGE_ESSAYS',      'Manage essay rubrics and grading'),
-('MANAGE_MOCK_TESTS',  'Manage mock tests and results'),
-('VIEW_REPORTS',       'View analytics and reports'),
-('MARK_ATTENDANCE',    'Mark student attendance'),
-('ENROLL_STUDENTS',    'Enroll and drop students from classes');
+('CENTER_CREATE',  'Can create a new center'),
+('VIEW_STUDENT',   'Can view student data'),
+('EDIT_FEE',       'Can edit fee records and payments'),
+('VIEW_SALARY',    'Can view teacher salary data'),
+('MANAGE_CLASS',   'Can create, update, and manage classes'),
+('MANAGE_TEACHER', 'Can create, update, and manage teachers');
 
 -- ================================================================
 -- 3. CENTERS
@@ -196,27 +233,61 @@ INSERT INTO membership (center_id, user_id, joined_by_user_id, joined_at) VALUES
 
 -- ================================================================
 -- 5. USER PERMISSIONS
+-- permission_id: 1=CENTER_CREATE 2=VIEW_STUDENT 3=EDIT_FEE
+--                4=VIEW_SALARY   5=MANAGE_CLASS 6=MANAGE_TEACHER
 -- ================================================================
 INSERT INTO user_permission (user_id, permission_id, granted_at) VALUES
--- Owner Center 1 (2): ALL permissions
-(2, 1, NOW()), (2, 2, NOW()), (2, 3, NOW()), (2, 4, NOW()),
-(2, 5, NOW()), (2, 6, NOW()), (2, 7, NOW()), (2, 8, NOW()),
-(2, 9, NOW()), (2, 10, NOW()),
--- Owner Center 2 (3): ALL permissions
-(3, 1, NOW()), (3, 2, NOW()), (3, 3, NOW()), (3, 4, NOW()),
-(3, 5, NOW()), (3, 6, NOW()), (3, 7, NOW()), (3, 8, NOW()),
-(3, 9, NOW()), (3, 10, NOW()),
--- Teachers: MARK_ATTENDANCE + VIEW_REPORTS
-(4, 9, NOW()), (4, 8, NOW()),
-(5, 9, NOW()), (5, 8, NOW()),
-(6, 9, NOW()), (6, 8, NOW()),
-(7, 9, NOW()), (7, 8, NOW()),
--- Cashiers: MANAGE_FEE_RECORDS + VIEW_REPORTS
-(8, 5, NOW()), (8, 8, NOW()),
-(9, 5, NOW()), (9, 8, NOW());
+-- Admin (1): VIEW_SALARY
+(1, 4, NOW()),
+-- Owner Center 1 (2): everything an OWNER needs
+(2, 1, NOW()), (2, 2, NOW()), (2, 3, NOW()), (2, 5, NOW()), (2, 6, NOW()),
+-- Owner Center 2 (3): everything an OWNER needs
+(3, 1, NOW()), (3, 2, NOW()), (3, 3, NOW()), (3, 5, NOW()), (3, 6, NOW()),
+-- Teachers (4,5,6,7): VIEW_STUDENT
+(4, 2, NOW()), (5, 2, NOW()), (6, 2, NOW()), (7, 2, NOW()),
+-- Cashiers (8,9): EDIT_FEE
+(8, 3, NOW()), (9, 3, NOW());
 
 -- ================================================================
--- 6. TEACHER CENTER PROFILES
+-- 6. COURSES
+-- Global curriculum templates (modules/course). NOT tenant-scoped -
+-- both centers' classes reference these by course_id. `code` is
+-- globally unique (CourseService.existsByCode).
+-- ================================================================
+INSERT INTO courses (code, name, level, description, default_duration, default_monthly_fee, default_max_students, is_active, created_at, updated_at) VALUES
+('TOEIC-FOUND', 'TOEIC Foundation',          'BEGINNER',     'Build fundamental English skills for TOEIC test preparation. Focus on basic grammar, vocabulary, and listening comprehension.', 12, 1200000.00, 25, b'1', NOW(), NOW()),
+('TOEIC-500',   'TOEIC 500+',                'INTERMEDIATE', 'Target TOEIC score 500-650. Intensive practice on Listening Part 1-4 and Reading Part 5-6.',                                     12, 1800000.00, 20, b'1', NOW(), NOW()),
+('TOEIC-650',   'TOEIC 650+',                'INTERMEDIATE', 'Target TOEIC score 650-800. Advanced strategies for Reading Part 7 and Listening Part 3-4.',                                     12, 2200000.00, 20, b'1', NOW(), NOW()),
+('ENG-COMM',    'English Communication',     'BEGINNER',     'Practical English for daily communication. Focus on speaking fluency, pronunciation, and conversational skills.',                10, 1000000.00, 30, b'1', NOW(), NOW()),
+('VSTEP-B1',    'VSTEP B1 Preparation',      'INTERMEDIATE', 'Prepare for VSTEP B1 certificate. Covers Reading, Listening, Writing, and Speaking modules.',                                    14, 1500000.00, 25, b'1', NOW(), NOW()),
+('TOEIC-800',   'TOEIC 800+',                'ADVANCED',     'Target TOEIC score 800-990. Advanced test-taking strategies, business vocabulary, and complex grammar structures.',              14, 2500000.00, 20, b'1', NOW(), NOW()),
+('VSTEP-B2',    'VSTEP B2 Preparation',      'ADVANCED',     'Prepare for VSTEP B2 certificate. Advanced academic English with essay writing and presentation skills.',                        16, 2000000.00, 20, b'1', NOW(), NOW()),
+('BIZ-ENG',     'Business English',          'INTERMEDIATE', 'English for professional environments. Email writing, meeting skills, negotiation, and business presentations.',                  12, 2000000.00, 25, b'1', NOW(), NOW()),
+('ENG-GRAM',    'English Grammar & Writing', 'INTERMEDIATE', 'Master English grammar structures and develop academic writing skills including essays, reports, and formal letters.',            12, 1500000.00, 25, b'1', NOW(), NOW()),
+('TOEIC-SW',    'TOEIC Speaking & Writing',  'ADVANCED',     'Prepare for TOEIC Speaking and Writing tests. Pronunciation, Q&A responses, and email composition.',                             10, 2200000.00, 20, b'1', NOW(), NOW());
+
+-- ================================================================
+-- 7. ROOMS
+-- Tenant-scoped (modules/room). `code` is unique per center
+-- (RoomService.existsByCodeAndCenter_Id), not globally.
+-- Center 1 (HCM) -> rooms 1-5, Center 2 (Hanoi) -> rooms 6-10.
+-- ================================================================
+INSERT INTO rooms (code, name, capacity, description, is_active, center_id, created_at, updated_at) VALUES
+-- Center 1 - HCM
+('101', 'Room 101', 25, 'Ground floor classroom, HCM campus', b'1', 1, NOW(), NOW()),
+('102', 'Room 102', 20, 'Ground floor classroom, HCM campus', b'1', 1, NOW(), NOW()),
+('201', 'Room 201', 20, 'Second floor classroom, HCM campus', b'1', 1, NOW(), NOW()),
+('202', 'Room 202', 30, 'Second floor classroom, HCM campus', b'1', 1, NOW(), NOW()),
+('103', 'Room 103', 25, 'Ground floor classroom, HCM campus', b'1', 1, NOW(), NOW()),
+-- Center 2 - Hanoi
+('301', 'Room 301', 20, 'Third floor classroom, Hanoi campus',  b'1', 2, NOW(), NOW()),
+('302', 'Room 302', 20, 'Third floor classroom, Hanoi campus',  b'1', 2, NOW(), NOW()),
+('401', 'Room 401', 25, 'Fourth floor classroom, Hanoi campus', b'1', 2, NOW(), NOW()),
+('402', 'Room 402', 25, 'Fourth floor classroom, Hanoi campus', b'1', 2, NOW(), NOW()),
+('303', 'Room 303', 20, 'Third floor classroom, Hanoi campus',  b'1', 2, NOW(), NOW());
+
+-- ================================================================
+-- 8. TEACHER CENTER PROFILES
 -- ================================================================
 INSERT INTO teacher_center_profile (teacher_user_id, center_id, salary, currency, created_at, updated_at) VALUES
 (4, 1, 18000000.00, 'VND', NOW(), NOW()),
@@ -225,65 +296,70 @@ INSERT INTO teacher_center_profile (teacher_user_id, center_id, salary, currency
 (7, 2, 19000000.00, 'VND', NOW(), NOW());
 
 -- ================================================================
--- 7. CLASSES (ALL ENGLISH-ONLY)
--- Center 1 (HCM): 5 classes
--- Center 2 (Hanoi): 5 classes
+-- 9. CLASSES (ALL ENGLISH-ONLY)
+-- Center 1 (HCM): 5 classes | Center 2 (Hanoi): 5 classes
+-- course_id links 1:1 to the matching course in section 6 above.
+-- status = IN_PROGRESS (not is_active - that column no longer
+-- exists on the entity) since every class here already has
+-- schedules, enrollments, attendance and grading history.
 -- ================================================================
-INSERT INTO classes (name, center_id, teacher_id, max_students, description, vstep_level, monthly_fee, is_active, create_at) VALUES
+INSERT INTO classes (name, center_id, course_id, teacher_id, max_students, description, vstep_level, monthly_fee, status, create_at) VALUES
 -- Center 1 - HCM
-('TOEIC Foundation',        1, 4, 25, 'Build fundamental English skills for TOEIC test preparation. Focus on basic grammar, vocabulary, and listening comprehension.', 'BEGINNER',      1200000.00, b'1', NOW()),
-('TOEIC 500+',              1, 4, 20, 'Target TOEIC score 500-650. Intensive practice on Listening Part 1-4 and Reading Part 5-6.',                  'INTERMEDIATE',  1800000.00, b'1', NOW()),
-('TOEIC 650+',              1, 5, 20, 'Target TOEIC score 650-800. Advanced strategies for Reading Part 7 and Listening Part 3-4.',                  'INTERMEDIATE',  2200000.00, b'1', NOW()),
-('English Communication',   1, 5, 30, 'Practical English for daily communication. Focus on speaking fluency, pronunciation, and conversational skills.', 'BEGINNER',      1000000.00, b'1', NOW()),
-('VSTEP B1 Preparation',    1, 4, 25, 'Prepare for VSTEP B1 certificate. Covers Reading, Listening, Writing, and Speaking modules.',               'INTERMEDIATE',  1500000.00, b'1', NOW()),
+('TOEIC Foundation',        1, 1,  4, 25, 'Build fundamental English skills for TOEIC test preparation. Focus on basic grammar, vocabulary, and listening comprehension.', 'BEGINNER',      1200000.00, 'IN_PROGRESS', NOW()),
+('TOEIC 500+',              1, 2,  4, 20, 'Target TOEIC score 500-650. Intensive practice on Listening Part 1-4 and Reading Part 5-6.',                  'INTERMEDIATE',  1800000.00, 'IN_PROGRESS', NOW()),
+('TOEIC 650+',              1, 3,  5, 20, 'Target TOEIC score 650-800. Advanced strategies for Reading Part 7 and Listening Part 3-4.',                  'INTERMEDIATE',  2200000.00, 'IN_PROGRESS', NOW()),
+('English Communication',   1, 4,  5, 30, 'Practical English for daily communication. Focus on speaking fluency, pronunciation, and conversational skills.', 'BEGINNER',      1000000.00, 'IN_PROGRESS', NOW()),
+('VSTEP B1 Preparation',    1, 5,  4, 25, 'Prepare for VSTEP B1 certificate. Covers Reading, Listening, Writing, and Speaking modules.',               'INTERMEDIATE',  1500000.00, 'IN_PROGRESS', NOW()),
 -- Center 2 - Hanoi
-('TOEIC 800+',              2, 6, 20, 'Target TOEIC score 800-990. Advanced test-taking strategies, business vocabulary, and complex grammar structures.', 'ADVANCED',  2500000.00, b'1', NOW()),
-('VSTEP B2 Preparation',    2, 6, 20, 'Prepare for VSTEP B2 certificate. Advanced academic English with essay writing and presentation skills.',    'ADVANCED',       2000000.00, b'1', NOW()),
-('Business English',        2, 7, 25, 'English for professional environments. Email writing, meeting skills, negotiation, and business presentations.', 'INTERMEDIATE',  2000000.00, b'1', NOW()),
-('English Grammar & Writing',2, 7, 25, 'Master English grammar structures and develop academic writing skills including essays, reports, and formal letters.', 'INTERMEDIATE', 1500000.00, b'1', NOW()),
-('TOEIC Speaking & Writing', 2, 6, 20, 'Prepare for TOEIC Speaking and Writing tests. Pronunciation, Q&A responses, and email composition.',        'ADVANCED',       2200000.00, b'1', NOW());
+('TOEIC 800+',              2, 6,  6, 20, 'Target TOEIC score 800-990. Advanced test-taking strategies, business vocabulary, and complex grammar structures.', 'ADVANCED',  2500000.00, 'IN_PROGRESS', NOW()),
+('VSTEP B2 Preparation',    2, 7,  6, 20, 'Prepare for VSTEP B2 certificate. Advanced academic English with essay writing and presentation skills.',    'ADVANCED',       2000000.00, 'IN_PROGRESS', NOW()),
+('Business English',        2, 8,  7, 25, 'English for professional environments. Email writing, meeting skills, negotiation, and business presentations.', 'INTERMEDIATE',  2000000.00, 'IN_PROGRESS', NOW()),
+('English Grammar & Writing',2, 9, 7, 25, 'Master English grammar structures and develop academic writing skills including essays, reports, and formal letters.', 'INTERMEDIATE', 1500000.00, 'IN_PROGRESS', NOW()),
+('TOEIC Speaking & Writing', 2, 10, 6, 20, 'Prepare for TOEIC Speaking and Writing tests. Pronunciation, Q&A responses, and email composition.',        'ADVANCED',       2200000.00, 'IN_PROGRESS', NOW());
 
 -- ================================================================
--- 8. SCHEDULES (2 per class = 20 schedules)
+-- 10. SCHEDULES (2 per class = 20 schedules)
 -- day_of_week uses Java DayOfWeek enum: MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY
+-- room_id points at the rooms inserted in section 7 (FK, replaces
+-- the old free-text `room` varchar column).
 -- ================================================================
-INSERT INTO schedules (class_id, center_id, teacher_user_id, day_of_week, start_time, end_time, room, is_active, created_at) VALUES
+INSERT INTO schedules (class_id, center_id, teacher_user_id, room_id, day_of_week, start_time, end_time, is_active, created_at) VALUES
 -- Center 1 - HCM
--- Class 1: TOEIC Foundation (Teacher David, Mon & Wed)
-(1, 1, 4, 'MONDAY',    '08:00:00', '10:00:00', 'Room 101', b'1', NOW()),
-(1, 1, 4, 'WEDNESDAY', '08:00:00', '10:00:00', 'Room 101', b'1', NOW()),
--- Class 2: TOEIC 500+ (Teacher David, Tue & Thu)
-(2, 1, 4, 'TUESDAY',   '08:00:00', '10:00:00', 'Room 102', b'1', NOW()),
-(2, 1, 4, 'THURSDAY',  '08:00:00', '10:00:00', 'Room 102', b'1', NOW()),
--- Class 3: TOEIC 650+ (Teacher Emma, Mon & Wed)
-(3, 1, 5, 'MONDAY',    '13:30:00', '15:30:00', 'Room 201', b'1', NOW()),
-(3, 1, 5, 'WEDNESDAY', '13:30:00', '15:30:00', 'Room 201', b'1', NOW()),
--- Class 4: English Communication (Teacher Emma, Tue & Thu)
-(4, 1, 5, 'TUESDAY',   '13:30:00', '15:00:00', 'Room 202', b'1', NOW()),
-(4, 1, 5, 'THURSDAY',  '13:30:00', '15:00:00', 'Room 202', b'1', NOW()),
--- Class 5: VSTEP B1 (Teacher David, Fri & Sat)
-(5, 1, 4, 'FRIDAY',    '09:00:00', '11:00:00', 'Room 103', b'1', NOW()),
-(5, 1, 4, 'SATURDAY',  '09:00:00', '11:00:00', 'Room 103', b'1', NOW()),
+-- Class 1: TOEIC Foundation (Teacher David, Room 101, Mon & Wed)
+(1, 1, 4, 1, 'MONDAY',    '08:00:00', '10:00:00', b'1', NOW()),
+(1, 1, 4, 1, 'WEDNESDAY', '08:00:00', '10:00:00', b'1', NOW()),
+-- Class 2: TOEIC 500+ (Teacher David, Room 102, Tue & Thu)
+(2, 1, 4, 2, 'TUESDAY',   '08:00:00', '10:00:00', b'1', NOW()),
+(2, 1, 4, 2, 'THURSDAY',  '08:00:00', '10:00:00', b'1', NOW()),
+-- Class 3: TOEIC 650+ (Teacher Emma, Room 201, Mon & Wed)
+(3, 1, 5, 3, 'MONDAY',    '13:30:00', '15:30:00', b'1', NOW()),
+(3, 1, 5, 3, 'WEDNESDAY', '13:30:00', '15:30:00', b'1', NOW()),
+-- Class 4: English Communication (Teacher Emma, Room 202, Tue & Thu)
+(4, 1, 5, 4, 'TUESDAY',   '13:30:00', '15:00:00', b'1', NOW()),
+(4, 1, 5, 4, 'THURSDAY',  '13:30:00', '15:00:00', b'1', NOW()),
+-- Class 5: VSTEP B1 (Teacher David, Room 103, Fri & Sat)
+(5, 1, 4, 5, 'FRIDAY',    '09:00:00', '11:00:00', b'1', NOW()),
+(5, 1, 4, 5, 'SATURDAY',  '09:00:00', '11:00:00', b'1', NOW()),
 
 -- Center 2 - Hanoi
--- Class 6: TOEIC 800+ (Teacher James, Mon & Wed)
-(6, 2, 6, 'MONDAY',    '08:00:00', '10:00:00', 'Room 301', b'1', NOW()),
-(6, 2, 6, 'WEDNESDAY', '08:00:00', '10:00:00', 'Room 301', b'1', NOW()),
--- Class 7: VSTEP B2 (Teacher James, Tue & Thu)
-(7, 2, 6, 'TUESDAY',   '08:00:00', '10:00:00', 'Room 302', b'1', NOW()),
-(7, 2, 6, 'THURSDAY',  '08:00:00', '10:00:00', 'Room 302', b'1', NOW()),
--- Class 8: Business English (Teacher Sophie, Mon & Wed)
-(8, 2, 7, 'MONDAY',    '14:00:00', '16:00:00', 'Room 401', b'1', NOW()),
-(8, 2, 7, 'WEDNESDAY', '14:00:00', '16:00:00', 'Room 401', b'1', NOW()),
--- Class 9: English Grammar & Writing (Teacher Sophie, Tue & Thu)
-(9, 2, 7, 'TUESDAY',   '14:00:00', '16:00:00', 'Room 402', b'1', NOW()),
-(9, 2, 7, 'THURSDAY',  '14:00:00', '16:00:00', 'Room 402', b'1', NOW()),
--- Class 10: TOEIC Speaking & Writing (Teacher James, Fri & Sat)
-(10, 2, 6, 'FRIDAY',   '09:00:00', '11:00:00', 'Room 303', b'1', NOW()),
-(10, 2, 6, 'SATURDAY', '09:00:00', '11:00:00', 'Room 303', b'1', NOW());
+-- Class 6: TOEIC 800+ (Teacher James, Room 301, Mon & Wed)
+(6, 2, 6, 6, 'MONDAY',    '08:00:00', '10:00:00', b'1', NOW()),
+(6, 2, 6, 6, 'WEDNESDAY', '08:00:00', '10:00:00', b'1', NOW()),
+-- Class 7: VSTEP B2 (Teacher James, Room 302, Tue & Thu)
+(7, 2, 6, 7, 'TUESDAY',   '08:00:00', '10:00:00', b'1', NOW()),
+(7, 2, 6, 7, 'THURSDAY',  '08:00:00', '10:00:00', b'1', NOW()),
+-- Class 8: Business English (Teacher Sophie, Room 401, Mon & Wed)
+(8, 2, 7, 8, 'MONDAY',    '14:00:00', '16:00:00', b'1', NOW()),
+(8, 2, 7, 8, 'WEDNESDAY', '14:00:00', '16:00:00', b'1', NOW()),
+-- Class 9: English Grammar & Writing (Teacher Sophie, Room 402, Tue & Thu)
+(9, 2, 7, 9, 'TUESDAY',   '14:00:00', '16:00:00', b'1', NOW()),
+(9, 2, 7, 9, 'THURSDAY',  '14:00:00', '16:00:00', b'1', NOW()),
+-- Class 10: TOEIC Speaking & Writing (Teacher James, Room 303, Fri & Sat)
+(10, 2, 6, 10, 'FRIDAY',   '09:00:00', '11:00:00', b'1', NOW()),
+(10, 2, 6, 10, 'SATURDAY', '09:00:00', '11:00:00', b'1', NOW());
 
 -- ================================================================
--- 9. CLASS ENROLLMENTS
+-- 11. CLASS ENROLLMENTS
 -- ~4-6 students per class, some students in 2 classes
 -- ================================================================
 INSERT INTO class_enrollments (student_user_id, class_id, center_id, enrolled_by_user_id, status, enrolled_at) VALUES
@@ -325,7 +401,7 @@ INSERT INTO class_enrollments (student_user_id, class_id, center_id, enrolled_by
 (58, 10, 2, 3, 'ACTIVE', NOW()), (59, 10, 2, 3, 'DROPPED', NOW());
 
 -- ================================================================
--- 10. ATTENDANCE (4 weeks of data: June 15 - July 8, 2026)
+-- 12. ATTENDANCE (4 weeks of data: June 15 - July 8, 2026)
 -- ================================================================
 INSERT INTO attendances (student_user_id, schedule_id, center_id, date, status, marked_by_user_id, note, created_at) VALUES
 -- === CLASS 1: TOEIC Foundation, Sched 1 (Mon) ===
@@ -411,7 +487,7 @@ INSERT INTO attendances (student_user_id, schedule_id, center_id, date, status, 
 (56, 19, 2, '2026-06-16', 'PRESENT', 7, NULL, NOW());
 
 -- ================================================================
--- 11. FEE RECORDS (June & July 2026)
+-- 13. FEE RECORDS (June & July 2026)
 -- Mix: PAID, PARTIAL, UNPAID
 -- ================================================================
 INSERT INTO fee_records (center_id, student_user_id, class_id, amount, paid_amount, month, due_date, status, created_at) VALUES
@@ -457,7 +533,7 @@ INSERT INTO fee_records (center_id, student_user_id, class_id, amount, paid_amou
 (2, 53, 9, 1500000.00,        0.00, '2026-06', '2026-06-05', 'UNPAID',  NOW());
 
 -- ================================================================
--- 12. PAYMENTS (Cash payments collected by cashiers)
+-- 14. PAYMENTS (Cash payments collected by cashiers)
 -- ================================================================
 INSERT INTO payments (fee_record_id, center_id, student_user_id, collected_by_user_id, amount, method, note, created_at) VALUES
 -- Center 1 - HCM Payments
@@ -488,7 +564,7 @@ INSERT INTO payments (fee_record_id, center_id, student_user_id, collected_by_us
 (25, 2, 52, 9, 1500000.00, 'SEPAY','Bank transfer',                     '2026-06-04 13:00:00');
 
 -- ================================================================
--- 13. ESSAY RUBRICS (English Writing Only)
+-- 15. ESSAY RUBRICS (English Writing Only)
 -- ================================================================
 INSERT INTO essay_rubrics (title, description, max_score, clazz_id, created_by_user_id, center_id, is_active, created_at) VALUES
 -- Center 1
@@ -502,7 +578,7 @@ INSERT INTO essay_rubrics (title, description, max_score, clazz_id, created_by_u
 ('TOEIC Writing Rubric', 'Evaluate TOEIC Writing tasks: picture description, email response, opinion essay with TOEIC scoring criteria.', 100.0, 10, 6, 2, b'1', NOW());
 
 -- ================================================================
--- 14. ESSAY RUBRIC CRITERIA
+-- 16. ESSAY RUBRIC CRITERIA
 -- ================================================================
 INSERT INTO essay_rubric_criteria (rubric_id, name, description, weight, max_score) VALUES
 -- Opinion Essay Rubric (rubric 1)
@@ -544,7 +620,7 @@ INSERT INTO essay_rubric_criteria (rubric_id, name, description, weight, max_sco
 (7, 'Vocabulary',           'Appropriate word choice and collocations',                  20.0, 20.0);
 
 -- ================================================================
--- 15. ESSAY SUBMISSIONS (English writing tasks only)
+-- 17. ESSAY SUBMISSIONS (English writing tasks only)
 -- ================================================================
 INSERT INTO essay_submissions (student_user_id, center_id, clazz_id, rubric_id, content, status, graded_by_user_id, feedback, total_score, submitted_at, graded_at) VALUES
 -- Center 1 Submissions
@@ -599,7 +675,7 @@ INSERT INTO essay_submissions (student_user_id, center_id, clazz_id, rubric_id, 
  'GRADED', 6, 'Good picture description with clear organization from foreground to background. Add more specific details about what people are wearing or doing. Score: 78/100', 78, '2026-06-20 15:00:00', '2026-06-22 10:00:00');
 
 -- ================================================================
--- 16. ESSAY GRADING RESULTS
+-- 18. ESSAY GRADING RESULTS
 -- ================================================================
 INSERT INTO essay_grading_results (submission_id, total_score, max_score, feedback, graded_at) VALUES
 (1, 82.0, 100.0, 'Good thesis statement and clear arguments. Work on varying your sentence structure. Some minor grammar issues. Score: 82/100', '2026-06-12 14:00:00'),
@@ -612,7 +688,7 @@ INSERT INTO essay_grading_results (submission_id, total_score, max_score, feedba
 (10,78.0, 100.0, 'Good picture description with clear organization. Add more specific details. Score: 78/100', '2026-06-22 10:00:00');
 
 -- ================================================================
--- 17. ESSAY CRITERIA SCORES
+-- 19. ESSAY CRITERIA SCORES
 -- ================================================================
 INSERT INTO essay_criteria_scores (grading_result_id, criteria_id, score, max_score, feedback) VALUES
 -- Grading Result 1 (Opinion Essay - Submission 1)
@@ -644,7 +720,7 @@ INSERT INTO essay_criteria_scores (grading_result_id, criteria_id, score, max_sc
 (7, 24, 12.0, 12.5, 'No grammatical errors');
 
 -- ================================================================
--- 18. MOCK TESTS (English Only: TOEIC, VSTEP, Grammar, Vocabulary, Pronunciation)
+-- 20. MOCK TESTS (English Only: TOEIC, VSTEP, Grammar, Vocabulary, Pronunciation)
 -- ================================================================
 INSERT INTO mock_tests (title, description, center_id, created_by_user_id, level, duration, total_questions, is_active, created_at) VALUES
 -- Center 1 - HCM
@@ -662,7 +738,7 @@ INSERT INTO mock_tests (title, description, center_id, created_by_user_id, level
 ('VSTEP Listening Simulation', 'Practice VSTEP Listening section: short conversations, lectures, and announcements. 15 questions.', 2, 6, 'ADVANCED', 25, 15, b'1', NOW());
 
 -- ================================================================
--- 19. MOCK TEST QUESTIONS (English content only)
+-- 21. MOCK TEST QUESTIONS (English content only)
 -- ================================================================
 INSERT INTO mock_test_questions (mock_test_id, question_text, optiona, optionb, optionc, optiond, correct_answer, explanation, sort_order, created_at, updated_at) VALUES
 -- ===== MOCK TEST 1: TOEIC Listening Part 1 (10 questions) =====
@@ -966,7 +1042,7 @@ INSERT INTO mock_test_questions (mock_test_id, question_text, optiona, optionb, 
  'C', 'The -es ending after ch is pronounced /ɪz/. Watches follows the rule: after s, z, sh, ch, j, x sounds.', 5, NOW(), NOW());
 
 -- ================================================================
--- 20. MOCK TEST ATTEMPTS
+-- 22. MOCK TEST ATTEMPTS
 -- ================================================================
 INSERT INTO mock_test_attempts (mock_test_id, student_user_id, center_id, status, score, max_score, total_questions, correct_answers, test_title_snapshot, time_spent_seconds, started_at, submitted_at, completed_at) VALUES
 -- Center 1 Attempts
@@ -988,7 +1064,7 @@ INSERT INTO mock_test_attempts (mock_test_id, student_user_id, center_id, status
 (8, 51, 2, 'COMPLETED', 7,  10, 10, 7,  'English Pronunciation & Stress Patterns',         600,  '2026-06-25 09:00:00', '2026-06-25 09:10:00', '2026-06-25 09:10:00');
 
 -- ================================================================
--- 21. MOCK TEST ATTEMPT ANSWERS (for a few completed attempts)
+-- 23. MOCK TEST ATTEMPT ANSWERS (for a few completed attempts)
 -- ================================================================
 -- Attempt 1: Student 10, TOEIC Listening Part 1 (8/10 correct)
 INSERT INTO mock_test_attempt_answers (attempt_id, question_id, question_text, student_answer, is_correct, correct_answer, created_at, updated_at) VALUES
@@ -1020,7 +1096,7 @@ INSERT INTO mock_test_attempt_answers (attempt_id, question_id, question_text, s
 (3, 15, 'If the shipment ______ on time, we would have completed the order by now.', 'D', FALSE, 'B', NOW(), NOW()); -- Wrong: chose "arrives" instead of "had arrived"
 
 -- ================================================================
--- 22. STUDENT DOCUMENTS (English learning materials)
+-- 24. STUDENT DOCUMENTS (English learning materials)
 -- ================================================================
 INSERT INTO student_documents (student_user_id, center_id, clazz_id, document_type, title, file_url, description, created_at) VALUES
 -- Center 1
@@ -1050,6 +1126,8 @@ UNION ALL SELECT 'permissions', COUNT(*) FROM permissions
 UNION ALL SELECT 'user_permission', COUNT(*) FROM user_permission
 UNION ALL SELECT 'centers', COUNT(*) FROM centers
 UNION ALL SELECT 'membership', COUNT(*) FROM membership
+UNION ALL SELECT 'courses', COUNT(*) FROM courses
+UNION ALL SELECT 'rooms', COUNT(*) FROM rooms
 UNION ALL SELECT 'teacher_center_profile', COUNT(*) FROM teacher_center_profile
 UNION ALL SELECT 'classes', COUNT(*) FROM classes
 UNION ALL SELECT 'schedules', COUNT(*) FROM schedules
@@ -1069,6 +1147,7 @@ UNION ALL SELECT 'mock_test_attempt_answers', COUNT(*) FROM mock_test_attempt_an
 UNION ALL SELECT 'student_documents', COUNT(*) FROM student_documents;
 
 SELECT '=== ENGLISH CONTENT VERIFICATION ===' AS '';
+SELECT 'Courses (English only):' AS check_name, GROUP_CONCAT(name SEPARATOR ' | ') AS result FROM courses;
 SELECT 'Classes (English only):' AS check_name, GROUP_CONCAT(name SEPARATOR ' | ') AS result FROM classes;
 SELECT 'Mock Tests (English only):' AS check_name, GROUP_CONCAT(title SEPARATOR ' | ') AS result FROM mock_tests;
 SELECT 'Essay Rubrics (English only):' AS check_name, GROUP_CONCAT(title SEPARATOR ' | ') AS result FROM essay_rubrics;
