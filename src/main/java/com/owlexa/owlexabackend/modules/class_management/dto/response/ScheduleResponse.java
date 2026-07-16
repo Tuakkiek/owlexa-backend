@@ -22,10 +22,13 @@ public class ScheduleResponse {
     private String teacherUserFullName;
     private String teacherPhoneNumber;
 
+    private Long roomId;
+    private String roomName;
+    private String roomCode;
+
     private Integer dayOfWeek;
     private LocalTime startTime;
     private LocalTime endTime;
-    private String room;
 
     private boolean isActive;
     private Instant createdAt;

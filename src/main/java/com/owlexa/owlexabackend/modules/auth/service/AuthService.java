@@ -426,7 +426,6 @@ public class AuthService {
         Long centerId = firstMembership != null ? firstMembership.getCenter().getId() : null;
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .sessionId(sessionId)
                 .phoneNumber(user.getPhoneNumber())
                 .email(user.getEmail())
                 .fullName(user.getFullName())

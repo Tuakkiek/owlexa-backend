@@ -87,8 +87,8 @@ class SessionManagementIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String sessionId1 = objectMapper.readTree(result1.getResponse().getContentAsString())
-                .get("sessionId").asText();
+        JsonNode body1 = objectMapper.readTree(result1.getResponse().getContentAsString());
+        String sessionId1 = jwtUtil.extractSessionId(body1.get("accessToken").asText());
         long count1 = sessionRepository.countByUser_IdAndActiveTrue(getUserId(SEED_PHONE));
 
         // Second login — same UA
@@ -99,8 +99,8 @@ class SessionManagementIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String sessionId2 = objectMapper.readTree(result2.getResponse().getContentAsString())
-                .get("sessionId").asText();
+        JsonNode body2 = objectMapper.readTree(result2.getResponse().getContentAsString());
+        String sessionId2 = jwtUtil.extractSessionId(body2.get("accessToken").asText());
         long count2 = sessionRepository.countByUser_IdAndActiveTrue(getUserId(SEED_PHONE));
 
         // Same session ID reused, count unchanged (still 1)
@@ -121,7 +121,8 @@ class SessionManagementIntegrationTest extends BaseIntegrationTest {
                         .header("User-Agent", "Mozilla/5.0 Chrome/120.0 Windows"))
                 .andExpect(status().isOk())
                 .andReturn();
-        String sid1 = objectMapper.readTree(r1.getResponse().getContentAsString()).get("sessionId").asText();
+        String sid1 = jwtUtil.extractSessionId(
+                objectMapper.readTree(r1.getResponse().getContentAsString()).get("accessToken").asText());
 
         // Firefox desktop
         MvcResult r2 = mockMvc.perform(post(LOGIN_URL)
@@ -130,7 +131,8 @@ class SessionManagementIntegrationTest extends BaseIntegrationTest {
                         .header("User-Agent", "Mozilla/5.0 Firefox/121.0 Windows"))
                 .andExpect(status().isOk())
                 .andReturn();
-        String sid2 = objectMapper.readTree(r2.getResponse().getContentAsString()).get("sessionId").asText();
+        String sid2 = jwtUtil.extractSessionId(
+                objectMapper.readTree(r2.getResponse().getContentAsString()).get("accessToken").asText());
 
         long count = sessionRepository.countByUser_IdAndActiveTrue(getUserId(SEED_PHONE));
 
@@ -249,10 +251,9 @@ class SessionManagementIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String sessionId = objectMapper.readTree(loginResult.getResponse().getContentAsString())
-                .get("sessionId").asText();
-        String accessToken = objectMapper.readTree(loginResult.getResponse().getContentAsString())
-                .get("accessToken").asText();
+        JsonNode loginBody = objectMapper.readTree(loginResult.getResponse().getContentAsString());
+        String accessToken = loginBody.get("accessToken").asText();
+        String sessionId = jwtUtil.extractSessionId(accessToken);
 
         // Logout
         mockMvc.perform(post(LOGOUT_URL)

@@ -1,41 +1,13 @@
 package com.owlexa.owlexabackend.modules.enrollment.service;
 import com.owlexa.owlexabackend.modules.enrollment.dto.request.EnrollmentRequest;
 import com.owlexa.owlexabackend.modules.enrollment.dto.response.EnrollmentResponse;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestLevel;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
-import com.owlexa.owlexabackend.modules.document.entity.StudentDocument;
-import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmissionStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayGradingResult;
-import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptStatus;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
-import com.owlexa.owlexabackend.modules.user.entity.DeviceTypeConverter;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayCriteriaScore;
 import com.owlexa.owlexabackend.modules.user.entity.User;
-import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
-import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
-import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmission;
-import com.owlexa.owlexabackend.modules.user.entity.Membership;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayRubric;
-import com.owlexa.owlexabackend.modules.user.entity.UserSession;
-import com.owlexa.owlexabackend.modules.teacher.entity.BulkTeacherStatus;
-import com.owlexa.owlexabackend.modules.user.entity.UserPermission;
-import com.owlexa.owlexabackend.modules.document.entity.DocumentType;
-import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttempt;
-import com.owlexa.owlexabackend.modules.user.entity.DeviceType;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptAnswer;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayRubricCriterion;
-import com.owlexa.owlexabackend.modules.payment.entity.Payment;
-import com.owlexa.owlexabackend.modules.user.entity.Permission;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTest;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestQuestion;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
@@ -43,31 +15,20 @@ import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
-import com.owlexa.owlexabackend.modules.user.repository.PermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
-import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
-import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestQuestionRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestAttemptRepository;
-import com.owlexa.owlexabackend.modules.mocktest.repository.MockTestAttemptAnswerRepository;
-import com.owlexa.owlexabackend.modules.essay.repository.EssaySubmissionRepository;
-import com.owlexa.owlexabackend.modules.essay.repository.EssayRubricRepository;
-import com.owlexa.owlexabackend.modules.essay.repository.EssayGradingResultRepository;
-import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -77,8 +38,9 @@ public class EnrollmentService {
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final ClassRepository classRepository;
     private final UserRepository userRepository;
-    private final CenterRepository centerRepository;
     private final MembershipRepository membershipRepository;
+    private final FeeRecordRepository feeRecordRepository;
+    private final ScheduleRepository scheduleRepository;
 
     @Transactional
     public EnrollmentResponse enroll (Long classId, EnrollmentRequest request) {
@@ -90,9 +52,13 @@ public class EnrollmentService {
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
 
-
         if (!clazz.getCenter().getId().equals(centerId)) {
             throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        }
+
+        if (clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.OPEN
+                && clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS) {
+            throw new BusinessRuleException("Class is not open for enrollment. Current status: " + clazz.getStatus());
         }
 
         User student = userRepository.findById(request.getStudentId())
@@ -105,41 +71,102 @@ public class EnrollmentService {
         }
 
         if (classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(classId, student.getId())) {
-            throw new DuplicateResourceException("Student is already exists in this class");
+            throw new DuplicateResourceException("Student is already enrolled in this class");
         }
 
-        long activeEnrollmentCount = classEnrollmentRepository.countByClazz_IdAndStatus(
-                classId, EnrollmentStatus.ACTIVE
+        long pendingOrActiveCount = classEnrollmentRepository.countByClazz_IdAndStatusIn(
+                classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE)
         );
 
-        if (activeEnrollmentCount >= clazz.getMaxStudents()) {
+        if (pendingOrActiveCount >= clazz.getMaxStudents()) {
             throw new BusinessRuleException("Class is full");
         }
 
-        var existingEnrollment = classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(classId, student.getId());
-
-        ClassEnrollment enrollment;
-        if (existingEnrollment.isPresent()) {
-            enrollment = existingEnrollment.get();
-
-            if (enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
-                throw new DuplicateResourceException("Student is already enrolled in this class");
+        // Check student schedule conflicts (log warning, non-blocking)
+        List<com.owlexa.owlexabackend.modules.class_management.entity.Schedule> classSchedules =
+                scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId);
+        for (var schedule : classSchedules) {
+            long conflict = scheduleRepository.countOverlappingStudentSchedules(
+                    student.getId(), schedule.getDayOfWeek(),
+                    schedule.getStartTime(), schedule.getEndTime(), centerId);
+            if (conflict > 0) {
+                throw new BusinessRuleException(
+                        "Student has a schedule conflict on " + schedule.getDayOfWeek()
+                );
             }
-
-            enrollment.setStatus(EnrollmentStatus.ACTIVE);
-            enrollment.setEnrolledByUser(currentUser);
-        } else {
-            enrollment = ClassEnrollment.builder()
-                    .clazz(clazz)
-                    .studentUser(student)
-                    .center(clazz.getCenter())
-                    .enrolledByUser(currentUser)
-                    .status(EnrollmentStatus.ACTIVE)
-                    .build();
         }
+
+        ClassEnrollment enrollment = ClassEnrollment.builder()
+                .clazz(clazz)
+                .studentUser(student)
+                .center(clazz.getCenter())
+                .enrolledByUser(currentUser)
+                .status(EnrollmentStatus.PENDING)
+                .build();
 
         enrollment = classEnrollmentRepository.save(enrollment);
         return toResponse(enrollment);
+    }
+
+    @Transactional
+    public EnrollmentResponse approve(Long classId, Long studentUserId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        }
+
+        ClassEnrollment enrollment = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Enrollment not found for studentId: " + studentUserId
+                ));
+
+        if (enrollment.getStatus() != EnrollmentStatus.PENDING) {
+            throw new BusinessRuleException("Only PENDING enrollments can be approved. Current status: " + enrollment.getStatus());
+        }
+
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment = classEnrollmentRepository.save(enrollment);
+
+        // Auto-generate FeeRecord
+        generateFeeRecordIfAbsent(enrollment);
+
+        return toResponse(enrollment);
+    }
+
+    @Transactional
+    public void reject(Long classId, Long studentUserId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        }
+
+        ClassEnrollment enrollment = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Enrollment not found for studentId: " + studentUserId
+                ));
+
+        if (enrollment.getStatus() != EnrollmentStatus.PENDING) {
+            throw new BusinessRuleException("Only PENDING enrollments can be rejected. Current status: " + enrollment.getStatus());
+        }
+
+        enrollment.setStatus(EnrollmentStatus.DROPPED);
+        classEnrollmentRepository.save(enrollment);
     }
 
     @Transactional(readOnly = true)
@@ -156,7 +183,8 @@ public class EnrollmentService {
             throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
-        return classEnrollmentRepository.findAllByClazz_IdAndStatus(classId, EnrollmentStatus.ACTIVE)
+        return classEnrollmentRepository.findAllByClazz_IdAndStatusIn(
+                        classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE))
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -188,26 +216,33 @@ public class EnrollmentService {
         classEnrollmentRepository.save(enrollment);
     }
 
-    @Transactional
-    public void remove(Long classId, Long studentUserId) {
-        User currentUser = getCurrentUser();
-        Long centerId = requiredCurrentCenterId();
+    // Helper: auto-generate FeeRecord when enrollment becomes ACTIVE
+    private void generateFeeRecordIfAbsent(ClassEnrollment enrollment) {
+        String currentMonth = YearMonth.now().toString();
 
-        Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+        boolean alreadyExists = feeRecordRepository
+                .findByStudentUser_IdAndClazz_IdAndMonth(
+                        enrollment.getStudentUser().getId(),
+                        enrollment.getClazz().getId(),
+                        currentMonth
+                ).isPresent();
 
-        if(!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        if (!alreadyExists && enrollment.getClazz().getMonthlyFee() != null
+                && enrollment.getClazz().getMonthlyFee() > 0) {
+            FeeRecord feeRecord = FeeRecord.builder()
+                    .studentUser(enrollment.getStudentUser())
+                    .center(enrollment.getCenter())
+                    .clazz(enrollment.getClazz())
+                    .amount(BigDecimal.valueOf(enrollment.getClazz().getMonthlyFee()))
+                    .paidAmount(BigDecimal.ZERO)
+                    .month(currentMonth)
+                    .dueDate(LocalDate.now().plusDays(7))
+                    .status(FeeStatus.UNPAID)
+                    .build();
+            feeRecordRepository.save(feeRecord);
         }
-
-        ClassEnrollment enrollment = classEnrollmentRepository
-                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("Enrollment not found for studentId: " +studentUserId));
-
-        classEnrollmentRepository.delete(enrollment);
     }
 
-    // Helper
     // To response
     private EnrollmentResponse toResponse(ClassEnrollment enrollment) {
         return EnrollmentResponse.builder()
@@ -217,7 +252,7 @@ public class EnrollmentService {
                 .studentUserId(enrollment.getStudentUser().getId())
                 .studentPhoneNumber(enrollment.getStudentUser().getPhoneNumber())
                 .studentFullName(enrollment.getStudentUser().getFullName())
-                .enrollmentByUserId(enrollment.getEnrolledByUser().getId())
+                .enrollmentByUserId(enrollment.getEnrolledByUser() != null ? enrollment.getEnrolledByUser().getId() : null)
                 .status(enrollment.getStatus())
                 .enrolledAt(enrollment.getEnrolledAt())
                 .build();
