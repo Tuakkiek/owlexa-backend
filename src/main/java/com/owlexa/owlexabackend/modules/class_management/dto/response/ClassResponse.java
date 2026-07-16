@@ -1,4 +1,5 @@
 package com.owlexa.owlexabackend.modules.class_management.dto.response;
+import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,15 @@ public class ClassResponse {
     private String vstepLevel;
     private Integer maxStudents;
     private Double monthFee;
+    private ClassStatus status;
     private Boolean isActive;
     private Long centerId;
+
+    private Long courseId;
+    private String courseName;
+    private String courseCode;
+
+    private Long teacherUserId;
+    private String teacherFullName;
+    private String teacherPhoneNumber;
 }

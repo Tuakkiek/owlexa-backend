@@ -86,6 +86,16 @@ public class JwtUtil {
         }
     }
 
+    /**
+     * Compute a stable device key for session deduplication.
+     * Device key = SHA-256(userId + "|" + userAgent).
+     * Same user + same User-Agent → same key → session reuse.
+     */
+    public String hashDeviceKey(Long userId, String userAgent) {
+        String input = userId + "|" + (userAgent != null ? userAgent : "");
+        return hashToken(input);
+    }
+
     private Claims getClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(signingKey)

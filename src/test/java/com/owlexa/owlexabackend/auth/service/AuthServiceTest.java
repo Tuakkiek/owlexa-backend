@@ -340,7 +340,8 @@ class AuthServiceTest {
         session.setUser(user);
         session.setRefreshTokenHash("hashed-old-refresh-token");
         session.setActive(true);
-        session.setExpiredAt(LocalDateTime.now().plusDays(1));
+        session.setInactiveExpireAt(LocalDateTime.now().plusDays(1));
+        session.setAbsoluteExpireAt(LocalDateTime.now().plusDays(90));
 
         when(jwtUtil.isRefreshToken("old-refresh-token")).thenReturn(true);
         when(jwtUtil.extractSessionId("old-refresh-token")).thenReturn("session-123");
@@ -422,7 +423,7 @@ class AuthServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Security alert: token reuse detected");
 
-        verify(sessionRepository).deactivateAllByUserId(1L);
+        verify(sessionRepository).deactivateAllByUserIdWithReason(1L, "REUSE_DETECTED");
     }
 
     @Test
@@ -461,7 +462,8 @@ class AuthServiceTest {
         session.setUser(user);
         session.setRefreshTokenHash("hashed-token");
         session.setActive(true);
-        session.setExpiredAt(LocalDateTime.now().minusDays(1));
+        session.setInactiveExpireAt(LocalDateTime.now().minusDays(1));
+        session.setAbsoluteExpireAt(LocalDateTime.now().plusDays(90));
 
         when(jwtUtil.isRefreshToken("expired-refresh-token")).thenReturn(true);
         when(jwtUtil.extractSessionId("expired-refresh-token")).thenReturn("session-123");
@@ -528,7 +530,7 @@ class AuthServiceTest {
 
         authService.revokeAllSessions("0901234567");
 
-        verify(sessionRepository).deactivateAllByUserId(1L);
+        verify(sessionRepository).deactivateAllByUserIdWithReason(1L, "MANUAL_REVOKE_ALL");
     }
 
     @Test

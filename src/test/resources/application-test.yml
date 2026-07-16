@@ -33,7 +33,16 @@ owlexa:
 jwt:
   secret: owlexa-test-secret-key-minimum-256-bits-long-not-for-production-use
   access-token-expiration-ms: 900000
-  refresh-token-expiration-ms: 604800000
+  refresh-token-expiration-ms: 2592000000
+
+# Session management (shorter timeouts for test determinism)
+app:
+  session:
+    inactive-timeout-days: 30
+    absolute-timeout-days: 90
+    max-devices: 5
+    cleanup-cron: "-"  # disabled in tests
+    cleanup-retention-days: 30
 
 # Disable Spring Boot startup banners and noisy logs during test runs
 logging:

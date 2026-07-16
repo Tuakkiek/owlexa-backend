@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.integration.auth;
 
+import com.owlexa.owlexabackend.common.security.JwtUtil;
 import com.owlexa.owlexabackend.integration.BaseIntegrationTest;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -59,6 +60,9 @@ class LoginIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private JwtUtil jwtUtil;
+
     @AfterEach
     void cleanUp() {
         sessionRepository.deleteAllInBatch();
@@ -80,7 +84,6 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                         .content(loginPayload(SEED_PHONE, SEED_PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.sessionId").isNotEmpty())
                 .andExpect(jsonPath("$.phoneNumber").value(SEED_PHONE))
                 .andExpect(jsonPath("$.roleName").value("OWNER"))
                 .andExpect(jsonPath("$.fullName").value("Integration Owner"))
@@ -90,7 +93,6 @@ class LoginIntegrationTest extends BaseIntegrationTest {
 
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(body.get("accessToken").asText()).startsWith("eyJ");
-        assertThat(body.get("sessionId").asText()).hasSize(36);
     }
 
     @Test
@@ -104,7 +106,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(cookie().exists("refreshToken"))
                 .andExpect(cookie().httpOnly("refreshToken", true))
-                .andExpect(cookie().maxAge("refreshToken", 7 * 24 * 60 * 60));
+                .andExpect(cookie().maxAge("refreshToken", 30 * 24 * 60 * 60));
     }
 
     @Test
@@ -118,8 +120,8 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        String sessionId = objectMapper.readTree(result.getResponse().getContentAsString())
-                .get("sessionId").asText();
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        String sessionId = jwtUtil.extractSessionId(body.get("accessToken").asText());
 
         assertThat(sessionRepository.existsById(sessionId)).isTrue();
         assertThat(sessionRepository.existsByIdAndActiveTrue(sessionId)).isTrue();

@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.class_management.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
@@ -41,6 +42,10 @@ public class Class implements TenantAware {
     private Center center;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
+    private Course course;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teacher_id")
     private User teacher;
 
@@ -56,8 +61,20 @@ public class Class implements TenantAware {
     @Column(name = "monthly_fee")
     private Double monthlyFee;
 
-    @Column(name = "is_active")
-    private Boolean isActive;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
+    private ClassStatus status = ClassStatus.PLANNING;
+
+    @Transient
+    public Boolean getIsActive() {
+        return status == ClassStatus.OPEN || status == ClassStatus.IN_PROGRESS || status == ClassStatus.FULL;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        // No-op for backward compatibility with code that might set isActive
+        // Status transitions should use dedicated lifecycle methods
+    }
 
     @OneToMany(mappedBy = "clazz", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

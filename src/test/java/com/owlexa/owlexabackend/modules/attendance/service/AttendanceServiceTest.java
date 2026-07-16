@@ -15,6 +15,8 @@ import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
+import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -49,6 +51,7 @@ class AttendanceServiceTest {
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private UserRepository userRepository;
+    @Mock private FeeRecordRepository feeRecordRepository;
 
     private AttendanceService service;
 
@@ -64,7 +67,7 @@ class AttendanceServiceTest {
     void setUp() {
         service = new AttendanceService(
                 attendanceRepository, scheduleRepository, classEnrollmentRepository,
-                membershipRepository, userRepository
+                membershipRepository, userRepository, feeRecordRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
@@ -94,6 +97,7 @@ class AttendanceServiceTest {
         clazz.setId(CLASS_ID);
         clazz.setName("Class A");
         clazz.setCenter(center);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS);
 
         Schedule schedule = new Schedule();
         schedule.setId(SCHEDULE_ID);
@@ -149,6 +153,10 @@ class AttendanceServiceTest {
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
         when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
                 CLASS_ID, STUDENT_ID, EnrollmentStatus.ACTIVE)).thenReturn(true);
+        when(feeRecordRepository.existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
+                org.mockito.ArgumentMatchers.eq(STUDENT_ID), org.mockito.ArgumentMatchers.eq(CLASS_ID),
+                org.mockito.ArgumentMatchers.eq(FeeStatus.UNPAID), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(false);
         when(attendanceRepository.findBySchedule_IdAndStudentUser_IdAndDate(
                 SCHEDULE_ID, STUDENT_ID, LocalDate.of(2026, 7, 10))).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> {
@@ -364,5 +372,28 @@ class AttendanceServiceTest {
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("mark: student có unpaid overdue fee → BusinessRuleException")
+    void mark_whenStudentHasUnpaidOverdueFee_shouldThrowBusinessRule() {
+        Schedule schedule = buildSchedule(CENTER_ID);
+        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(schedule));
+        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
+        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
+                CLASS_ID, STUDENT_ID, EnrollmentStatus.ACTIVE)).thenReturn(true);
+        when(feeRecordRepository.existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
+                org.mockito.ArgumentMatchers.eq(STUDENT_ID), org.mockito.ArgumentMatchers.eq(CLASS_ID),
+                org.mockito.ArgumentMatchers.eq(FeeStatus.UNPAID), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
+
+        AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
+                .studentUserId(STUDENT_ID)
+                .status(AttendanceStatus.PRESENT)
+                .build();
+
+        assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("unpaid overdue fees");
     }
 }

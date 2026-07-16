@@ -23,6 +23,7 @@ import com.owlexa.owlexabackend.common.security.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,15 @@ public class AuthService {
     private final JwtUtil                jwtUtil;
     private final PermissionRepository   permissionRepository;
 
+    @Value("${app.session.inactive-timeout-days:30}")
+    private int inactiveTimeoutDays;
+
+    @Value("${app.session.absolute-timeout-days:90}")
+    private int absoluteTimeoutDays;
+
+    @Value("${app.session.max-devices:5}")
+    private int maxDevices;
+
     // ═══════════════════════════════════════════════════════════════
     // LOGIN
     // ═══════════════════════════════════════════════════════════════
@@ -65,27 +75,84 @@ public class AuthService {
             user.setPassword(encoded); // keep in-memory state consistent
         }
 
-        String role      = user.getRole() != null ? user.getRole().name() : null;
-        String sessionId = UUID.randomUUID().toString();
+        String role       = user.getRole() != null ? user.getRole().name() : null;
+        String userAgent  = httpRequest.getHeader("User-Agent");
+        String deviceKey  = jwtUtil.hashDeviceKey(user.getId(), userAgent);
+        String deviceName = resolveDeviceName(request.getDeviceName(), httpRequest);
+        DeviceType deviceType = resolveDeviceType(request.getDeviceType(), httpRequest);
+        String ipAddr     = extractIp(httpRequest);
 
+        // ── Device dedup: same device → reuse, don't create new session ──
+        UserSession session = sessionRepository
+                .findByUser_IdAndDeviceKeyAndActiveTrue(user.getId(), deviceKey)
+                .orElse(null);
+
+        if (session != null) {
+            return reuseExistingSession(session, user, role, deviceName, deviceType, ipAddr, userAgent);
+        }
+
+        // ── New device: enforce max-devices limit ────────────────────────
+        long activeCount = sessionRepository.countByUser_IdAndActiveTrue(user.getId());
+        if (activeCount >= maxDevices) {
+            sessionRepository.findFirstByUser_IdAndActiveTrueOrderByLastUsedAtAsc(user.getId())
+                    .ifPresent(oldest -> {
+                        log.info("Evicting oldest session {} (lastUsed={}) for userId={} — device limit {} reached",
+                                oldest.getId(), oldest.getLastUsedAt(), user.getId(), maxDevices);
+                        sessionRepository.delete(oldest);
+                    });
+        }
+
+        // ── Create new session ───────────────────────────────────────────
+        String sessionId    = UUID.randomUUID().toString();
         String refreshToken = jwtUtil.generateRefreshToken(phone, sessionId);
         String accessToken  = jwtUtil.generateAccessToken(phone, role, sessionId);
+        LocalDateTime now   = LocalDateTime.now();
 
-        UserSession session = UserSession.builder()
+        UserSession newSession = UserSession.builder()
                 .id(sessionId)
                 .user(user)
                 .center(resolveCenter(user))
                 .refreshTokenHash(jwtUtil.hashToken(refreshToken))
-                .deviceName(resolveDeviceName(request.getDeviceName(), httpRequest))
-                .deviceType(resolveDeviceType(request.getDeviceType(), httpRequest))
-                .ipAddress(extractIp(httpRequest))
-                .userAgent(httpRequest.getHeader("User-Agent"))
+                .deviceName(deviceName)
+                .deviceType(deviceType)
+                .deviceKey(deviceKey)
+                .ipAddress(ipAddr)
+                .userAgent(userAgent)
                 .active(true)
-                .createdAt(LocalDateTime.now())
-                .lastUsedAt(LocalDateTime.now())
-                .expiredAt(LocalDateTime.now().plusDays(7))
+                .createdAt(now)
+                .lastUsedAt(now)
+                .inactiveExpireAt(now.plusDays(inactiveTimeoutDays))
+                .absoluteExpireAt(now.plusDays(absoluteTimeoutDays))
+                .rotationCount(0)
                 .build();
 
+        sessionRepository.save(newSession);
+
+        AuthResponse authResponse = buildAuthResponse(accessToken, sessionId, user, role);
+        return LoginResult.builder()
+                .authResponse(authResponse)
+                .refreshToken(refreshToken)
+                .build();
+    }
+
+    /** Reuse an existing session: rotate tokens, update metadata, extend sliding expiration. */
+    private LoginResult reuseExistingSession(UserSession session, User user, String role,
+                                              String deviceName, DeviceType deviceType,
+                                              String ipAddr, String userAgent) {
+        String phone       = user.getPhoneNumber();
+        String sessionId   = session.getId();
+        String refreshToken = jwtUtil.generateRefreshToken(phone, sessionId);
+        String accessToken  = jwtUtil.generateAccessToken(phone, role, sessionId);
+        LocalDateTime now   = LocalDateTime.now();
+
+        session.setRefreshTokenHash(jwtUtil.hashToken(refreshToken));
+        session.setDeviceName(deviceName);
+        session.setDeviceType(deviceType);
+        session.setIpAddress(ipAddr);
+        session.setUserAgent(userAgent);
+        session.setLastUsedAt(now);
+        session.setInactiveExpireAt(now.plusDays(inactiveTimeoutDays));
+        // absoluteExpireAt is never extended — it stays at the original value
         sessionRepository.save(session);
 
         AuthResponse authResponse = buildAuthResponse(accessToken, sessionId, user, role);
@@ -96,10 +163,10 @@ public class AuthService {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // REFRESH TOKEN (với rotation + reuse detection)
+    // REFRESH TOKEN (rotation + reuse detection + sliding + absolute)
     // ═══════════════════════════════════════════════════════════════
 
-    @Transactional
+    @Transactional(noRollbackFor = BadRequestException.class)
     public RefreshResult refreshToken(String token) {
         if (token == null || token.isBlank()) {
             throw new BadRequestException("Refresh token must not be empty");
@@ -122,12 +189,11 @@ public class AuthService {
         String incomingHash = jwtUtil.hashToken(token);
 
         // ── Reuse detection ──────────────────────────────────────────────
-        // Nếu hash không khớp → đây là refresh token đã bị rotate trước đó.
-        // Kẻ tấn công đã có token cũ, nên chúng ta revoke TOÀN BỘ session.
         if (!incomingHash.equals(session.getRefreshTokenHash())) {
             log.warn("Refresh token reuse detected for userId={} sessionId={}. Revoking all sessions.",
                     session.getUser().getId(), sessionId);
-            sessionRepository.deactivateAllByUserId(session.getUser().getId());
+            sessionRepository.deactivateAllByUserIdWithReason(
+                    session.getUser().getId(), "REUSE_DETECTED");
             throw new BadRequestException(
                     "Security alert: token reuse detected. All sessions have been revoked. Please login again.");
         }
@@ -136,21 +202,35 @@ public class AuthService {
             throw new BadRequestException("Session has been revoked. Please login again.");
         }
 
-        if (session.getExpiredAt().isBefore(LocalDateTime.now())) {
+        // ── Absolute expiration check ────────────────────────────────────
+        if (session.getAbsoluteExpireAt().isBefore(LocalDateTime.now())) {
             session.setActive(false);
+            session.setRevokedReason("ABSOLUTE_EXPIRED");
+            session.setRevokedAt(LocalDateTime.now());
             sessionRepository.save(session);
-            throw new BadRequestException("Session has expired. Please login again.");
+            throw new BadRequestException("Session has reached its maximum lifetime. Please login again.");
+        }
+
+        // ── Sliding expiration check ─────────────────────────────────────
+        if (session.getInactiveExpireAt().isBefore(LocalDateTime.now())) {
+            session.setActive(false);
+            session.setRevokedReason("INACTIVE_EXPIRED");
+            session.setRevokedAt(LocalDateTime.now());
+            sessionRepository.save(session);
+            throw new BadRequestException("Session has expired due to inactivity. Please login again.");
         }
 
         // ── Rotation ─────────────────────────────────────────────────────
-        // SessionId giữ nguyên, chỉ refresh token thay đổi.
-        User   user           = session.getUser();
-        String role           = user.getRole() != null ? user.getRole().name() : null;
+        User   user            = session.getUser();
+        String role            = user.getRole() != null ? user.getRole().name() : null;
         String newRefreshToken = jwtUtil.generateRefreshToken(phoneNumber, sessionId);
         String newAccessToken  = jwtUtil.generateAccessToken(phoneNumber, role, sessionId);
+        LocalDateTime now      = LocalDateTime.now();
 
         session.setRefreshTokenHash(jwtUtil.hashToken(newRefreshToken));
-        session.setLastUsedAt(LocalDateTime.now());
+        session.setLastUsedAt(now);
+        session.setInactiveExpireAt(now.plusDays(inactiveTimeoutDays)); // sliding extension
+        session.setRotationCount(session.getRotationCount() + 1);
         sessionRepository.save(session);
 
         AuthResponse authResponse = buildAuthResponse(newAccessToken, sessionId, user, role);
@@ -173,6 +253,8 @@ public class AuthService {
         }
         sessionRepository.findById(sessionId).ifPresent(s -> {
             s.setActive(false);
+            s.setRevokedReason("USER_LOGOUT");
+            s.setRevokedAt(LocalDateTime.now());
             sessionRepository.save(s);
         });
     }
@@ -187,6 +269,8 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
 
         session.setActive(false);
+        session.setRevokedReason("MANUAL_REVOKE");
+        session.setRevokedAt(LocalDateTime.now());
         sessionRepository.save(session);
     }
 
@@ -195,7 +279,7 @@ public class AuthService {
     public void revokeAllSessions(String phoneNumber) {
         User user = userRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        sessionRepository.deactivateAllByUserId(user.getId());
+        sessionRepository.deactivateAllByUserIdWithReason(user.getId(), "MANUAL_REVOKE_ALL");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -255,9 +339,12 @@ public class AuthService {
         user.setRole(role);
         userRepository.save(user);
 
+        // New user always gets a fresh session — no dedup needed
         String sessionId    = UUID.randomUUID().toString();
         String refreshToken = jwtUtil.generateRefreshToken(phoneNumber, sessionId);
         String accessToken  = jwtUtil.generateAccessToken(phoneNumber, role.name(), sessionId);
+        String userAgent    = httpRequest.getHeader("User-Agent");
+        LocalDateTime now   = LocalDateTime.now();
 
         UserSession session = UserSession.builder()
                 .id(sessionId)
@@ -266,12 +353,15 @@ public class AuthService {
                 .refreshTokenHash(jwtUtil.hashToken(refreshToken))
                 .deviceName(resolveDeviceName(null, httpRequest))
                 .deviceType(resolveDeviceType(null, httpRequest))
+                .deviceKey(jwtUtil.hashDeviceKey(user.getId(), userAgent))
                 .ipAddress(extractIp(httpRequest))
-                .userAgent(httpRequest.getHeader("User-Agent"))
+                .userAgent(userAgent)
                 .active(true)
-                .createdAt(LocalDateTime.now())
-                .lastUsedAt(LocalDateTime.now())
-                .expiredAt(LocalDateTime.now().plusDays(7))
+                .createdAt(now)
+                .lastUsedAt(now)
+                .inactiveExpireAt(now.plusDays(inactiveTimeoutDays))
+                .absoluteExpireAt(now.plusDays(absoluteTimeoutDays))
+                .rotationCount(0)
                 .build();
 
         sessionRepository.save(session);
@@ -336,7 +426,6 @@ public class AuthService {
         Long centerId = firstMembership != null ? firstMembership.getCenter().getId() : null;
         return AuthResponse.builder()
                 .accessToken(accessToken)
-                .sessionId(sessionId)
                 .phoneNumber(user.getPhoneNumber())
                 .email(user.getEmail())
                 .fullName(user.getFullName())

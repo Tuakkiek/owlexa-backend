@@ -8,15 +8,18 @@ import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.dto.request.EnrollmentRequest;
 import com.owlexa.owlexabackend.modules.enrollment.dto.response.EnrollmentResponse;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
+import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
+import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
-import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -45,8 +48,9 @@ class EnrollmentServiceTest {
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private ClassRepository classRepository;
     @Mock private UserRepository userRepository;
-    @Mock private CenterRepository centerRepository;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private FeeRecordRepository feeRecordRepository;
+    @Mock private ScheduleRepository scheduleRepository;
 
     private EnrollmentService service;
 
@@ -61,7 +65,7 @@ class EnrollmentServiceTest {
     void setUp() {
         service = new EnrollmentService(
                 classEnrollmentRepository, classRepository, userRepository,
-                centerRepository, membershipRepository
+                membershipRepository, feeRecordRepository, scheduleRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
@@ -91,6 +95,8 @@ class EnrollmentServiceTest {
         clazz.setName("Class A");
         clazz.setCenter(center);
         clazz.setMaxStudents(maxStudents);
+        clazz.setMonthlyFee(1500000.0);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.OPEN);
         return clazz;
     }
 
@@ -111,6 +117,7 @@ class EnrollmentServiceTest {
         clazz.setId(CLASS_ID);
         clazz.setName("Class A");
         clazz.setCenter(center);
+        clazz.setMonthlyFee(1500000.0);
 
         User student = buildStudent(studentId);
 
@@ -132,14 +139,14 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("enroll: OWNER + class có chỗ + student mới → tạo enrollment ACTIVE")
-    void enroll_whenValid_shouldCreateActiveEnrollment() {
+    @DisplayName("enroll: OWNER + class có chỗ + student mới → tạo enrollment PENDING")
+    void enroll_whenValid_shouldCreatePendingEnrollment() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
         when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
-        when(classEnrollmentRepository.countByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE)).thenReturn(5L);
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.empty());
+        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE))).thenReturn(5L);
+        when(scheduleRepository.findAllByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID)).thenReturn(List.of());
         when(classEnrollmentRepository.save(any(ClassEnrollment.class))).thenAnswer(invocation -> {
             ClassEnrollment e = invocation.getArgument(0);
             e.setId(999L);
@@ -150,7 +157,7 @@ class EnrollmentServiceTest {
 
         assertThat(response.getClassId()).isEqualTo(CLASS_ID);
         assertThat(response.getStudentUserId()).isEqualTo(STUDENT_ID);
-        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
+        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
         assertThat(response.getCenterId()).isEqualTo(CENTER_ID);
     }
 
@@ -197,7 +204,7 @@ class EnrollmentServiceTest {
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
         when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
-        when(classEnrollmentRepository.countByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE)).thenReturn(20L);
+        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE))).thenReturn(20L);
 
         assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
                 .isInstanceOf(BusinessRuleException.class)
@@ -205,50 +212,82 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("enroll: enrollment cũ tồn tại status=DROPPED → reactivate thành ACTIVE")
-    void enroll_whenExistingDroppedEnrollment_shouldReactivate() {
+    @DisplayName("approve: PENDING → ACTIVE + tạo FeeRecord")
+    void approve_whenPending_shouldActivateAndGenerateFeeRecord() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
-        when(classEnrollmentRepository.countByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE)).thenReturn(5L);
-
-        ClassEnrollment existing = new ClassEnrollment();
-        existing.setId(1L);
-        existing.setClazz(clazz);
-        existing.setCenter(clazz.getCenter());
-        existing.setStudentUser(buildStudent(STUDENT_ID));
-        existing.setStatus(EnrollmentStatus.DROPPED);
+        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.PENDING);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
-                .thenReturn(Optional.of(existing));
+                .thenReturn(Optional.of(enrollment));
         when(classEnrollmentRepository.save(any(ClassEnrollment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(org.mockito.ArgumentMatchers.eq(STUDENT_ID), org.mockito.ArgumentMatchers.eq(CLASS_ID), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+        when(feeRecordRepository.save(any(FeeRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        EnrollmentResponse response = service.enroll(CLASS_ID, buildEnrollRequest());
+        EnrollmentResponse response = service.approve(CLASS_ID, STUDENT_ID);
 
         assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
-        assertThat(existing.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
+        org.mockito.Mockito.verify(feeRecordRepository).save(any(FeeRecord.class));
     }
 
     @Test
-    @DisplayName("enroll: enrollment cũ tồn tại status=ACTIVE → DuplicateResourceException (race condition)")
-    void enroll_whenExistingActiveEnrollment_shouldThrowDuplicate() {
+    @DisplayName("approve: enrollment không phải PENDING → BusinessRuleException")
+    void approve_whenNotPending_shouldThrowBusinessRule() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
-        when(classEnrollmentRepository.countByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE)).thenReturn(5L);
-
-        ClassEnrollment existing = new ClassEnrollment();
-        existing.setId(1L);
-        existing.setClazz(clazz);
-        existing.setCenter(clazz.getCenter());
-        existing.setStudentUser(buildStudent(STUDENT_ID));
-        existing.setStatus(EnrollmentStatus.ACTIVE);
+        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
-                .thenReturn(Optional.of(existing));
+                .thenReturn(Optional.of(enrollment));
 
-        assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
-                .isInstanceOf(DuplicateResourceException.class);
+        assertThatThrownBy(() -> service.approve(CLASS_ID, STUDENT_ID))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Only PENDING enrollments can be approved");
+    }
+
+    @Test
+    @DisplayName("approve: FeeRecord đã tồn tại → không tạo duplicate")
+    void approve_whenFeeRecordAlreadyExists_shouldNotCreateDuplicate() {
+        Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.PENDING);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
+                .thenReturn(Optional.of(enrollment));
+        when(classEnrollmentRepository.save(any(ClassEnrollment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(org.mockito.ArgumentMatchers.eq(STUDENT_ID), org.mockito.ArgumentMatchers.eq(CLASS_ID), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.of(new FeeRecord()));
+
+        EnrollmentResponse response = service.approve(CLASS_ID, STUDENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
+        org.mockito.Mockito.verify(feeRecordRepository, org.mockito.Mockito.never()).save(any(FeeRecord.class));
+    }
+
+    @Test
+    @DisplayName("reject: PENDING → DROPPED")
+    void reject_whenPending_shouldMarkDropped() {
+        Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.PENDING);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
+                .thenReturn(Optional.of(enrollment));
+
+        service.reject(CLASS_ID, STUDENT_ID);
+
+        assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.DROPPED);
+    }
+
+    @Test
+    @DisplayName("reject: enrollment không phải PENDING → BusinessRuleException")
+    void reject_whenNotPending_shouldThrowBusinessRule() {
+        Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
+                .thenReturn(Optional.of(enrollment));
+
+        assertThatThrownBy(() -> service.reject(CLASS_ID, STUDENT_ID))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Only PENDING enrollments can be rejected");
     }
 
     @Test
@@ -270,13 +309,13 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("findAllByClass: trả về danh sách enrollment ACTIVE trong class")
-    void findAllByClass_shouldReturnActiveEnrollments() {
+    @DisplayName("findAllByClass: trả về danh sách enrollment PENDING + ACTIVE")
+    void findAllByClass_shouldReturnPendingAndActiveEnrollments() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        when(classEnrollmentRepository.findAllByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE))
+        when(classEnrollmentRepository.findAllByClazz_IdAndStatusIn(CLASS_ID, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE)))
                 .thenReturn(List.of(
-                        buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE),
+                        buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.PENDING),
                         buildEnrollment(2L, 101L, EnrollmentStatus.ACTIVE)
                 ));
 
@@ -325,30 +364,6 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.drop(CLASS_ID, STUDENT_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    @DisplayName("remove: class thuộc center khác → TenancyViolationException")
-    void remove_whenClassInOtherCenter_shouldThrowTenancyViolation() {
-        Class clazz = buildClass(CLASS_ID, OTHER_CENTER_ID, 20);
-        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-
-        assertThatThrownBy(() -> service.remove(CLASS_ID, STUDENT_ID))
-                .isInstanceOf(TenancyViolationException.class);
-    }
-
-    @Test
-    @DisplayName("remove: enrollment hợp lệ → xóa")
-    void remove_whenValid_shouldDeleteEnrollment() {
-        Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
-        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
-                .thenReturn(Optional.of(enrollment));
-
-        service.remove(CLASS_ID, STUDENT_ID);
-
-        org.mockito.Mockito.verify(classEnrollmentRepository).delete(enrollment);
     }
 
     @Test

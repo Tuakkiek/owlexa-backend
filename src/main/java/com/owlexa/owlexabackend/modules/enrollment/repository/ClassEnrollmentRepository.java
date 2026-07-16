@@ -10,6 +10,8 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
     List<ClassEnrollment> findAllByClazz_IdAndStatus(Long classId, EnrollmentStatus status);
 
+    List<ClassEnrollment> findAllByClazz_IdAndStatusIn(Long classId, List<EnrollmentStatus> statuses);
+
     List<ClassEnrollment> findAllByClazz_IdAndCenter_Id(Long clazzId, Long centerId);
 
     Optional<ClassEnrollment> findByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId);
@@ -17,6 +19,8 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
     boolean existsByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId);
 
     long countByClazz_IdAndStatus(Long classId, EnrollmentStatus status);
+
+    long countByClazz_IdAndStatusIn(Long classId, List<EnrollmentStatus> statuses);
 
     boolean existsByClazz_IdAndStudentUser_IdAndStatus(Long classId, Long studentUserId, EnrollmentStatus status);
 

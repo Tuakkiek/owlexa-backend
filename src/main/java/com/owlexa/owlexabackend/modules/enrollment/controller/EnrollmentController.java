@@ -30,6 +30,23 @@ public class EnrollmentController {
         return enrollmentService.findAllByClass(classId);
     }
 
+    @PatchMapping("/{studentUserId}/approve")
+    public EnrollmentResponse approve(
+            @PathVariable Long classId,
+            @PathVariable Long studentUserId
+    ) {
+        return enrollmentService.approve(classId, studentUserId);
+    }
+
+    @PatchMapping("/{studentUserId}/reject")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reject(
+            @PathVariable Long classId,
+            @PathVariable Long studentUserId
+    ) {
+        enrollmentService.reject(classId, studentUserId);
+    }
+
     @PatchMapping("/{studentUserId}/drop")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void drop (

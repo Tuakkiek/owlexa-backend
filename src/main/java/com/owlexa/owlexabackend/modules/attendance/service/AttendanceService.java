@@ -14,6 +14,8 @@ import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
+import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
@@ -37,6 +39,7 @@ public class AttendanceService {
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final MembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    private final FeeRecordRepository feeRecordRepository;
 
     @Transactional
     public List<AttendanceResponse> mark(Long scheduleId, AttendanceMarkRequest request) {
@@ -51,6 +54,11 @@ public class AttendanceService {
         }
 
         assertCanMarkAttendance(currentUser, centerId, schedule);
+
+        if (schedule.getClazz().getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS) {
+            throw new BusinessRuleException(
+                    "Attendance can only be marked for IN_PROGRESS classes. Current: " + schedule.getClazz().getStatus());
+        }
 
         List<AttendanceResponse> responses = new ArrayList<>();
 
@@ -73,6 +81,19 @@ public class AttendanceService {
             if (!activeEnrollment) {
                 throw new BusinessRuleException(
                         "Student is not actively enrolled in this class: " + student.getId()
+                );
+            }
+
+            boolean hasUnpaidOverdue = feeRecordRepository
+                    .existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
+                            student.getId(),
+                            schedule.getClazz().getId(),
+                            FeeStatus.UNPAID,
+                            request.getDate() != null ? request.getDate() : LocalDate.now()
+                    );
+            if (hasUnpaidOverdue) {
+                throw new BusinessRuleException(
+                        "Student has unpaid overdue fees: " + student.getId()
                 );
             }
 
