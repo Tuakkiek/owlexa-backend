@@ -11,4 +11,6 @@ public interface PermissionRepository extends JpaRepository<Permission, Long> {
     Optional<Permission> findByCode(String code);
 
     List<Permission> findByCodeIn(Collection<String> codes);
+
+    List<Permission> findAllByOrderByCodeAsc();
 }
