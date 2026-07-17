@@ -8,7 +8,6 @@ import com.owlexa.owlexabackend.modules.user.dto.response.EffectivePermission;
 import com.owlexa.owlexabackend.modules.user.dto.response.PermissionResponse;
 import com.owlexa.owlexabackend.modules.user.dto.response.UserPermissionsResponse;
 import com.owlexa.owlexabackend.modules.user.entity.Permission;
-import com.owlexa.owlexabackend.modules.user.entity.PermissionOverrideType;
 import com.owlexa.owlexabackend.modules.user.entity.RolePermission;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.entity.UserPermission;
@@ -23,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -54,7 +52,7 @@ public class UserPermissionService {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // EFFECTIVE PERMISSIONS (with source annotation)
+    // EFFECTIVE PERMISSIONS (role-scoped — only the user's role permissions)
     // ═══════════════════════════════════════════════════════════════
 
     @Transactional(readOnly = true)
@@ -62,43 +60,29 @@ public class UserPermissionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        // Load all known permissions
-        List<Permission> allPermissions = permissionRepository.findAllByOrderByCodeAsc();
+        // Load only the permissions that belong to this user's ROLE
+        List<RolePermission> rolePerms = rolePermissionRepository.findAllByRole(user.getRole());
 
-        // Load role defaults
-        Set<String> roleDefaultCodes = rolePermissionRepository.findAllByRole(user.getRole())
+        // Load disabled permission codes for this user
+        Set<String> disabledCodes = userPermissionRepository.findAllByUser_Id(userId)
                 .stream()
-                .map(RolePermission::getPermission)
+                .map(UserPermission::getPermission)
                 .map(Permission::getCode)
                 .collect(Collectors.toSet());
 
-        // Load user overrides — keyed by permission code
-        Map<String, PermissionOverrideType> overrides = userPermissionRepository
-                .findAllByUser_Id(userId)
-                .stream()
-                .collect(Collectors.toMap(
-                        up -> up.getPermission().getCode(),
-                        UserPermission::getType,
-                        (existing, replacement) -> replacement));
-
         List<EffectivePermission> permissions = new ArrayList<>();
-        for (Permission perm : allPermissions) {
+        for (RolePermission rp : rolePerms) {
+            Permission perm = rp.getPermission();
+            if (perm == null || perm.getCode() == null) continue;
+
             String code = perm.getCode();
-            EffectivePermission.EffectivePermissionBuilder builder = EffectivePermission.builder()
+            boolean enabled = !disabledCodes.contains(code);
+
+            permissions.add(EffectivePermission.builder()
                     .code(code)
-                    .description(perm.getDescription());
-
-            if (overrides.containsKey(code)) {
-                PermissionOverrideType type = overrides.get(code);
-                builder.source(type == PermissionOverrideType.ALLOW ? "ALLOW" : "DENY");
-            } else if (roleDefaultCodes.contains(code)) {
-                builder.source("ROLE_DEFAULT");
-            } else {
-                // Permission exists in system but is neither granted by role nor overridden
-                continue;
-            }
-
-            permissions.add(builder.build());
+                    .description(perm.getDescription())
+                    .source(enabled ? "ENABLED" : "DISABLED")
+                    .build());
         }
 
         return UserPermissionsResponse.builder()
@@ -118,31 +102,47 @@ public class UserPermissionService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
         if (request.getOverrides() == null || request.getOverrides().isEmpty()) {
-            // Empty list = remove all overrides
+            // Empty list = remove all overrides → re-enable all role permissions
             removeAllOverrides(userId);
             return getEffectivePermissions(userId);
         }
 
-        // Validate all permission codes exist
+        // Load role permission codes for boundary validation
+        Set<String> rolePermissionCodes = rolePermissionRepository.findAllByRole(user.getRole())
+                .stream()
+                .map(RolePermission::getPermission)
+                .map(Permission::getCode)
+                .collect(Collectors.toSet());
+
+        // Validate: each override must target a permission within the user's role
         for (PermissionOverrideItem item : request.getOverrides()) {
             validateOverrideType(item.getType());
-            if (!"INHERIT".equalsIgnoreCase(item.getType())) {
-                permissionRepository.findByCode(item.getPermissionCode())
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Permission not found: " + item.getPermissionCode()));
+            if ("INHERIT".equalsIgnoreCase(item.getType())) {
+                continue; // INHERIT means "remove override" — always valid
             }
+            if (!rolePermissionCodes.contains(item.getPermissionCode())) {
+                throw new BadRequestException(
+                        "Permission '" + item.getPermissionCode()
+                        + "' does not belong to role " + user.getRole().name()
+                        + ". User permissions must be a subset of role permissions.");
+            }
+            permissionRepository.findByCode(item.getPermissionCode())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Permission not found: " + item.getPermissionCode()));
         }
 
         // Delete existing overrides
         userPermissionRepository.deleteByUser_Id(userId);
-        userPermissionRepository.flush(); // force DELETE to DB before INSERTs to avoid unique constraint violation
+        userPermissionRepository.flush();
 
-        // Create new overrides (skip INHERIT — that means "no override")
+        // Create new overrides: only DISABLED/DENY records disable the permission.
+        // INHERIT is skipped (re-enables).
         for (PermissionOverrideItem item : request.getOverrides()) {
             if ("INHERIT".equalsIgnoreCase(item.getType())) {
                 continue;
             }
 
+            // DISABLED or DENY: create a user_permission row to disable this permission
             Permission permission = permissionRepository.findByCode(item.getPermissionCode())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Permission not found: " + item.getPermissionCode()));
@@ -150,9 +150,6 @@ public class UserPermissionService {
             UserPermission up = new UserPermission();
             up.setUser(user);
             up.setPermission(permission);
-            up.setType("DENY".equalsIgnoreCase(item.getType())
-                    ? PermissionOverrideType.DENY
-                    : PermissionOverrideType.ALLOW);
             userPermissionRepository.save(up);
         }
 
@@ -175,31 +172,38 @@ public class UserPermissionService {
 
         validateOverrideType(type);
 
+        // Validate: permission must belong to user's role
+        Set<String> roleCodes = rolePermissionRepository.findAllByRole(user.getRole())
+                .stream()
+                .map(RolePermission::getPermission)
+                .map(Permission::getCode)
+                .collect(Collectors.toSet());
+
+        if (!roleCodes.contains(permissionCode)) {
+            throw new BadRequestException(
+                    "Permission '" + permissionCode + "' does not belong to role " + user.getRole().name());
+        }
+
         Permission permission = permissionRepository.findByCode(permissionCode)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Permission not found: " + permissionCode));
 
-        // Remove existing override for this permission (if any)
+        // Remove existing override (if any)
         userPermissionRepository.findByUser_IdAndPermission_Code(userId, permissionCode)
                 .ifPresent(userPermissionRepository::delete);
 
-        if ("INHERIT".equalsIgnoreCase(type)) {
-            // Remove override → fall back to role default
-            permissionResolver.evictCache(userId);
-            return buildEffectivePermission(permission, user, null);
+        if ("DENY".equalsIgnoreCase(type) || "DISABLED".equalsIgnoreCase(type)) {
+            // Create a disable record
+            UserPermission up = new UserPermission();
+            up.setUser(user);
+            up.setPermission(permission);
+            userPermissionRepository.save(up);
         }
-
-        // Create new override
-        UserPermission up = new UserPermission();
-        up.setUser(user);
-        up.setPermission(permission);
-        up.setType("DENY".equalsIgnoreCase(type)
-                ? PermissionOverrideType.DENY
-                : PermissionOverrideType.ALLOW);
-        userPermissionRepository.save(up);
+        // ALLOW and INHERIT both mean "enabled" — no record needed
 
         permissionResolver.evictCache(userId);
-        return buildEffectivePermission(permission, user, up.getType());
+        return buildEffectivePermission(permission, user,
+                "DENY".equalsIgnoreCase(type) || "DISABLED".equalsIgnoreCase(type));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -224,35 +228,19 @@ public class UserPermissionService {
             throw new BadRequestException("Override type must not be empty");
         }
         String upper = type.trim().toUpperCase();
-        if (!upper.equals("ALLOW") && !upper.equals("DENY") && !upper.equals("INHERIT")) {
+        // Accept DISABLED (new) + DENY/INHERIT (backward compat). Reject ALLOW.
+        if (!upper.equals("DISABLED") && !upper.equals("DENY") && !upper.equals("INHERIT")) {
             throw new BadRequestException(
-                    "Invalid override type: " + type + ". Must be ALLOW, DENY, or INHERIT.");
+                    "Invalid override type: " + type + ". Must be DISABLED or INHERIT.");
         }
     }
 
     private EffectivePermission buildEffectivePermission(Permission permission, User user,
-                                                          PermissionOverrideType overrideType) {
-        Set<String> roleDefaults = rolePermissionRepository.findAllByRole(user.getRole())
-                .stream()
-                .map(RolePermission::getPermission)
-                .map(Permission::getCode)
-                .collect(Collectors.toSet());
-
-        String source;
-        if (overrideType == PermissionOverrideType.ALLOW) {
-            source = "ALLOW";
-        } else if (overrideType == PermissionOverrideType.DENY) {
-            source = "DENY";
-        } else if (roleDefaults.contains(permission.getCode())) {
-            source = "ROLE_DEFAULT";
-        } else {
-            source = "ROLE_DEFAULT"; // fallback — should not normally reach here
-        }
-
+                                                          boolean disabled) {
         return EffectivePermission.builder()
                 .code(permission.getCode())
                 .description(permission.getDescription())
-                .source(source)
+                .source(disabled ? "DISABLED" : "ENABLED")
                 .build();
     }
 }

@@ -15,11 +15,10 @@ public class EffectivePermission {
     private String description;
 
     /**
-     * Where this permission comes from:
+     * Permission state:
      * <ul>
-     *   <li>{@code ROLE_DEFAULT} — inherited from the user's role via role_permission</li>
-     *   <li>{@code ALLOW} — explicitly granted via user_permission (type = ALLOW)</li>
-     *   <li>{@code DENY} — explicitly revoked via user_permission (type = DENY)</li>
+     *   <li>{@code ENABLED} — permission is active (inherited from role, not disabled)</li>
+     *   <li>{@code DISABLED} — permission has been revoked by the Owner</li>
      * </ul>
      */
     private String source;

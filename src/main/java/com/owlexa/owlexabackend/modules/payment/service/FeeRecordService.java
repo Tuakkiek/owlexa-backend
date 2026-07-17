@@ -120,7 +120,7 @@ public class FeeRecordService {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
-        assertCenterMembership(currentUser, centerId);
+        assertCanViewFees(currentUser, centerId);
 
         Class clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
@@ -151,7 +151,7 @@ public class FeeRecordService {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
-        assertCenterMembership(currentUser, centerId);
+        assertCanViewFees(currentUser, centerId);
 
         return feeRecordRepository
                 .findAllByCenter_IdAndStatusAndDueDateBefore(centerId, FeeStatus.UNPAID, java.time.LocalDate.now())
@@ -222,5 +222,13 @@ public class FeeRecordService {
         if (!hasMembership) {
             throw new AccessDeniedException("User is not a member of this center");
         }
+    }
+
+    private void assertCanViewFees(User currentUser, Long centerId) {
+        if (currentUser.getRole() != Role.OWNER && currentUser.getRole() != Role.CASHIER) {
+            throw new AccessDeniedException("Only OWNER or CASHIER can view fee records");
+        }
+
+        assertCenterMembership(currentUser, centerId);
     }
 }

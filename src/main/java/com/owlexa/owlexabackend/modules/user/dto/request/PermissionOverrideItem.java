@@ -16,10 +16,10 @@ public class PermissionOverrideItem {
     /**
      * Override type:
      * <ul>
-     *   <li>{@code ALLOW} — explicitly grant this permission</li>
-     *   <li>{@code DENY} — explicitly revoke this permission</li>
-     *   <li>{@code INHERIT} — remove any override; fall back to role default</li>
+     *   <li>{@code DISABLED} — revoke this permission</li>
+     *   <li>{@code INHERIT} — restore this permission (re-enable)</li>
      * </ul>
+     * Note: ALLOW and DENY are still accepted for backward compatibility.
      */
     private String type;
 }
