@@ -45,6 +45,7 @@ public class AuthService {
     private final PasswordEncoder        passwordEncoder;
     private final JwtUtil                jwtUtil;
     private final PermissionRepository   permissionRepository;
+    private final com.owlexa.owlexabackend.modules.user.service.PermissionResolver permissionResolver;
 
     @Value("${app.session.inactive-timeout-days:30}")
     private int inactiveTimeoutDays;
@@ -424,6 +425,11 @@ public class AuthService {
                 .orElse(null);
         String centerName = firstMembership != null ? firstMembership.getCenter().getName() : null;
         Long centerId = firstMembership != null ? firstMembership.getCenter().getId() : null;
+        
+        java.util.List<String> permissions = new java.util.ArrayList<>(
+            permissionResolver.resolvePermissions(user.getId(), user.getRole())
+        );
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .phoneNumber(user.getPhoneNumber())
@@ -432,6 +438,7 @@ public class AuthService {
                 .roleName(role)
                 .centerName(centerName)
                 .centerId(centerId)
+                .permissions(permissions)
                 .build();
     }
 
@@ -554,17 +561,6 @@ public class AuthService {
             return xff.split(",")[0].trim();
         }
         return request.getRemoteAddr();
-    }
-
-    private List<String> getDefaultPermissionCode(Role role) {
-        if (role == null) return List.of();
-        return switch (role) {
-            case OWNER   -> List.of("CENTER_CREATE", "VIEW_STUDENT", "EDIT_FEE");
-            case CASHIER -> List.of("EDIT_FEE");
-            case TEACHER -> List.of("VIEW_STUDENT");
-            case STUDENT -> List.of("VIEW_STUDENT");
-            case ADMIN   -> List.of("VIEW_SALARY");
-        };
     }
 
     @lombok.Getter

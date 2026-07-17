@@ -37,8 +37,10 @@ import com.owlexa.owlexabackend.modules.user.entity.DeviceType;
 import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptAnswer;
 import com.owlexa.owlexabackend.modules.essay.entity.EssayRubricCriterion;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
+import com.owlexa.owlexabackend.modules.user.dto.request.BulkPermissionOverrideRequest;
 import com.owlexa.owlexabackend.modules.user.entity.Permission;
 import com.owlexa.owlexabackend.modules.mocktest.entity.MockTest;
+import com.owlexa.owlexabackend.modules.user.service.UserPermissionService;
 import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestQuestion;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BulkTeacherValidationException;
@@ -50,6 +52,8 @@ import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,7 +68,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TeacherService {
 
-    private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final Logger LOGGER = LoggerFactory.getLogger(TeacherService.class);
+
+    private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
@@ -72,39 +78,77 @@ public class TeacherService {
     private final CenterRepository centerRepository;
     private final PasswordEncoder passwordEncoder;
     private final TeacherCenterProfileRepository teacherCenterProfileRepository;
+    private final UserPermissionService userPermissionService;
 
     @Transactional
     public TeacherResponse create(TeacherRequest request) {
+        LOGGER.info("=== TeacherService.create() START ===");
+        LOGGER.info("  request.fullName    = '{}'", request.getFullName());
+        LOGGER.info("  request.phoneNumber = '{}'", request.getPhoneNumber());
+        LOGGER.info("  request.email       = '{}'", request.getEmail());
+
+        LOGGER.info("[STEP 1] getCurrentUser()...");
         User currentUser = getCurrentUser();
+        LOGGER.info("  currentUser.id={}, phone={}, role={}", currentUser.getId(), currentUser.getPhoneNumber(), currentUser.getRole());
+
+        LOGGER.info("[STEP 2] requiredCurrentCenterId()...");
         Long centerId = requiredCurrentCenterId();
+        LOGGER.info("  centerId = {}", centerId);
+
+        LOGGER.info("[STEP 3] centerRepository.findById({})...", centerId);
         Center center = centerRepository.findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
+        LOGGER.info("  center found: id={}, name={}", center.getId(), center.getName());
 
+        LOGGER.info("[STEP 4] assertOwnerAndCenterMembership(currentUser, centerId)...");
         assertOwnerAndCenterMembership(currentUser, centerId);
+        LOGGER.info("  PASSED");
 
-        // Validate email
+        LOGGER.info("[STEP 5] Email uniqueness check...");
+        LOGGER.info("  request.email = '{}'", request.getEmail());
+        LOGGER.info("  email != null? {}", request.getEmail() != null);
+        LOGGER.info("  email.isBlank()? {}", request.getEmail() != null && request.getEmail().isBlank());
         if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            if (userRepository.existsByEmail(request.getEmail())) {
+            boolean emailExists = userRepository.existsByEmail(request.getEmail());
+            LOGGER.info("  existsByEmail('{}') = {}", request.getEmail(), emailExists);
+            if (emailExists) {
+                LOGGER.error("  >>> THROWING DuplicateResourceException: Email '{}' already exists", request.getEmail());
                 throw new DuplicateResourceException("Email already exists");
             }
+            LOGGER.info("  PASSED: email is unique");
+        } else {
+            LOGGER.info("  SKIPPED: email is null or blank");
         }
 
         User teacherUser;
         String temporaryPassword = null;
 
+        LOGGER.info("[STEP 6] Phone lookup...");
+        LOGGER.info("  findByPhoneNumber('{}')...", request.getPhoneNumber());
         var existingUser = userRepository.findByPhoneNumber(request.getPhoneNumber());
+        LOGGER.info("  existingUser.isPresent() = {}", existingUser.isPresent());
         if (existingUser.isPresent()) {
             teacherUser = existingUser.get();
+            LOGGER.info("  existing user: id={}, phone={}, role={}", teacherUser.getId(), teacherUser.getPhoneNumber(), teacherUser.getRole());
+
+            LOGGER.info("[STEP 6a] Role check: role == TEACHER?");
             if (teacherUser.getRole() != Role.TEACHER) {
+                LOGGER.error("  >>> THROWING BadRequestException: User role is {}, not TEACHER", teacherUser.getRole());
                 throw new BadRequestException("User is not TEACHER");
             }
+            LOGGER.info("  PASSED: role is TEACHER");
 
+            LOGGER.info("[STEP 6b] Membership check...");
             boolean existsMembership = membershipRepository.existsByUser_IdAndCenter_Id(teacherUser.getId(), centerId);
+            LOGGER.info("  existsByUser_IdAndCenter_Id({}, {}) = {}", teacherUser.getId(), centerId, existsMembership);
             if (!existsMembership) {
+                LOGGER.info("  Creating membership...");
                 createMembership(teacherUser, center, currentUser);
             }
         } else {
+            LOGGER.info("  User does not exist, will create new...");
             temporaryPassword = generateTemporaryPassword();
+            LOGGER.info("  generated temporaryPassword (length={})", temporaryPassword.length());
 
             teacherUser = new User();
             teacherUser.setPhoneNumber(request.getPhoneNumber());
@@ -112,14 +156,23 @@ public class TeacherService {
             teacherUser.setFullName(request.getFullName());
             teacherUser.setRole(Role.TEACHER);
             teacherUser.setPassword(passwordEncoder.encode(temporaryPassword));
+            LOGGER.info("  saving new user...");
             teacherUser = userRepository.save(teacherUser);
+            LOGGER.info("  saved: id={}, phone={}", teacherUser.getId(), teacherUser.getPhoneNumber());
 
+            LOGGER.info("  creating membership...");
             createMembership(teacherUser, center, currentUser);
         }
 
-        boolean includeSalary = currentUser.getRole() == Role.OWNER;
+        LOGGER.info("[STEP 7] applyPermissionOverridesIfPresent...");
+        applyPermissionOverridesIfPresent(teacherUser.getId(), request.getPermissionOverrides());
 
-        return toResponse(teacherUser, centerId, temporaryPassword, includeSalary);
+        boolean includeSalary = currentUser.getRole() == Role.OWNER;
+        LOGGER.info("[STEP 8] toResponse (includeSalary={}, temporaryPassword={})", includeSalary, temporaryPassword != null ? "***" : "null");
+
+        TeacherResponse response = toResponse(teacherUser, centerId, temporaryPassword, includeSalary);
+        LOGGER.info("=== TeacherService.create() END — SUCCESS (userId={}) ===", response.getUserId());
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -172,6 +225,8 @@ public class TeacherService {
         teacher.setFullName(fullName);
 
         teacher = userRepository.save(teacher);
+
+        applyPermissionOverridesIfPresent(teacher.getId(), request.getPermissionOverrides());
 
         boolean includeSalary = currentUser.getRole() == Role.OWNER;
 
@@ -327,6 +382,14 @@ public class TeacherService {
         membership.setCenter(center);
         membership.setJoinedByUser(joinedByUser);
         membershipRepository.save(membership);
+    }
+
+    private void applyPermissionOverridesIfPresent(Long userId,
+                                                    java.util.List<com.owlexa.owlexabackend.modules.user.dto.request.PermissionOverrideItem> overrides) {
+        if (overrides != null && !overrides.isEmpty()) {
+            userPermissionService.applyOverrides(userId,
+                    BulkPermissionOverrideRequest.builder().overrides(overrides).build());
+        }
     }
 
     private TeacherResponse toResponse(User user, Long centerId, String temporaryPassword, boolean includeSalary) {

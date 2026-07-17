@@ -8,6 +8,8 @@ import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.dto.request.BulkPermissionOverrideRequest;
+import com.owlexa.owlexabackend.modules.user.service.UserPermissionService;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BulkStudentValidationException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
@@ -32,13 +34,14 @@ import java.util.*;
 @RequiredArgsConstructor
 public class StudentService {
 
-    private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
     private final CenterRepository centerRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserPermissionService userPermissionService;
 
     // Create
     @Transactional
@@ -87,6 +90,8 @@ public class StudentService {
             createMembership(studentUser, center, currentUser);
         }
 
+        applyPermissionOverridesIfPresent(studentUser.getId(), request.getPermissionOverrides());
+
         return toResponse(studentUser, centerId, temporaryPassword);
 
     }
@@ -125,6 +130,8 @@ public class StudentService {
         student.setFullName(fullName);
 
         User savedStudent = userRepository.save(student);
+
+        applyPermissionOverridesIfPresent(savedStudent.getId(), request.getPermissionOverrides());
 
         return toResponse(savedStudent, centerId, null);
     }
@@ -309,6 +316,14 @@ public class StudentService {
         membership.setCenter(center);
         membership.setJoinedByUser(joinedByUser);
         membershipRepository.save(membership);
+    }
+
+    private void applyPermissionOverridesIfPresent(Long userId,
+                                                    java.util.List<com.owlexa.owlexabackend.modules.user.dto.request.PermissionOverrideItem> overrides) {
+        if (overrides != null && !overrides.isEmpty()) {
+            userPermissionService.applyOverrides(userId,
+                    BulkPermissionOverrideRequest.builder().overrides(overrides).build());
+        }
     }
 
     // Build bulk error

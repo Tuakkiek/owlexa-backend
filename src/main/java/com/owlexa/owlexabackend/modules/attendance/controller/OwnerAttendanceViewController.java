@@ -4,6 +4,7 @@ import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceRespon
 import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceStatsResponse;
 import com.owlexa.owlexabackend.modules.attendance.service.AttendanceService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -18,6 +19,7 @@ public class OwnerAttendanceViewController {
 
     /** View attendance for a specific schedule + date (read-only for owner) */
     @GetMapping("/schedules/{scheduleId}")
+    @PreAuthorize("hasAuthority('ATTENDANCE_VIEW')")
     public List<AttendanceResponse> findBySchedule(
             @PathVariable Long scheduleId,
             @RequestParam LocalDate date
@@ -27,6 +29,7 @@ public class OwnerAttendanceViewController {
 
     /** View attendance for a class on a specific date */
     @GetMapping("/classes/{classId}")
+    @PreAuthorize("hasAuthority('ATTENDANCE_VIEW')")
     public List<AttendanceResponse> findByClassAndDate(
             @PathVariable Long classId,
             @RequestParam LocalDate date
@@ -36,6 +39,7 @@ public class OwnerAttendanceViewController {
 
     /** View attendance for a class in a date range */
     @GetMapping("/classes/{classId}/range")
+    @PreAuthorize("hasAuthority('ATTENDANCE_VIEW')")
     public List<AttendanceResponse> findByClassAndDateRange(
             @PathVariable Long classId,
             @RequestParam LocalDate startDate,
@@ -46,6 +50,7 @@ public class OwnerAttendanceViewController {
 
     /** Get attendance statistics for a class in a date range */
     @GetMapping("/classes/{classId}/stats")
+    @PreAuthorize("hasAuthority('ATTENDANCE_VIEW')")
     public AttendanceStatsResponse getStats(
             @PathVariable Long classId,
             @RequestParam(required = false) LocalDate startDate,

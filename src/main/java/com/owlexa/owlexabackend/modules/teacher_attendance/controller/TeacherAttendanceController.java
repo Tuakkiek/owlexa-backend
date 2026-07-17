@@ -7,6 +7,7 @@ import com.owlexa.owlexabackend.modules.teacher_attendance.service.TeacherAttend
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -22,6 +23,7 @@ public class TeacherAttendanceController {
     /** Batch mark teacher attendance for a date */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_ATT_MARK')")
     public List<TeacherAttendanceResponse> mark(
             @Valid @RequestBody TeacherAttendanceMarkRequest request
     ) {
@@ -30,6 +32,7 @@ public class TeacherAttendanceController {
 
     /** Query teacher attendance with filters */
     @GetMapping
+    @PreAuthorize("hasAuthority('TEACHER_ATT_VIEW')")
     public List<TeacherAttendanceResponse> findAll(
             @RequestParam(required = false) Long teacherId,
             @RequestParam(required = false) LocalDate date,
@@ -41,12 +44,14 @@ public class TeacherAttendanceController {
 
     /** Get a single teacher attendance record */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEACHER_ATT_VIEW')")
     public TeacherAttendanceResponse findById(@PathVariable Long id) {
         return teacherAttendanceService.findById(id);
     }
 
     /** Update a teacher attendance record */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('TEACHER_ATT_OVERRIDE')")
     public TeacherAttendanceResponse update(
             @PathVariable Long id,
             @RequestParam TeacherAttendanceStatus status,

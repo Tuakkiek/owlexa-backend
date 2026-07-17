@@ -10,6 +10,7 @@ import com.owlexa.owlexabackend.modules.mocktest.service.MockTestService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,23 +30,27 @@ public class MockTestController {
     private final MockTestService mockTestService;
 
     @GetMapping("/owner/mock-tests")
+    @PreAuthorize("hasAuthority('TEST_VIEW')")
     public List<MockTestResponse> getOwnerTests() {
         return mockTestService.getOwnerTests();
     }
 
     @PostMapping("/owner/mock-tests")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEST_CREATE')")
     public MockTestResponse createTest(@Valid @RequestBody MockTestRequest request) {
         return mockTestService.createTest(request);
     }
 
     @PutMapping("/owner/mock-tests/{testId}")
+    @PreAuthorize("hasAuthority('TEST_CREATE')")
     public MockTestResponse updateTest(@PathVariable Long testId, @Valid @RequestBody MockTestRequest request) {
         return mockTestService.updateTest(testId, request);
     }
 
     @DeleteMapping("/owner/mock-tests/{testId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEST_CREATE')")
     public void deleteTest(@PathVariable Long testId) {
         mockTestService.deleteTest(testId);
     }

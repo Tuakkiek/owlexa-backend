@@ -14,4 +14,5 @@ public class AuthResponse {
     private String roleName;
     private String centerName;
     private Long centerId;
+    private java.util.List<String> permissions;
 }

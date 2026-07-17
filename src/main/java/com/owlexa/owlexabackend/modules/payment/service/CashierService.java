@@ -4,7 +4,9 @@ import com.owlexa.owlexabackend.modules.payment.dto.response.CashierResponse;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.dto.request.BulkPermissionOverrideRequest;
 import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.service.UserPermissionService;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
@@ -30,8 +32,9 @@ public class CashierService {
     private final PasswordEncoder passwordEncoder;
     private final MembershipRepository membershipRepository;
     private final CenterRepository centerRepository;
+    private final UserPermissionService userPermissionService;
 
-    private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     // Create
@@ -82,6 +85,8 @@ public class CashierService {
 
             createMembership(cashierUser, center, currentUser);
         }
+
+        applyPermissionOverridesIfPresent(cashierUser.getId(), request.getPermissionOverrides());
 
         return toResponse(cashierUser, centerId, temporaryPassword);
 
@@ -137,6 +142,8 @@ public class CashierService {
         cashier.setFullName(fullName);
 
         cashier = userRepository.save(cashier);
+
+        applyPermissionOverridesIfPresent(cashier.getId(), request.getPermissionOverrides());
 
         return toResponse(cashier, centerId, null);
     }
@@ -195,6 +202,14 @@ public class CashierService {
         membership.setJoinedByUser(joinedByUser);
 
         membershipRepository.save(membership);
+    }
+
+    private void applyPermissionOverridesIfPresent(Long userId,
+                                                    java.util.List<com.owlexa.owlexabackend.modules.user.dto.request.PermissionOverrideItem> overrides) {
+        if (overrides != null && !overrides.isEmpty()) {
+            userPermissionService.applyOverrides(userId,
+                    BulkPermissionOverrideRequest.builder().overrides(overrides).build());
+        }
     }
 
     // Generate temporary password

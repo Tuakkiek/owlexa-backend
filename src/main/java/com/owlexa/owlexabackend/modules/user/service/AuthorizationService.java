@@ -4,7 +4,6 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,8 +12,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.net.Authenticator;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +21,7 @@ import java.util.Locale;
 public class AuthorizationService {
 
     private final UserRepository userRepository;
-    private final UserPermissionRepository userPermissionRepository;
+    private final PermissionResolver permissionResolver;
     private final CenterRepository centerRepository;
 
 
@@ -31,6 +30,11 @@ public class AuthorizationService {
         return currentUser.getRole() == role;
     }
 
+    /**
+     * Checks whether the current user has the given permission,
+     * considering BOTH role defaults (role_permission table) AND
+     * user-level overrides (user_permission table).
+     */
     public boolean hasPermission(String permissionCode) {
         if (permissionCode == null || permissionCode.isBlank()) {
             return false;
@@ -39,10 +43,10 @@ public class AuthorizationService {
         User currentUser = getCurrentUser();
         String normalizedCode = permissionCode.trim().toUpperCase(Locale.ROOT);
 
-        return userPermissionRepository.existsByUser_IdAndPermissionCode(
-                currentUser.getId(),
-                normalizedCode
-        );
+        Set<String> effectivePermissions = permissionResolver.resolvePermissions(
+                currentUser.getId(), currentUser.getRole());
+
+        return effectivePermissions.contains(normalizedCode);
     }
 
     public boolean isOwnerOfCenter(Long centerId) {
