@@ -34,4 +34,8 @@ public class UserPermission {
     @CreationTimestamp
     @Column(name = "granted_at", nullable = false, updatable = false)
     private Instant grantedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false, length = 20)
+    private PermissionOverrideType type = PermissionOverrideType.ALLOW;
 }

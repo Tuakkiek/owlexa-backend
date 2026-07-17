@@ -19,6 +19,7 @@ import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.teacher.repository.TeacherCenterProfileRepository;
+import com.owlexa.owlexabackend.modules.user.service.UserPermissionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,7 @@ class TeacherServiceTest {
     @Mock private CenterRepository centerRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private TeacherCenterProfileRepository teacherCenterProfileRepository;
+    @Mock private UserPermissionService userPermissionService;
 
     private TeacherService service;
 
@@ -63,7 +65,7 @@ class TeacherServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TeacherService(userRepository, membershipRepository, centerRepository, passwordEncoder, teacherCenterProfileRepository);
+        service = new TeacherService(userRepository, membershipRepository, centerRepository, passwordEncoder, teacherCenterProfileRepository, userPermissionService);
         TenantContext.setCurrentTenantId(CENTER_ID);
 
         SecurityContextHolder.getContext().setAuthentication(

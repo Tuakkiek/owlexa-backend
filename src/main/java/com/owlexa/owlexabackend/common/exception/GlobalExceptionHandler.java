@@ -45,6 +45,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicate(DuplicateResourceException ex) {
+        log.error("[409] DuplicateResourceException thrown: class={}, message={}", ex.getClass().getName(), ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(
                 409,
                 ex.getMessage(),
@@ -63,6 +64,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(BadRequestException ex) {
+        log.error("[400] BadRequestException thrown: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
                 ex.getMessage(),
@@ -111,6 +113,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex) {
+        log.error("[409] DataIntegrityViolationException thrown: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(
                 409,
                 "Database constraint violation: cannot delete or modify because this resource is referenced by other records",

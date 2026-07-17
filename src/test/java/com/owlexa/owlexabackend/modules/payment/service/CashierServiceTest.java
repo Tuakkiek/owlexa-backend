@@ -12,6 +12,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
+import com.owlexa.owlexabackend.modules.user.service.UserPermissionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +44,7 @@ class CashierServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private MembershipRepository membershipRepository;
     @Mock private CenterRepository centerRepository;
+    @Mock private UserPermissionService userPermissionService;
 
     private CashierService service;
 
@@ -53,7 +55,7 @@ class CashierServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new CashierService(userRepository, passwordEncoder, membershipRepository, centerRepository);
+        service = new CashierService(userRepository, passwordEncoder, membershipRepository, centerRepository, userPermissionService);
         TenantContext.setCurrentTenantId(CENTER_ID);
 
         SecurityContextHolder.getContext().setAuthentication(

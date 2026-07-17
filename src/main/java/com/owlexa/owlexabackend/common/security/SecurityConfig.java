@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -21,6 +22,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -58,11 +60,6 @@ public class SecurityConfig {
                                 "/auth/sessions",
                                 "/auth/sessions/**"
                         ).authenticated()
-                        .requestMatchers("/admin/**").hasAnyAuthority("ADMIN")
-                        .requestMatchers("/owner/**").hasAnyAuthority("OWNER")
-                        .requestMatchers("/teacher/**").hasAnyAuthority("TEACHER")
-                        .requestMatchers("/student/**").hasAnyAuthority("STUDENT")
-                        .requestMatchers("/cashier/**").hasAnyAuthority("CASHIER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(domainResolverFilter, UsernamePasswordAuthenticationFilter.class)
