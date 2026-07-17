@@ -1,6 +1,5 @@
 package com.owlexa.owlexabackend.modules.user.service;
 
-import com.owlexa.owlexabackend.modules.user.entity.PermissionOverrideType;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.RolePermission;
 import com.owlexa.owlexabackend.modules.user.entity.UserPermission;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Service;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,11 +31,21 @@ public class PermissionResolver {
         // The annotation does the work — this method body is intentionally empty.
     }
 
+    /**
+     * Resolves the effective permissions for a user.
+     *
+     * Simplified RBAC model (Phase 1):
+     *   1. Start with ALL permissions from the user's role (role_permission table).
+     *   2. Remove any permission that has a user_permission record (disabled).
+     *
+     * User permissions are always a SUBSET of role permissions —
+     * they can never be expanded beyond what the role allows.
+     */
     @Cacheable(value = "userPermissions", key = "#userId")
     public Set<String> resolvePermissions(Long userId, Role role) {
         Set<String> finalPermissions = new HashSet<>();
 
-        // 1. Load default Role Permissions
+        // 1. Load all Role Permissions (the baseline)
         if (role != null) {
             List<RolePermission> rolePerms = rolePermissionRepository.findAllByRole(role);
             for (RolePermission rp : rolePerms) {
@@ -47,19 +55,10 @@ public class PermissionResolver {
             }
         }
 
-        // 2. Load User Permission Overrides
+        // 2. Remove any permission that has a user_permission record (disabled)
         List<UserPermission> userPerms = userPermissionRepository.findAllByUser_Id(userId);
-
-        // First apply ALLOWs
         for (UserPermission up : userPerms) {
-            if (up.getType() == PermissionOverrideType.ALLOW && up.getPermission() != null) {
-                finalPermissions.add(up.getPermission().getCode());
-            }
-        }
-
-        // Then apply DENYs (remove from final set)
-        for (UserPermission up : userPerms) {
-            if (up.getType() == PermissionOverrideType.DENY && up.getPermission() != null) {
+            if (up.getPermission() != null && up.getPermission().getCode() != null) {
                 finalPermissions.remove(up.getPermission().getCode());
             }
         }

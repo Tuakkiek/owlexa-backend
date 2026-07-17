@@ -179,27 +179,128 @@ INSERT INTO users (phone_number, email, full_name, password, role) VALUES
 ('0906200025', 'tai.do@email.com',             'Do Van Tai',               '$2a$10$0FxtjwbmKTcDr2hLPwqb1.0DGjQWU25XP93zOodK1UjPf2t.twWvS', 'STUDENT');
 
 -- ================================================================
--- 2. PERMISSIONS
--- Codes match what the code actually checks/grants:
---   - CenterController checks hasPermission("CENTER_CREATE")
---   - AuthService.getDefaultPermissionCode(role) documents the
---     intended default grant per role (CENTER_CREATE/VIEW_STUDENT/
---     EDIT_FEE for OWNER, EDIT_FEE for CASHIER, VIEW_STUDENT for
---     TEACHER/STUDENT, VIEW_SALARY for ADMIN).
---   - MANAGE_CLASS / MANAGE_TEACHER aren't referenced by any
---     @PreAuthorize-style check today, but they exist as the
---     natural OWNER-level capabilities and are kept for the
---     permission-management UI/API to assign.
--- (The old v4 codes MANAGE_STUDENTS, VIEW_REPORTS, MARK_ATTENDANCE,
---  etc. do not appear anywhere in the codebase and were removed.)
+-- 2. PERMISSIONS (aligned with V8__seed_rbac_data.sql — 57 codes)
+-- Uses INSERT IGNORE so it is safe to run after Flyway migrations.
 -- ================================================================
-INSERT INTO permissions (code, description) VALUES
-('CENTER_CREATE',  'Can create a new center'),
-('VIEW_STUDENT',   'Can view student data'),
-('EDIT_FEE',       'Can edit fee records and payments'),
-('VIEW_SALARY',    'Can view teacher salary data'),
-('MANAGE_CLASS',   'Can create, update, and manage classes'),
-('MANAGE_TEACHER', 'Can create, update, and manage teachers');
+INSERT IGNORE INTO permissions (code, description) VALUES
+('CENTER_VIEW', 'View center details'),
+('CENTER_SETTINGS_UPDATE', 'Update center settings'),
+('USER_VIEW', 'View users'),
+('USER_CREATE', 'Create users'),
+('USER_UPDATE', 'Update users'),
+('USER_DEACTIVATE', 'Deactivate users'),
+('STUDENT_VIEW', 'View students'),
+('STUDENT_ENROLL', 'Enroll students'),
+('STUDENT_UPDATE', 'Update students'),
+('STUDENT_APPROVE_LEAVE', 'Approve student leave'),
+('TEACHER_VIEW', 'View teachers'),
+('TEACHER_ASSIGN', 'Assign teachers'),
+('TEACHER_SCHEDULE_EDIT', 'Edit teacher schedule'),
+('COURSE_VIEW', 'View courses'),
+('COURSE_CREATE', 'Create courses'),
+('COURSE_EDIT', 'Edit courses'),
+('COURSE_ARCHIVE', 'Archive courses'),
+('ROOM_VIEW', 'View rooms'),
+('ROOM_BOOK', 'Book rooms'),
+('ROOM_MAINTENANCE', 'Manage room maintenance'),
+('CLASS_VIEW', 'View classes'),
+('CLASS_CREATE', 'Create classes'),
+('CLASS_OPEN', 'Open classes'),
+('CLASS_START', 'Start classes'),
+('CLASS_FINISH', 'Finish classes'),
+('CLASS_ARCHIVE', 'Archive classes'),
+('SCHEDULE_VIEW', 'View schedules'),
+('SCHEDULE_GENERATE', 'Generate schedules'),
+('SCHEDULE_EDIT_SINGLE', 'Edit single schedule'),
+('SCHEDULE_EDIT_BULK', 'Bulk edit schedules'),
+('ATTENDANCE_VIEW', 'View attendance'),
+('ATTENDANCE_MARK', 'Mark attendance'),
+('ATTENDANCE_OVERRIDE', 'Override attendance'),
+('TEACHER_ATT_VIEW', 'View teacher attendance'),
+('TEACHER_ATT_MARK', 'Mark teacher attendance'),
+('TEACHER_ATT_OVERRIDE', 'Override teacher attendance'),
+('FEE_VIEW', 'View fees'),
+('FEE_GENERATE', 'Generate fees'),
+('FEE_ADJUST', 'Adjust fees'),
+('PAYMENT_VIEW', 'View payments'),
+('PAYMENT_COLLECT', 'Collect payments'),
+('PAYMENT_REFUND', 'Refund payments'),
+('PAYMENT_VOID', 'Void payments'),
+('ESSAY_VIEW', 'View essays'),
+('ESSAY_SUBMIT', 'Submit essays'),
+('ESSAY_GRADE', 'Grade essays'),
+('TEST_VIEW', 'View tests'),
+('TEST_CREATE', 'Create tests'),
+('TEST_GRADE', 'Grade tests'),
+('DOCUMENT_VIEW', 'View documents'),
+('DOCUMENT_UPLOAD', 'Upload documents'),
+('DOCUMENT_DELETE', 'Delete documents'),
+('REPORT_ACADEMIC_VIEW', 'View academic reports'),
+('REPORT_FINANCE_VIEW', 'View finance reports'),
+('SALARY_VIEW', 'View salaries'),
+('SALARY_CALCULATE', 'Calculate salaries'),
+('SALARY_APPROVE', 'Approve salaries'),
+('DASHBOARD_ACADEMIC', 'View academic dashboard'),
+('DASHBOARD_FINANCE', 'View finance dashboard'),
+('DASHBOARD_OWNER', 'View owner dashboard');
+
+-- ================================================================
+-- 2b. ROLE PERMISSIONS (aligned with V8__seed_rbac_data.sql)
+-- Uses INSERT IGNORE so it is safe to run after Flyway migrations.
+-- ================================================================
+
+-- OWNER: all permissions
+INSERT IGNORE INTO role_permission (role, permission_id)
+SELECT 'OWNER', id FROM permissions;
+
+-- MANAGER: all except CENTER_SETTINGS_UPDATE, SALARY_APPROVE, PAYMENT_VOID
+INSERT IGNORE INTO role_permission (role, permission_id)
+SELECT 'MANAGER', id FROM permissions
+WHERE code NOT IN ('CENTER_SETTINGS_UPDATE', 'SALARY_APPROVE', 'PAYMENT_VOID');
+
+-- ACADEMIC_STAFF: academic scope
+INSERT IGNORE INTO role_permission (role, permission_id)
+SELECT 'ACADEMIC_STAFF', id FROM permissions
+WHERE code IN (
+    'STUDENT_VIEW', 'STUDENT_ENROLL', 'STUDENT_UPDATE', 'STUDENT_APPROVE_LEAVE',
+    'TEACHER_VIEW', 'TEACHER_ASSIGN', 'TEACHER_SCHEDULE_EDIT',
+    'COURSE_VIEW', 'COURSE_CREATE', 'COURSE_EDIT', 'COURSE_ARCHIVE',
+    'ROOM_VIEW', 'ROOM_BOOK', 'ROOM_MAINTENANCE',
+    'CLASS_VIEW', 'CLASS_CREATE', 'CLASS_OPEN', 'CLASS_START', 'CLASS_FINISH', 'CLASS_ARCHIVE',
+    'SCHEDULE_VIEW', 'SCHEDULE_GENERATE', 'SCHEDULE_EDIT_SINGLE', 'SCHEDULE_EDIT_BULK',
+    'ATTENDANCE_VIEW', 'ATTENDANCE_MARK', 'ATTENDANCE_OVERRIDE',
+    'TEACHER_ATT_VIEW', 'TEACHER_ATT_MARK', 'TEACHER_ATT_OVERRIDE',
+    'REPORT_ACADEMIC_VIEW', 'DASHBOARD_ACADEMIC'
+);
+
+-- CASHIER: finance scope
+INSERT IGNORE INTO role_permission (role, permission_id)
+SELECT 'CASHIER', id FROM permissions
+WHERE code IN (
+    'STUDENT_VIEW',
+    'FEE_VIEW', 'FEE_GENERATE', 'FEE_ADJUST',
+    'PAYMENT_VIEW', 'PAYMENT_COLLECT', 'PAYMENT_REFUND',
+    'REPORT_FINANCE_VIEW', 'DASHBOARD_FINANCE'
+);
+
+-- TEACHER: teaching scope
+INSERT IGNORE INTO role_permission (role, permission_id)
+SELECT 'TEACHER', id FROM permissions
+WHERE code IN (
+    'CLASS_VIEW', 'SCHEDULE_VIEW', 'ATTENDANCE_MARK',
+    'ESSAY_VIEW', 'ESSAY_GRADE',
+    'TEST_VIEW', 'TEST_GRADE',
+    'DOCUMENT_VIEW', 'DOCUMENT_UPLOAD'
+);
+
+-- STUDENT: limited scope
+INSERT IGNORE INTO role_permission (role, permission_id)
+SELECT 'STUDENT', id FROM permissions
+WHERE code IN (
+    'STUDENT_VIEW', 'SCHEDULE_VIEW',
+    'ESSAY_VIEW', 'ESSAY_SUBMIT',
+    'PAYMENT_VIEW'
+);
 
 -- ================================================================
 -- 3. CENTERS
@@ -232,21 +333,12 @@ INSERT INTO membership (center_id, user_id, joined_by_user_id, joined_at) VALUES
 (2, 59, 3,  NOW());
 
 -- ================================================================
--- 5. USER PERMISSIONS
--- permission_id: 1=CENTER_CREATE 2=VIEW_STUDENT 3=EDIT_FEE
---                4=VIEW_SALARY   5=MANAGE_CLASS 6=MANAGE_TEACHER
+-- 5. USER PERMISSION OVERRIDES
+-- Role defaults are handled by role_permission (section 2b).
+-- A row in user_permission means the permission is DISABLED for that user.
+-- No rows = all role permissions are enabled.
+-- No default overrides are needed for seed data.
 -- ================================================================
-INSERT INTO user_permission (user_id, permission_id, granted_at) VALUES
--- Admin (1): VIEW_SALARY
-(1, 4, NOW()),
--- Owner Center 1 (2): everything an OWNER needs
-(2, 1, NOW()), (2, 2, NOW()), (2, 3, NOW()), (2, 5, NOW()), (2, 6, NOW()),
--- Owner Center 2 (3): everything an OWNER needs
-(3, 1, NOW()), (3, 2, NOW()), (3, 3, NOW()), (3, 5, NOW()), (3, 6, NOW()),
--- Teachers (4,5,6,7): VIEW_STUDENT
-(4, 2, NOW()), (5, 2, NOW()), (6, 2, NOW()), (7, 2, NOW()),
--- Cashiers (8,9): EDIT_FEE
-(8, 3, NOW()), (9, 3, NOW());
 
 -- ================================================================
 -- 6. COURSES

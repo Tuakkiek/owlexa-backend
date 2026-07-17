@@ -12,7 +12,8 @@ import lombok.NoArgsConstructor;
 public class SinglePermissionOverrideRequest {
 
     /**
-     * Override type: {@code ALLOW}, {@code DENY}, or {@code INHERIT}.
+     * Override type: {@code DISABLED} to revoke, or {@code INHERIT} to restore.
+     * ALLOW and DENY are accepted for backward compatibility.
      */
     private String type;
 }

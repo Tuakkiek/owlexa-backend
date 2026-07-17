@@ -70,6 +70,7 @@ public class PaymentService {
         Long centerId = requiredCurrentCenterId();
 
         assertCenterMembership(currentUser, centerId);
+        assertCanCollectPayment(currentUser, centerId);
 
         FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
                 .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));

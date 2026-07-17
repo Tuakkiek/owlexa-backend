@@ -5,6 +5,7 @@ import com.owlexa.owlexabackend.modules.payment.service.PaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +21,7 @@ public class PaymentController {
             "/cashier/fee-record/{feeRecordId}/payments/cash"
     })
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('PAYMENT_COLLECT')")
     public PaymentResponse collectCash(
             @PathVariable Long feeRecordId,
             @Valid @RequestBody CashPaymentRequest request
@@ -31,6 +33,7 @@ public class PaymentController {
             "/owner/fee-record/{feeRecordId}/payments",
             "/cashier/fee-record/{feeRecordId}/payments"
     })
+    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
     public List<PaymentResponse> findAllByFeeRecord(
             @PathVariable Long feeRecordId
     ) {
@@ -46,6 +49,7 @@ public class PaymentController {
             "/owner/payments",
             "/cashier/payments"
     })
+    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
     public List<PaymentResponse> findAllByCenter() {
         return paymentService.findAllByCenter();
     }

@@ -5,7 +5,6 @@ import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
-import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,7 +29,7 @@ import static org.mockito.Mockito.when;
 class AuthorizationServiceTest {
 
     @Mock private UserRepository userRepository;
-    @Mock private UserPermissionRepository userPermissionRepository;
+    @Mock private PermissionResolver permissionResolver;
     @Mock private CenterRepository centerRepository;
 
     private AuthorizationService service;
@@ -39,7 +39,7 @@ class AuthorizationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthorizationService(userRepository, userPermissionRepository, centerRepository);
+        service = new AuthorizationService(userRepository, permissionResolver, centerRepository);
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(PHONE, null, List.of())
@@ -94,8 +94,8 @@ class AuthorizationServiceTest {
     void hasPermission_shouldNormalizeCodeToUppercase() {
         when(userRepository.findByPhoneNumber(PHONE))
                 .thenReturn(Optional.of(buildUser(Role.OWNER)));
-        when(userPermissionRepository.existsByUser_IdAndPermissionCode(USER_ID, "CENTER_CREATE"))
-                .thenReturn(true);
+        when(permissionResolver.resolvePermissions(USER_ID, Role.OWNER))
+                .thenReturn(Set.of("CENTER_CREATE"));
 
         assertThat(service.hasPermission("center_create")).isTrue();
     }
@@ -105,8 +105,8 @@ class AuthorizationServiceTest {
     void hasPermission_whenUserHasPermission_shouldReturnTrue() {
         when(userRepository.findByPhoneNumber(PHONE))
                 .thenReturn(Optional.of(buildUser(Role.OWNER)));
-        when(userPermissionRepository.existsByUser_IdAndPermissionCode(USER_ID, "FEE_COLLECT"))
-                .thenReturn(true);
+        when(permissionResolver.resolvePermissions(USER_ID, Role.OWNER))
+                .thenReturn(Set.of("FEE_COLLECT"));
 
         assertThat(service.hasPermission("FEE_COLLECT")).isTrue();
     }
@@ -116,8 +116,8 @@ class AuthorizationServiceTest {
     void hasPermission_whenUserDoesNotHavePermission_shouldReturnFalse() {
         when(userRepository.findByPhoneNumber(PHONE))
                 .thenReturn(Optional.of(buildUser(Role.OWNER)));
-        when(userPermissionRepository.existsByUser_IdAndPermissionCode(USER_ID, "FEE_COLLECT"))
-                .thenReturn(false);
+        when(permissionResolver.resolvePermissions(USER_ID, Role.OWNER))
+                .thenReturn(Set.of("OTHER_PERMISSION"));
 
         assertThat(service.hasPermission("FEE_COLLECT")).isFalse();
     }

@@ -6,6 +6,7 @@ import com.owlexa.owlexabackend.modules.attendance.service.AttendanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ public class TeacherStudentAttendanceController {
     /** Teacher marks attendance for students in their own schedule */
     @PostMapping("/schedules/{scheduleId}")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
     public List<AttendanceResponse> mark(
             @PathVariable Long scheduleId,
             @Valid @RequestBody AttendanceMarkRequest request
@@ -30,6 +32,7 @@ public class TeacherStudentAttendanceController {
 
     /** Teacher views attendance for their own schedule */
     @GetMapping("/schedules/{scheduleId}")
+    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
     public List<AttendanceResponse> findBySchedule(
             @PathVariable Long scheduleId,
             @RequestParam LocalDate date

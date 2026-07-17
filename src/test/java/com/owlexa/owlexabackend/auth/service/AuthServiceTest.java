@@ -18,8 +18,10 @@ import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.PermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
+import com.owlexa.owlexabackend.modules.user.service.PermissionResolver;
 import com.owlexa.owlexabackend.common.security.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,8 +31,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,8 +67,19 @@ class AuthServiceTest {
     @Mock
     private PermissionRepository permissionRepository;
 
+    @Mock
+    private PermissionResolver permissionResolver;
+
     @InjectMocks
     private AuthService authService;
+
+    @BeforeEach
+    void setUp() {
+        // PermissionResolver is a required dependency of AuthService.buildAuthResponse().
+        // Stub it leniently so all tests get a default empty permission set.
+        lenient().when(permissionResolver.resolvePermissions(any(), any()))
+                .thenReturn(new HashSet<>());
+    }
 
     private HttpServletRequest createMockRequest() {
         HttpServletRequest request = org.mockito.Mockito.mock(HttpServletRequest.class);

@@ -8,7 +8,6 @@ import com.owlexa.owlexabackend.modules.user.dto.response.EffectivePermission;
 import com.owlexa.owlexabackend.modules.user.dto.response.PermissionResponse;
 import com.owlexa.owlexabackend.modules.user.dto.response.UserPermissionsResponse;
 import com.owlexa.owlexabackend.modules.user.entity.Permission;
-import com.owlexa.owlexabackend.modules.user.entity.PermissionOverrideType;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.RolePermission;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -17,6 +16,7 @@ import com.owlexa.owlexabackend.modules.user.repository.PermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.RolePermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserPermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
+import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +43,7 @@ class UserPermissionServiceTest {
     @Mock private PermissionRepository permissionRepository;
     @Mock private RolePermissionRepository rolePermissionRepository;
     @Mock private UserPermissionRepository userPermissionRepository;
+    @Mock private UserSessionRepository sessionRepository;
     @Mock private PermissionResolver permissionResolver;
 
     private UserPermissionService service;
@@ -55,7 +56,7 @@ class UserPermissionServiceTest {
         service = new UserPermissionService(
                 userRepository, permissionRepository,
                 rolePermissionRepository, userPermissionRepository,
-                permissionResolver);
+                sessionRepository, permissionResolver);
     }
 
     // ── helpers ──
@@ -83,11 +84,10 @@ class UserPermissionServiceTest {
         return rp;
     }
 
-    private UserPermission up(User user, Permission p, PermissionOverrideType type) {
+    private UserPermission up(User user, Permission p) {
         UserPermission up = new UserPermission();
         up.setUser(user);
         up.setPermission(p);
-        up.setType(type);
         return up;
     }
 
@@ -124,8 +124,6 @@ class UserPermissionServiceTest {
         User user = buildUser();
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(permissionRepository.findAllByOrderByCodeAsc())
-                .thenReturn(List.of(classView, essayGrade));
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
                 .thenReturn(List.of(rp(USER_ROLE, classView), rp(USER_ROLE, essayGrade)));
         when(userPermissionRepository.findAllByUser_Id(USER_ID))
@@ -136,43 +134,34 @@ class UserPermissionServiceTest {
         assertThat(result.getUserId()).isEqualTo(USER_ID);
         assertThat(result.getRoleName()).isEqualTo("TEACHER");
         assertThat(result.getPermissions()).hasSize(2);
-        assertThat(result.getPermissions().get(0).getSource()).isEqualTo("ROLE_DEFAULT");
-        assertThat(result.getPermissions().get(1).getSource()).isEqualTo("ROLE_DEFAULT");
+        assertThat(result.getPermissions().get(0).getSource()).isEqualTo("ENABLED");
+        assertThat(result.getPermissions().get(1).getSource()).isEqualTo("ENABLED");
     }
 
     @Test
-    @DisplayName("getEffectivePermissions — with ALLOW and DENY overrides")
-    void getEffectivePermissions_withOverrides() {
+    @DisplayName("getEffectivePermissions — with DENY override shows DISABLED")
+    void getEffectivePermissions_withDenyOverride() {
         Permission classView = perm(1L, "CLASS_VIEW", "View classes");
-        Permission paymentView = perm(2L, "PAYMENT_VIEW", "View payments");
         Permission docUpload = perm(3L, "DOCUMENT_UPLOAD", "Upload docs");
         User user = buildUser();
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(permissionRepository.findAllByOrderByCodeAsc())
-                .thenReturn(List.of(classView, paymentView, docUpload));
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
                 .thenReturn(List.of(rp(USER_ROLE, classView), rp(USER_ROLE, docUpload)));
         when(userPermissionRepository.findAllByUser_Id(USER_ID))
                 .thenReturn(List.of(
-                        up(user, paymentView, PermissionOverrideType.ALLOW),
-                        up(user, docUpload, PermissionOverrideType.DENY)));
+                        up(user, docUpload)));
 
         UserPermissionsResponse result = service.getEffectivePermissions(USER_ID);
 
-        assertThat(result.getPermissions()).hasSize(3);
-        // Find by code
+        assertThat(result.getPermissions()).hasSize(2);
         EffectivePermission cp = result.getPermissions().stream()
                 .filter(p -> p.getCode().equals("CLASS_VIEW")).findFirst().orElseThrow();
-        assertThat(cp.getSource()).isEqualTo("ROLE_DEFAULT");
-
-        EffectivePermission pp = result.getPermissions().stream()
-                .filter(p -> p.getCode().equals("PAYMENT_VIEW")).findFirst().orElseThrow();
-        assertThat(pp.getSource()).isEqualTo("ALLOW");
+        assertThat(cp.getSource()).isEqualTo("ENABLED");
 
         EffectivePermission dp = result.getPermissions().stream()
                 .filter(p -> p.getCode().equals("DOCUMENT_UPLOAD")).findFirst().orElseThrow();
-        assertThat(dp.getSource()).isEqualTo("DENY");
+        assertThat(dp.getSource()).isEqualTo("DISABLED");
     }
 
     @Test
@@ -189,38 +178,33 @@ class UserPermissionServiceTest {
     // ═══════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("applyOverrides — replaces all existing overrides and evicts cache")
-    void applyOverrides_replacesAndEvicts() {
+    @DisplayName("applyOverrides — DENY disables a role permission")
+    void applyOverrides_denyDisablesRolePermission() {
         User user = buildUser();
-        Permission paymentView = perm(2L, "PAYMENT_VIEW", "View payments");
+        Permission attMark = perm(2L, "ATTENDANCE_MARK", "Mark attendance");
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(permissionRepository.findByCode("PAYMENT_VIEW"))
-                .thenReturn(Optional.of(paymentView));
-        when(permissionRepository.findAllByOrderByCodeAsc())
-                .thenReturn(List.of(paymentView));
+        when(permissionRepository.findByCode("ATTENDANCE_MARK"))
+                .thenReturn(Optional.of(attMark));
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
-                .thenReturn(List.of());
+                .thenReturn(List.of(rp(USER_ROLE, attMark)));
         when(userPermissionRepository.findAllByUser_Id(USER_ID))
                 .thenReturn(List.of());
 
         BulkPermissionOverrideRequest request = BulkPermissionOverrideRequest.builder()
                 .overrides(List.of(PermissionOverrideItem.builder()
-                        .permissionCode("PAYMENT_VIEW")
-                        .type("ALLOW")
+                        .permissionCode("ATTENDANCE_MARK")
+                        .type("DENY")
                         .build()))
                 .build();
 
         UserPermissionsResponse result = service.applyOverrides(USER_ID, request);
 
-        // Verify deletes existing overrides
         verify(userPermissionRepository).deleteByUser_Id(USER_ID);
-        // Verify saves new override
         ArgumentCaptor<UserPermission> captor = ArgumentCaptor.forClass(UserPermission.class);
         verify(userPermissionRepository).save(captor.capture());
-        assertThat(captor.getValue().getType()).isEqualTo(PermissionOverrideType.ALLOW);
-        assertThat(captor.getValue().getPermission().getCode()).isEqualTo("PAYMENT_VIEW");
-        // Verify cache eviction
+        assertThat(captor.getValue().getPermission().getCode()).isEqualTo("ATTENDANCE_MARK");
+        assertThat(captor.getValue().getPermission().getCode()).isEqualTo("ATTENDANCE_MARK");
         verify(permissionResolver).evictCache(USER_ID);
     }
 
@@ -231,8 +215,6 @@ class UserPermissionServiceTest {
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(userRepository.existsById(USER_ID)).thenReturn(true);
-        when(permissionRepository.findAllByOrderByCodeAsc())
-                .thenReturn(List.of());
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
                 .thenReturn(List.of());
         when(userPermissionRepository.findAllByUser_Id(USER_ID))
@@ -255,8 +237,6 @@ class UserPermissionServiceTest {
         User user = buildUser();
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(permissionRepository.findAllByOrderByCodeAsc())
-                .thenReturn(List.of());
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
                 .thenReturn(List.of());
         when(userPermissionRepository.findAllByUser_Id(USER_ID))
@@ -264,7 +244,7 @@ class UserPermissionServiceTest {
 
         BulkPermissionOverrideRequest request = BulkPermissionOverrideRequest.builder()
                 .overrides(List.of(PermissionOverrideItem.builder()
-                        .permissionCode("PAYMENT_VIEW")
+                        .permissionCode("CLASS_VIEW")
                         .type("INHERIT")
                         .build()))
                 .build();
@@ -284,7 +264,7 @@ class UserPermissionServiceTest {
 
         BulkPermissionOverrideRequest request = BulkPermissionOverrideRequest.builder()
                 .overrides(List.of(PermissionOverrideItem.builder()
-                        .permissionCode("PAYMENT_VIEW")
+                        .permissionCode("CLASS_VIEW")
                         .type("INVALID")
                         .build()))
                 .build();
@@ -293,49 +273,72 @@ class UserPermissionServiceTest {
                 .isInstanceOf(BadRequestException.class);
     }
 
+    @Test
+    @DisplayName("applyOverrides — non-role permission rejected")
+    void applyOverrides_nonRolePermission_rejected() {
+        User user = buildUser();
+        Permission classView = perm(1L, "CLASS_VIEW", "View classes");
+
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        // TEACHER role does NOT have PAYMENT_VIEW
+        when(rolePermissionRepository.findAllByRole(USER_ROLE))
+                .thenReturn(List.of(rp(USER_ROLE, classView)));
+
+        BulkPermissionOverrideRequest request = BulkPermissionOverrideRequest.builder()
+                .overrides(List.of(PermissionOverrideItem.builder()
+                        .permissionCode("PAYMENT_VIEW")
+                        .type("DENY")
+                        .build()))
+                .build();
+
+        assertThatThrownBy(() -> service.applyOverrides(USER_ID, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("does not belong to role");
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // updateSingleOverride
     // ═══════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("updateSingleOverride — ALLOW creates new override")
-    void updateSingleOverride_allow() {
+    @DisplayName("updateSingleOverride — DISABLED creates disable record")
+    void updateSingleOverride_disable() {
         User user = buildUser();
-        Permission paymentView = perm(2L, "PAYMENT_VIEW", "View payments");
+        Permission attMark = perm(2L, "ATTENDANCE_MARK", "Mark attendance");
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(permissionRepository.findByCode("PAYMENT_VIEW"))
-                .thenReturn(Optional.of(paymentView));
-        when(userPermissionRepository.findByUser_IdAndPermission_Code(USER_ID, "PAYMENT_VIEW"))
+        when(permissionRepository.findByCode("ATTENDANCE_MARK"))
+                .thenReturn(Optional.of(attMark));
+        when(userPermissionRepository.findByUser_IdAndPermission_Code(USER_ID, "ATTENDANCE_MARK"))
                 .thenReturn(Optional.empty());
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
-                .thenReturn(List.of());
+                .thenReturn(List.of(rp(USER_ROLE, attMark)));
 
-        EffectivePermission result = service.updateSingleOverride(USER_ID, "PAYMENT_VIEW", "ALLOW");
+        EffectivePermission result = service.updateSingleOverride(USER_ID, "ATTENDANCE_MARK", "DISABLED");
 
-        assertThat(result.getSource()).isEqualTo("ALLOW");
+        assertThat(result.getSource()).isEqualTo("DISABLED");
         verify(userPermissionRepository).save(any(UserPermission.class));
         verify(permissionResolver).evictCache(USER_ID);
     }
 
     @Test
-    @DisplayName("updateSingleOverride — INHERIT removes existing override")
+    @DisplayName("updateSingleOverride — INHERIT removes existing disable record")
     void updateSingleOverride_inherit() {
         User user = buildUser();
-        Permission paymentView = perm(2L, "PAYMENT_VIEW", "View payments");
-        UserPermission existing = up(user, paymentView, PermissionOverrideType.ALLOW);
+        Permission docUpload = perm(2L, "DOCUMENT_UPLOAD", "Upload docs");
+        UserPermission existing = up(user, docUpload);
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(permissionRepository.findByCode("PAYMENT_VIEW"))
-                .thenReturn(Optional.of(paymentView));
-        when(userPermissionRepository.findByUser_IdAndPermission_Code(USER_ID, "PAYMENT_VIEW"))
+        when(permissionRepository.findByCode("DOCUMENT_UPLOAD"))
+                .thenReturn(Optional.of(docUpload));
+        when(userPermissionRepository.findByUser_IdAndPermission_Code(USER_ID, "DOCUMENT_UPLOAD"))
                 .thenReturn(Optional.of(existing));
         when(rolePermissionRepository.findAllByRole(USER_ROLE))
-                .thenReturn(List.of());
+                .thenReturn(List.of(rp(USER_ROLE, docUpload)));
 
-        EffectivePermission result = service.updateSingleOverride(USER_ID, "PAYMENT_VIEW", "INHERIT");
+        EffectivePermission result = service.updateSingleOverride(USER_ID, "DOCUMENT_UPLOAD", "INHERIT");
 
-        assertThat(result.getSource()).isEqualTo("ROLE_DEFAULT");
+        assertThat(result.getSource()).isEqualTo("ENABLED");
         verify(userPermissionRepository).delete(existing);
         verify(userPermissionRepository, never()).save(any());
         verify(permissionResolver).evictCache(USER_ID);

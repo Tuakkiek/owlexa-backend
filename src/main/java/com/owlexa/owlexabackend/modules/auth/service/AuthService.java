@@ -563,19 +563,6 @@ public class AuthService {
         return request.getRemoteAddr();
     }
 
-    private List<String> getDefaultPermissionCode(Role role) {
-        if (role == null) return List.of();
-        return switch (role) {
-            case OWNER   -> List.of("CENTER_CREATE", "VIEW_STUDENT", "EDIT_FEE");
-            case MANAGER -> List.of("CENTER_CREATE", "VIEW_STUDENT");
-            case ACADEMIC_STAFF -> List.of("VIEW_STUDENT");
-            case CASHIER -> List.of("EDIT_FEE");
-            case TEACHER -> List.of("VIEW_STUDENT");
-            case STUDENT -> List.of("VIEW_STUDENT");
-            case ADMIN   -> List.of("VIEW_SALARY");
-        };
-    }
-
     @lombok.Getter
     @lombok.Builder
     public static class LoginResult {
