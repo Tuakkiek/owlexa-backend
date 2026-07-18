@@ -1,4 +1,5 @@
 package com.owlexa.owlexabackend.modules.dashboard.controller;
+import com.owlexa.owlexabackend.modules.dashboard.dto.response.CashierDashboardStatsResponse;
 import com.owlexa.owlexabackend.modules.dashboard.dto.response.DashboardStatsResponse;
 import com.owlexa.owlexabackend.modules.dashboard.service.DashboardService;
 import lombok.RequiredArgsConstructor;
@@ -21,5 +22,15 @@ public class DashboardController {
     @PreAuthorize("hasAuthority('DASHBOARD_OWNER')")
     public DashboardStatsResponse getOwnerStats() {
         return dashboardService.getOwnerStats();
+    }
+
+    /**
+     * GET /cashier/dashboard/stats
+     * Returns cashier-specific stats: today's payments, pending payments, pending amount.
+     */
+    @GetMapping("/cashier/dashboard/stats")
+    @PreAuthorize("hasAuthority('DASHBOARD_FINANCE')")
+    public CashierDashboardStatsResponse getCashierStats() {
+        return dashboardService.getCashierStats();
     }
 }
