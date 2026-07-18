@@ -1,4 +1,5 @@
 package com.owlexa.owlexabackend.modules.dashboard.service;
+import com.owlexa.owlexabackend.modules.dashboard.dto.response.CashierDashboardStatsResponse;
 import com.owlexa.owlexabackend.modules.dashboard.dto.response.DashboardStatsResponse;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
@@ -30,6 +31,13 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 
 @Service
 @RequiredArgsConstructor
@@ -66,6 +74,38 @@ public class DashboardService {
                 .unpaidFeeRecords(unpaidFeeRecords)
                 .paidFeeRecords(paidFeeRecords)
                 .totalRevenue(totalRevenue)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public CashierDashboardStatsResponse getCashierStats() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.CASHIER) {
+            throw new AccessDeniedException("Only CASHIER can access cashier dashboard stats");
+        }
+
+        LocalDate today = LocalDate.now();
+        Instant startOfDay = today.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant startOfNextDay = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+        long totalPaymentsToday = paymentRepository.countByCenterIdAndCreatedAtBetween(centerId, startOfDay, startOfNextDay);
+        var totalAmountCollectedToday = paymentRepository.sumAmountByCenterIdAndCreatedAtBetween(centerId, startOfDay, startOfNextDay);
+        long totalPendingPayments = feeRecordRepository.countByCenter_IdAndStatus(centerId, FeeStatus.UNPAID);
+        var totalPendingAmount = feeRecordRepository.sumRemainingByCenterIdAndStatus(centerId, FeeStatus.UNPAID);
+
+        // This month stats
+        Instant startOfMonth = today.with(TemporalAdjusters.firstDayOfMonth()).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant startOfNextMonth = today.with(TemporalAdjusters.firstDayOfNextMonth()).atStartOfDay(ZoneId.systemDefault()).toInstant();
+        long totalPaymentsThisMonth = paymentRepository.countByCenterIdAndCreatedAtBetween(centerId, startOfMonth, startOfNextMonth);
+
+        return CashierDashboardStatsResponse.builder()
+                .totalPaymentsToday(totalPaymentsToday)
+                .totalAmountCollectedToday(totalAmountCollectedToday)
+                .totalPendingPayments(totalPendingPayments)
+                .totalPendingAmount(totalPendingAmount)
+                .totalPaymentsThisMonth(totalPaymentsThisMonth)
                 .build();
     }
 

@@ -60,6 +60,10 @@ public class SecurityConfig {
                                 "/auth/sessions",
                                 "/auth/sessions/**"
                         ).authenticated()
+                        .requestMatchers(
+                                "/account",
+                                "/account/**"
+                        ).authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(domainResolverFilter, UsernamePasswordAuthenticationFilter.class)
