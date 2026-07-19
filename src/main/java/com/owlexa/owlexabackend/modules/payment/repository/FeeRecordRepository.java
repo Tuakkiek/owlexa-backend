@@ -46,4 +46,19 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
     @Query("SELECT COALESCE(SUM(fr.amount - COALESCE(fr.paidAmount, 0)), 0) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status = :status")
     BigDecimal sumRemainingByCenterIdAndStatus(@Param("centerId") Long centerId,
                                                 @Param("status") FeeStatus status);
+
+    // ── Multi-status queries for unpaid list (UNPAID + PARTIAL) ──────────────
+
+    @Query("SELECT fr FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses AND fr.dueDate < :dueDate")
+    List<FeeRecord> findAllByCenter_IdAndStatusInAndDueDateBefore(@Param("centerId") Long centerId,
+                                                                   @Param("statuses") List<FeeStatus> statuses,
+                                                                   @Param("dueDate") LocalDate dueDate);
+
+    @Query("SELECT COUNT(fr) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses")
+    long countByCenter_IdAndStatusIn(@Param("centerId") Long centerId,
+                                     @Param("statuses") List<FeeStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(fr.amount - COALESCE(fr.paidAmount, 0)), 0) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses")
+    BigDecimal sumRemainingByCenterIdAndStatusIn(@Param("centerId") Long centerId,
+                                                  @Param("statuses") List<FeeStatus> statuses);
 }

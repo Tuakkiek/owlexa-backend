@@ -25,7 +25,9 @@ public class FeeRecordResponse {
     private String className;
 
     private BigDecimal amount;
+    private BigDecimal discountAmount;
     private BigDecimal paidAmount;
+    private BigDecimal remainingAmount;
     private String month;
     private LocalDate dueDate;
     private FeeStatus status;

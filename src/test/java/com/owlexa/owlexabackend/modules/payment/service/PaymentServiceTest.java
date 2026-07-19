@@ -10,7 +10,11 @@ import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
+import com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
@@ -45,6 +49,10 @@ class PaymentServiceTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private UserRepository userRepository;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private AuditLogRepository auditLogRepository;
+    @Mock private InstallmentRepository installmentRepository;
+    @Mock private RefundRepository refundRepository;
+    @Mock private DiscountRepository discountRepository;
 
     private PaymentService paymentService;
 
@@ -54,14 +62,15 @@ class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         paymentService = new PaymentService(
-                userRepository, membershipRepository, feeRecordRepository, paymentRepository
+                userRepository, membershipRepository, feeRecordRepository, paymentRepository,
+                auditLogRepository, installmentRepository, refundRepository, discountRepository
         );
         TenantContext.setCurrentTenantId(CURRENT_CENTER_ID);
 
         User currentUser = new User();
         currentUser.setId(10L);
         currentUser.setPhoneNumber("0901234567");
-        currentUser.setRole(Role.OWNER);
+        currentUser.setRole(Role.CASHIER);
         lenient().when(userRepository.findByPhoneNumber("0901234567"))
                 .thenReturn(Optional.of(currentUser));
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(10L, CURRENT_CENTER_ID))
@@ -72,6 +81,8 @@ class PaymentServiceTest {
                     p.setId(1L);
                     return p;
                 });
+        lenient().when(paymentRepository.findMaxReceiptNumberByPrefix(any(String.class)))
+                .thenReturn(null);
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("0901234567", null, List.of())
@@ -101,6 +112,7 @@ class PaymentServiceTest {
         fr.setClazz(clazz);
         fr.setStudentUser(student);
         fr.setAmount(amount);
+        fr.setDiscountAmount(BigDecimal.ZERO);
         fr.setPaidAmount(paid);
         fr.setStatus(FeeStatus.PARTIAL);
         fr.setMonth("2026-07");
@@ -180,5 +192,45 @@ class PaymentServiceTest {
         paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
 
         assertThat(feeRecord.getStatus()).isEqualTo(FeeStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("collectCash: phải sinh receipt number định dạng RCP-YYYYMMDD-NNNNNN")
+    void collectCash_shouldGenerateReceiptNumber() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), new BigDecimal("500"));
+        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+
+        var response = paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
+
+        assertThat(response.getReceiptNumber()).isNotNull();
+        assertThat(response.getReceiptNumber()).matches("RCP-\\d{8}-\\d{6}");
+    }
+
+    @Test
+    @DisplayName("collectCash: receipt number tăng tuần tự trong cùng ngày")
+    void collectCash_shouldIncrementReceiptNumberSequentially() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), new BigDecimal("500"));
+        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+
+        String todayPrefix = "RCP-" + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
+        when(paymentRepository.findMaxReceiptNumberByPrefix(todayPrefix)).thenReturn(todayPrefix + "000005");
+
+        var response = paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
+
+        assertThat(response.getReceiptNumber()).isEqualTo(todayPrefix + "000006");
+    }
+
+    @Test
+    @DisplayName("collectCash: default payment method = CASH")
+    void collectCash_shouldDefaultToCash() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), new BigDecimal("500"));
+        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+
+        var response = paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
+
+        assertThat(response.getMethod()).isEqualTo(PaymentMethod.CASH);
     }
 }
