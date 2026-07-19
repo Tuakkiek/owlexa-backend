@@ -8,8 +8,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-@Aspect
-@Component
+// FIXME: Requires @AuditLog annotation to be created. Disabled until annotation is defined.
+// @Aspect
+// @Component
 @Slf4j
 public class AuditAspect {
 

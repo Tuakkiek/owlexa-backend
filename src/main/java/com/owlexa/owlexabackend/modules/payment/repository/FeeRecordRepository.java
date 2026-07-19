@@ -2,7 +2,10 @@ package com.owlexa.owlexabackend.modules.payment.repository;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -39,4 +42,23 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
     long countByCenter_IdAndStatus(Long centerId, FeeStatus status);
 
     void deleteByCenter_Id(Long centerId);
+
+    @Query("SELECT COALESCE(SUM(fr.amount - COALESCE(fr.paidAmount, 0)), 0) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status = :status")
+    BigDecimal sumRemainingByCenterIdAndStatus(@Param("centerId") Long centerId,
+                                                @Param("status") FeeStatus status);
+
+    // ── Multi-status queries for unpaid list (UNPAID + PARTIAL) ──────────────
+
+    @Query("SELECT fr FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses AND fr.dueDate < :dueDate")
+    List<FeeRecord> findAllByCenter_IdAndStatusInAndDueDateBefore(@Param("centerId") Long centerId,
+                                                                   @Param("statuses") List<FeeStatus> statuses,
+                                                                   @Param("dueDate") LocalDate dueDate);
+
+    @Query("SELECT COUNT(fr) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses")
+    long countByCenter_IdAndStatusIn(@Param("centerId") Long centerId,
+                                     @Param("statuses") List<FeeStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(fr.amount - COALESCE(fr.paidAmount, 0)), 0) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses")
+    BigDecimal sumRemainingByCenterIdAndStatusIn(@Param("centerId") Long centerId,
+                                                  @Param("statuses") List<FeeStatus> statuses);
 }

@@ -16,10 +16,13 @@ import java.time.Instant;
 public class PaymentResponse {
 
     private Long id;
+    private String receiptNumber;
 
     private Long feeRecordId;
     private Long centerId;
     private Long classId;
+    private String className;
+    private String courseName;
 
     private Long studentUserId;
     private String studentPhoneNumber;
@@ -31,6 +34,8 @@ public class PaymentResponse {
     private String note;
 
     private Long collectedByUserId;
+    private String collectedByUserName;
+    private String centerName;
     private Instant createdAt;
 
     private BigDecimal feeRecordAmount;

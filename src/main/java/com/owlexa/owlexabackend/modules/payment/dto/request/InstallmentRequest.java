@@ -1,5 +1,5 @@
 package com.owlexa.owlexabackend.modules.payment.dto.request;
-import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
+
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
@@ -8,19 +8,18 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CashPaymentRequest {
+public class InstallmentRequest {
 
-    @NotNull(message = "amount is required")
-    @Positive(message = "amount must be greater than 0")
-    private BigDecimal amount;
+    @NotNull(message = "dueDate is required")
+    private LocalDate dueDate;
 
-    @Builder.Default
-    private PaymentMethod method = PaymentMethod.CASH;
-
-    private String note;
+    @NotNull(message = "expectedAmount is required")
+    @Positive(message = "expectedAmount must be positive")
+    private BigDecimal expectedAmount;
 }

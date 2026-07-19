@@ -1,6 +1,8 @@
 package com.owlexa.owlexabackend.modules.payment.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,23 +14,18 @@ import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
-import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.user.entity.User;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 
 @Data
 @Entity
-@Table(name = "fee_records")
+@Table(name = "audit_logs")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "center_id = :tenantId")
 @EntityListeners(TenantEntityListener.class)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FeeRecord implements TenantAware {
+public class AuditLog implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -39,32 +36,23 @@ public class FeeRecord implements TenantAware {
     private Center center;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_user_id", nullable = false)
-    private User studentUser;
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "class_id")
-    private Class clazz;
+    @Column(nullable = false, length = 50)
+    private String action;
 
-    @Column(name = "amount", nullable = false, precision = 12, scale = 2)
-    private BigDecimal amount;
+    @Column(name = "entity_type", length = 50)
+    private String entityType;
 
-    @Column(name = "discount_amount", precision = 12, scale = 2)
-    @Builder.Default
-    private BigDecimal discountAmount = BigDecimal.ZERO;
+    @Column(name = "entity_id")
+    private Long entityId;
 
-    @Column(name = "paid_amount", precision = 12, scale = 2)
-    private BigDecimal paidAmount;
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
-    @Column(name = "month", length = 7)
-    private String month;
-
-    @Column(name = "due_date")
-    private LocalDate dueDate;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private FeeStatus status;
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -6,6 +6,9 @@ import com.owlexa.owlexabackend.modules.dashboard.dto.response.DashboardStatsRes
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -38,6 +41,9 @@ class DashboardServiceTest {
     @Mock private FeeRecordRepository feeRecordRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private UserRepository userRepository;
+    @Mock private DiscountRepository discountRepository;
+    @Mock private RefundRepository refundRepository;
+    @Mock private InstallmentRepository installmentRepository;
 
     private DashboardService service;
 
@@ -48,7 +54,8 @@ class DashboardServiceTest {
     void setUp() {
         service = new DashboardService(
                 membershipRepository, classRepository, feeRecordRepository,
-                paymentRepository, userRepository
+                paymentRepository, userRepository,
+                discountRepository, refundRepository, installmentRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
         SecurityContextHolder.getContext().setAuthentication(
@@ -81,7 +88,7 @@ class DashboardServiceTest {
                 .thenReturn(5L);
         when(classRepository.countByCenter_Id(CENTER_ID)).thenReturn(8L);
         when(feeRecordRepository.countByCenter_Id(CENTER_ID)).thenReturn(120L);
-        when(feeRecordRepository.countByCenter_IdAndStatus(CENTER_ID, FeeStatus.UNPAID))
+        when(feeRecordRepository.countByCenter_IdAndStatusIn(CENTER_ID, List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)))
                 .thenReturn(20L);
         when(feeRecordRepository.countByCenter_IdAndStatus(CENTER_ID, FeeStatus.PAID))
                 .thenReturn(90L);
@@ -110,7 +117,7 @@ class DashboardServiceTest {
                 .thenReturn(0L);
         when(classRepository.countByCenter_Id(CENTER_ID)).thenReturn(0L);
         when(feeRecordRepository.countByCenter_Id(CENTER_ID)).thenReturn(0L);
-        when(feeRecordRepository.countByCenter_IdAndStatus(CENTER_ID, FeeStatus.UNPAID))
+        when(feeRecordRepository.countByCenter_IdAndStatusIn(CENTER_ID, List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)))
                 .thenReturn(0L);
         when(feeRecordRepository.countByCenter_IdAndStatus(CENTER_ID, FeeStatus.PAID))
                 .thenReturn(0L);

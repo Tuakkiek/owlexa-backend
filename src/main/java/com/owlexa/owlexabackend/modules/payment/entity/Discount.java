@@ -1,6 +1,8 @@
 package com.owlexa.owlexabackend.modules.payment.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,26 +16,21 @@ import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.user.entity.User;
 
 @Data
 @Entity
-@Table(name = "payments")
+@Table(name = "discounts")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "center_id = :tenantId")
 @EntityListeners(TenantEntityListener.class)
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Payment implements TenantAware {
+public class Discount implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(name = "receipt_number", unique = true, length = 30, updatable = false)
-    private String receiptNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "fee_record_id", nullable = false)
@@ -43,45 +40,26 @@ public class Payment implements TenantAware {
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_user_id", nullable = false)
-    private User studentUser;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "collected_by_user_id", nullable = false)
-    private User collectedByUser;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal amount;
+    @Column(nullable = false)
+    private String name;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private PaymentMethod method;
+    @Column(nullable = false, length = 20)
+    private DiscountType type;
 
-    @Column(name = "sepay_ref")
-    private String sepayRef;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal value;
 
     @Column(columnDefinition = "TEXT")
-    private String note;
+    private String reason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_user_id", nullable = false)
+    private User createdBy;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    @Builder.Default
-    private TransactionStatus status = TransactionStatus.ACTIVE;
-
-    @Column(name = "void_reason", columnDefinition = "TEXT")
-    private String voidReason;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "voided_by_user_id")
-    private User voidedBy;
-
-    @Column(name = "voided_at")
-    private Instant voidedAt;
 
     @Override
     public Long getCenterId() {

@@ -255,11 +255,11 @@ class FeeRecordServiceTest {
     }
 
     @Test
-    @DisplayName("findAllOverdue: query với status=UNPAID và dueDate < today")
+    @DisplayName("findAllOverdue: query với status IN (UNPAID, PARTIAL) và dueDate < today")
     void findAllOverdue_shouldQueryWithUnpaidAndPastDueDate() {
-        when(feeRecordRepository.findAllByCenter_IdAndStatusAndDueDateBefore(
+        when(feeRecordRepository.findAllByCenter_IdAndStatusInAndDueDateBefore(
                 org.mockito.ArgumentMatchers.eq(CENTER_ID),
-                org.mockito.ArgumentMatchers.eq(FeeStatus.UNPAID),
+                org.mockito.ArgumentMatchers.anyList(),
                 org.mockito.ArgumentMatchers.any(LocalDate.class)
         )).thenReturn(new ArrayList<>());
 
@@ -267,9 +267,9 @@ class FeeRecordServiceTest {
 
         assertThat(responses).isEmpty();
         org.mockito.Mockito.verify(feeRecordRepository)
-                .findAllByCenter_IdAndStatusAndDueDateBefore(
+                .findAllByCenter_IdAndStatusInAndDueDateBefore(
                         org.mockito.ArgumentMatchers.eq(CENTER_ID),
-                        org.mockito.ArgumentMatchers.eq(FeeStatus.UNPAID),
+                        org.mockito.ArgumentMatchers.anyList(),
                         org.mockito.ArgumentMatchers.any(LocalDate.class)
                 );
     }
