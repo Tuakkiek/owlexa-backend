@@ -1,7 +1,8 @@
 package com.owlexa.owlexabackend.modules.payment.entity;
-public enum FeeStatus {
-    UNPAID,
-    PARTIAL,
+
+public enum InstallmentStatus {
+    PENDING,
+    PARTIALLY_PAID,
     PAID,
     OVERDUE
 }

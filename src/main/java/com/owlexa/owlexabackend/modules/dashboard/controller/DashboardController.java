@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.dashboard.controller;
 import com.owlexa.owlexabackend.modules.dashboard.dto.response.CashierDashboardStatsResponse;
 import com.owlexa.owlexabackend.modules.dashboard.dto.response.DashboardStatsResponse;
+import com.owlexa.owlexabackend.modules.dashboard.dto.response.RevenueSummaryResponse;
 import com.owlexa.owlexabackend.modules.dashboard.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,5 +33,11 @@ public class DashboardController {
     @PreAuthorize("hasAuthority('DASHBOARD_FINANCE')")
     public CashierDashboardStatsResponse getCashierStats() {
         return dashboardService.getCashierStats();
+    }
+
+    @GetMapping({"/owner/dashboard/revenue", "/cashier/dashboard/revenue"})
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_OWNER', 'DASHBOARD_FINANCE')")
+    public RevenueSummaryResponse getRevenueSummary() {
+        return dashboardService.getRevenueSummary();
     }
 }

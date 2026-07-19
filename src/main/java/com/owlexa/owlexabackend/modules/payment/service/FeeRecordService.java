@@ -53,6 +53,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 
@@ -146,6 +147,9 @@ public class FeeRecordService {
                 .toList();
     }
 
+    /** Statuses that indicate the student still owes money (used for unpaid/overdue lists). */
+    private static final List<FeeStatus> NOT_FULLY_PAID = List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL);
+
     @Transactional(readOnly = true)
     public List<FeeRecordResponse> findAllOverdue() {
         User currentUser = getCurrentUser();
@@ -154,13 +158,20 @@ public class FeeRecordService {
         assertCanViewFees(currentUser, centerId);
 
         return feeRecordRepository
-                .findAllByCenter_IdAndStatusAndDueDateBefore(centerId, FeeStatus.UNPAID, java.time.LocalDate.now())
+                .findAllByCenter_IdAndStatusInAndDueDateBefore(centerId, NOT_FULLY_PAID, LocalDate.now())
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     private FeeRecordResponse toResponse(FeeRecord feeRecord) {
+        BigDecimal paid = feeRecord.getPaidAmount() != null ? feeRecord.getPaidAmount() : BigDecimal.ZERO;
+        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
+        BigDecimal remaining = effectiveAmount.subtract(paid);
+
+        FeeStatus effectiveStatus = resolveEffectiveStatus(feeRecord.getStatus(), feeRecord.getDueDate());
+
         return FeeRecordResponse.builder()
                 .id(feeRecord.getId())
                 .studentUserId(feeRecord.getStudentUser().getId())
@@ -170,12 +181,29 @@ public class FeeRecordService {
                 .classId(feeRecord.getClazz().getId())
                 .className(feeRecord.getClazz().getName())
                 .amount(feeRecord.getAmount())
-                .paidAmount(feeRecord.getPaidAmount())
+                .discountAmount(discount)
+                .paidAmount(paid)
+                .remainingAmount(remaining.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : remaining)
                 .month(feeRecord.getMonth())
                 .dueDate(feeRecord.getDueDate())
-                .status(feeRecord.getStatus())
+                .status(effectiveStatus)
                 .createdAt(feeRecord.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Computes the effective status for display.
+     * If the stored status is UNPAID or PARTIAL and the due date has passed,
+     * the effective status is OVERDUE. Otherwise the stored status is used.
+     */
+    private FeeStatus resolveEffectiveStatus(FeeStatus storedStatus, LocalDate dueDate) {
+        if (dueDate == null) return storedStatus;
+        if (storedStatus == FeeStatus.UNPAID || storedStatus == FeeStatus.PARTIAL) {
+            if (dueDate.isBefore(LocalDate.now())) {
+                return FeeStatus.OVERDUE;
+            }
+        }
+        return storedStatus;
     }
 
     private void validateMonth(String month) {
