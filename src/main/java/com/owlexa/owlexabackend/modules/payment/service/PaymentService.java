@@ -415,6 +415,7 @@ public class PaymentService {
                 .note(payment.getNote())
                 .collectedByUserId(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getId() : null)
                 .collectedByUserName(collectedByUserName)
+                .status(payment.getStatus())
                 .createdAt(payment.getCreatedAt())
                 .feeRecordAmount(feeRecord.getAmount())
                 .feeRecordPaidAmount(feeRecord.getPaidAmount())

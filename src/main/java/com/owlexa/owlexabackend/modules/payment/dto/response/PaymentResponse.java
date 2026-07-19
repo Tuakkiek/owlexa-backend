@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.payment.dto.response;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
+import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,6 +37,7 @@ public class PaymentResponse {
     private Long collectedByUserId;
     private String collectedByUserName;
     private String centerName;
+    private TransactionStatus status;
     private Instant createdAt;
 
     private BigDecimal feeRecordAmount;
