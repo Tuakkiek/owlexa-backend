@@ -45,4 +45,10 @@ public class FeeRecordController {
     public List<FeeRecordResponse> findAllOverdue() {
         return feeRecordService.findAllOverdue();
     }
+
+    @GetMapping({"/owner/fee-records/pending", "/cashier/fee-records/pending"})
+    @PreAuthorize("hasAnyAuthority('FEE_VIEW', 'PAYMENT_VIEW')")
+    public List<FeeRecordResponse> findAllPending() {
+        return feeRecordService.findAllPending();
+    }
 }

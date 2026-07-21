@@ -164,6 +164,20 @@ public class FeeRecordService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<FeeRecordResponse> findAllPending() {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertCanViewFees(currentUser, centerId);
+
+        return feeRecordRepository
+                .findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(centerId, NOT_FULLY_PAID)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     private FeeRecordResponse toResponse(FeeRecord feeRecord) {
         BigDecimal paid = feeRecord.getPaidAmount() != null ? feeRecord.getPaidAmount() : BigDecimal.ZERO;
         BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
@@ -171,6 +185,14 @@ public class FeeRecordService {
         BigDecimal remaining = effectiveAmount.subtract(paid);
 
         FeeStatus effectiveStatus = resolveEffectiveStatus(feeRecord.getStatus(), feeRecord.getDueDate());
+
+        // Look up enrollment status so the student portal can surface SUSPENDED state
+        EnrollmentStatus enrollmentStatus = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(
+                        feeRecord.getClazz().getId(),
+                        feeRecord.getStudentUser().getId())
+                .map(ClassEnrollment::getStatus)
+                .orElse(null);
 
         return FeeRecordResponse.builder()
                 .id(feeRecord.getId())
@@ -187,6 +209,7 @@ public class FeeRecordService {
                 .month(feeRecord.getMonth())
                 .dueDate(feeRecord.getDueDate())
                 .status(effectiveStatus)
+                .enrollmentStatus(enrollmentStatus)
                 .createdAt(feeRecord.getCreatedAt())
                 .build();
     }

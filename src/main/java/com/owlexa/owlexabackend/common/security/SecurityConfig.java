@@ -53,7 +53,8 @@ public class SecurityConfig {
                                 "/auth/register/student",
                                 "/auth/register/owner",
                                 "/auth/refresh-token",
-                                "/public/**"
+                                "/public/**",
+                                "/webhooks/sepay"
                         ).permitAll()
                         .requestMatchers(
                                 "/auth/logout",

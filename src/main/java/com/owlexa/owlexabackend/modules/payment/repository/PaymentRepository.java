@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.payment.repository;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
+import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
     List<Payment> findAllByCenter_IdOrderByCreatedAtDesc(Long centerId);
 
     List<Payment> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
+
+    List<Payment> findAllByStatusAndExpiresAtBefore(TransactionStatus status, Instant expiresAt);
 
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.center.id = :centerId AND p.status = 'ACTIVE'")
     BigDecimal sumAmountByCenterId(@Param("centerId") Long centerId);

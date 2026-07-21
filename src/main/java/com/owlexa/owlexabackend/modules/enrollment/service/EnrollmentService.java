@@ -21,6 +21,7 @@ import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepo
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,9 @@ public class EnrollmentService {
     private final MembershipRepository membershipRepository;
     private final FeeRecordRepository feeRecordRepository;
     private final ScheduleRepository scheduleRepository;
+
+    @Value("${app.enrollment.fee-grace-days:7}")
+    private int feeGraceDays;
 
     @Transactional
     public EnrollmentResponse enroll (Long classId, EnrollmentRequest request) {
@@ -75,7 +79,7 @@ public class EnrollmentService {
         }
 
         long pendingOrActiveCount = classEnrollmentRepository.countByClazz_IdAndStatusIn(
-                classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE)
+                classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
         );
 
         if (pendingOrActiveCount >= clazz.getMaxStudents()) {
@@ -101,10 +105,14 @@ public class EnrollmentService {
                 .studentUser(student)
                 .center(clazz.getCenter())
                 .enrolledByUser(currentUser)
-                .status(EnrollmentStatus.PENDING)
+                .status(EnrollmentStatus.ACTIVE)
                 .build();
 
         enrollment = classEnrollmentRepository.save(enrollment);
+
+        // Immediately generate the first month's fee record (Owner-initiated flow)
+        generateFeeRecordIfAbsent(enrollment);
+
         return toResponse(enrollment);
     }
 
@@ -184,7 +192,7 @@ public class EnrollmentService {
         }
 
         return classEnrollmentRepository.findAllByClazz_IdAndStatusIn(
-                        classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE))
+                        classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED))
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -216,6 +224,62 @@ public class EnrollmentService {
         classEnrollmentRepository.save(enrollment);
     }
 
+    /**
+     * Suspend an active enrollment (e.g., for non-payment).
+     * Only reachable from ACTIVE. Preserves the enrollment record and all history.
+     * Called by the overdue scheduler or by Owner as a manual override.
+     */
+    @Transactional
+    public void suspend(Long classId, Long studentUserId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        ClassEnrollment enrollment = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Enrollment not found for studentId: " + studentUserId
+                ));
+
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new BusinessRuleException(
+                    "Only ACTIVE enrollments can be suspended. Current status: " + enrollment.getStatus()
+            );
+        }
+
+        enrollment.setStatus(EnrollmentStatus.SUSPENDED);
+        classEnrollmentRepository.save(enrollment);
+    }
+
+    /**
+     * Reactivate a suspended enrollment (e.g., after payment is received).
+     * Only reachable from SUSPENDED. Called by PaymentService after a payment
+     * clears the overdue condition, or by Owner as a manual override.
+     */
+    @Transactional
+    public void reactivate(Long classId, Long studentUserId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        ClassEnrollment enrollment = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Enrollment not found for studentId: " + studentUserId
+                ));
+
+        if (enrollment.getStatus() != EnrollmentStatus.SUSPENDED) {
+            throw new BusinessRuleException(
+                    "Only SUSPENDED enrollments can be reactivated. Current status: " + enrollment.getStatus()
+            );
+        }
+
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        classEnrollmentRepository.save(enrollment);
+    }
+
     // Helper: auto-generate FeeRecord when enrollment becomes ACTIVE
     private void generateFeeRecordIfAbsent(ClassEnrollment enrollment) {
         String currentMonth = YearMonth.now().toString();
@@ -236,7 +300,7 @@ public class EnrollmentService {
                     .amount(BigDecimal.valueOf(enrollment.getClazz().getMonthlyFee()))
                     .paidAmount(BigDecimal.ZERO)
                     .month(currentMonth)
-                    .dueDate(LocalDate.now().plusDays(7))
+                    .dueDate(LocalDate.now().plusDays(feeGraceDays))
                     .status(FeeStatus.UNPAID)
                     .build();
             feeRecordRepository.save(feeRecord);
