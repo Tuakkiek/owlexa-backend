@@ -1,10 +1,18 @@
 package com.owlexa.owlexabackend.modules.payment.controller;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.payment.dto.request.CashPaymentRequest;
+import com.owlexa.owlexabackend.modules.payment.dto.response.BankTransferQrResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.TimelineEntryResponse;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
+import com.owlexa.owlexabackend.modules.payment.entity.Payment;
+import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
+import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
+import com.owlexa.owlexabackend.modules.payment.service.BankTransferQrService;
 import com.owlexa.owlexabackend.modules.payment.service.PaymentService;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
+import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,6 +32,8 @@ import java.util.List;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final BankTransferQrService bankTransferQrService;
+    private final PaymentRepository paymentRepository;
 
     @PostMapping("/cashier/fee-record/{feeRecordId}/payments/cash")
     @ResponseStatus(HttpStatus.CREATED)
@@ -33,6 +43,36 @@ public class PaymentController {
             @Valid @RequestBody CashPaymentRequest request
     ) {
         return paymentService.collectCash(feeRecordId, request);
+    }
+
+    @PostMapping("/cashier/fee-record/{feeRecordId}/payments/bank-transfer")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('PAYMENT_COLLECT')")
+    public PaymentResponse createBankTransfer(
+            @PathVariable Long feeRecordId,
+            @Valid @RequestBody CashPaymentRequest request
+    ) {
+        return paymentService.createPendingBankTransfer(feeRecordId, request);
+    }
+
+    @GetMapping({"/cashier/payments/{paymentId}/qr", "/owner/payments/{paymentId}/qr"})
+    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    public BankTransferQrResponse getPaymentQr(@PathVariable Long paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+
+        Long centerId = TenantContext.getCurrentTenantId();
+        if (centerId != null && !payment.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Payment " + paymentId + " belongs to another center");
+        }
+
+        if (payment.getStatus() != TransactionStatus.PENDING
+                && payment.getStatus() != TransactionStatus.ACTIVE) {
+            throw new BusinessRuleException(
+                    "QR is only available for pending or confirmed bank transfer payments");
+        }
+
+        return bankTransferQrService.buildQrResponse(payment);
     }
 
     @GetMapping({

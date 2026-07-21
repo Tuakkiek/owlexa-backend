@@ -55,4 +55,22 @@ public class EnrollmentController {
     ) {
         enrollmentService.drop(classId, studentUserId);
     }
+
+    @PatchMapping("/{studentUserId}/suspend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void suspend(
+            @PathVariable Long classId,
+            @PathVariable Long studentUserId
+    ) {
+        enrollmentService.suspend(classId, studentUserId);
+    }
+
+    @PatchMapping("/{studentUserId}/reactivate")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reactivate(
+            @PathVariable Long classId,
+            @PathVariable Long studentUserId
+    ) {
+        enrollmentService.reactivate(classId, studentUserId);
+    }
 }

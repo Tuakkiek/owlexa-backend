@@ -55,7 +55,7 @@ public class Payment implements TenantAware {
     private BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private PaymentMethod method;
 
     @Column(name = "sepay_ref")
@@ -82,6 +82,9 @@ public class Payment implements TenantAware {
 
     @Column(name = "voided_at")
     private Instant voidedAt;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
 
     @Override
     public Long getCenterId() {
