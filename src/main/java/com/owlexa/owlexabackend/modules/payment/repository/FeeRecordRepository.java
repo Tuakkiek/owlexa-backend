@@ -12,10 +12,6 @@ import java.util.Optional;
 
 public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
-    List<FeeRecord> findAllByClazz_IdAndMonth(Long classId, String month);
-
-    List<FeeRecord> findAllByCenter_IdAndMonth(Long centerId, String month);
-
     List<FeeRecord> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
 
     List<FeeRecord> findAllByCenter_IdAndStatusAndDueDateBefore(
@@ -29,8 +25,6 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
             Long classId,
             String month
     );
-
-    boolean existsByClazz_IdAndMonth(Long classId, String month);
 
     List<FeeRecord> findAllByStatusAndDueDateBefore(FeeStatus status, LocalDate date);
 
@@ -70,3 +64,4 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     List<FeeRecord> findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(Long centerId, List<FeeStatus> statuses);
 }
+

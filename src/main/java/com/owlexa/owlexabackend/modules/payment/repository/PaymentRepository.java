@@ -4,12 +4,15 @@ import com.owlexa.owlexabackend.modules.payment.entity.Payment;
 import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpecificationExecutor<Payment> {
 
@@ -20,6 +23,23 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
     List<Payment> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
 
     List<Payment> findAllByStatusAndExpiresAtBefore(TransactionStatus status, Instant expiresAt);
+
+    // ── Idempotency & duplicate prevention ──────────────────────────────
+
+    Optional<Payment> findByIdempotencyKey(String idempotencyKey);
+
+    /** Find the single current PENDING payment for a fee record + student (if any). */
+    @Query("SELECT p FROM Payment p WHERE p.feeRecord.id = :feeRecordId " +
+           "AND p.studentUser.id = :studentUserId AND p.status = 'PENDING' " +
+           "AND (p.method = 'BANK_TRANSFER' OR p.method = 'SEPAY' OR p.method = 'QR_CODE')")
+    Optional<Payment> findCurrentPendingByFeeRecordAndStudent(
+            @Param("feeRecordId") Long feeRecordId,
+            @Param("studentUserId") Long studentUserId);
+
+    /** Pessimistic write lock on FeeRecord to prevent race conditions. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT fr FROM FeeRecord fr WHERE fr.id = :id")
+    Optional<FeeRecord> findFeeRecordByIdForUpdate(@Param("id") Long id);
 
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.center.id = :centerId AND p.status = 'ACTIVE'")
     BigDecimal sumAmountByCenterId(@Param("centerId") Long centerId);

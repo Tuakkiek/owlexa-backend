@@ -58,31 +58,14 @@ public class ClassController {
         return classService.findMyClassesWithStudentsAsTeacher();
     }
 
-    // ── Lifecycle Transitions ────────────────────────────────────────────────
+    // ── Lifecycle: Update Status (any status → any status) ────────────────────
 
-    @PatchMapping("/owner/classes/{classId}/open")
-    public ClassResponse openForEnrollment(@PathVariable Long classId) {
-        return classService.openForEnrollment(classId);
-    }
-
-    @PatchMapping("/owner/classes/{classId}/start")
-    public ClassResponse startClass(@PathVariable Long classId) {
-        return classService.startClass(classId);
-    }
-
-    @PatchMapping("/owner/classes/{classId}/finish")
-    public ClassResponse finishClass(@PathVariable Long classId) {
-        return classService.finishClass(classId);
-    }
-
-    @PatchMapping("/owner/classes/{classId}/archive")
-    public ClassResponse archiveClass(@PathVariable Long classId) {
-        return classService.archiveClass(classId);
-    }
-
-    @PatchMapping("/owner/classes/{classId}/cancel")
-    public ClassResponse cancelClass(@PathVariable Long classId) {
-        return classService.cancelClass(classId);
+    @PatchMapping("/owner/classes/{classId}/status")
+    public ClassResponse updateStatus(
+            @PathVariable Long classId,
+            @RequestBody com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus newStatus
+    ) {
+        return classService.updateStatus(classId, newStatus);
     }
 }
 

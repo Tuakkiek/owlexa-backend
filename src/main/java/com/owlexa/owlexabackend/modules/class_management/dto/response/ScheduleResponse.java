@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
 import java.time.Instant;
 import java.time.LocalTime;
 
@@ -30,6 +31,6 @@ public class ScheduleResponse {
     private LocalTime startTime;
     private LocalTime endTime;
 
-    private boolean isActive;
+    private ScheduleType type;
     private Instant createdAt;
 }

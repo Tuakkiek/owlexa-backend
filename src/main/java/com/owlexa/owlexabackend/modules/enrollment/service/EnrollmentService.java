@@ -60,8 +60,7 @@ public class EnrollmentService {
             throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
-        if (clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.OPEN
-                && clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS) {
+        if (clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE) {
             throw new BusinessRuleException("Class is not open for enrollment. Current status: " + clazz.getStatus());
         }
 
@@ -74,10 +73,42 @@ public class EnrollmentService {
             throw new BadRequestException("User is not a student");
         }
 
-        if (classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(classId, student.getId())) {
-            throw new DuplicateResourceException("Student is already enrolled in this class");
+        // Check for existing enrollment record
+        var existingEnrollment = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(classId, student.getId());
+
+        if (existingEnrollment.isPresent()) {
+            ClassEnrollment enrollment = existingEnrollment.get();
+
+            switch (enrollment.getStatus()) {
+                case ACTIVE:
+                case PENDING:
+                case SUSPENDED:
+                    throw new DuplicateResourceException(
+                            "Student is already enrolled in this class. Current status: " + enrollment.getStatus()
+                    );
+                case DROPPED:
+                    // Restore the dropped enrollment - check capacity first
+                    long activeCount = classEnrollmentRepository.countByClazz_IdAndStatusIn(
+                            classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
+                    );
+                    if (activeCount >= clazz.getMaxStudents()) {
+                        throw new BusinessRuleException("Class is full");
+                    }
+
+                    // Restore: set status to ACTIVE, update enrolled-by user
+                    enrollment.setStatus(EnrollmentStatus.ACTIVE);
+                    enrollment.setEnrolledByUser(currentUser);
+                    enrollment = classEnrollmentRepository.save(enrollment);
+
+                    // Regenerate fee record if needed (the method already checks existence)
+                    generateFeeRecordIfAbsent(enrollment);
+
+                    return toResponse(enrollment);
+            }
         }
 
+        // No existing enrollment - check capacity and create new
         long pendingOrActiveCount = classEnrollmentRepository.countByClazz_IdAndStatusIn(
                 classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
         );
@@ -86,16 +117,19 @@ public class EnrollmentService {
             throw new BusinessRuleException("Class is full");
         }
 
-        // Check student schedule conflicts (log warning, non-blocking)
+        // Check student schedule conflicts
         List<com.owlexa.owlexabackend.modules.class_management.entity.Schedule> classSchedules =
                 scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId);
         for (var schedule : classSchedules) {
-            long conflict = scheduleRepository.countOverlappingStudentSchedules(
-                    student.getId(), schedule.getDayOfWeek(),
-                    schedule.getStartTime(), schedule.getEndTime(), centerId);
-            if (conflict > 0) {
+            List<com.owlexa.owlexabackend.modules.class_management.entity.Schedule> overlaps =
+                    scheduleRepository.findOverlappingStudentSchedules(
+                            student.getId(), schedule.getDayOfWeek(),
+                            schedule.getStartTime(), schedule.getEndTime(), centerId, null);
+            if (!overlaps.isEmpty()) {
                 throw new BusinessRuleException(
-                        "Student has a schedule conflict on " + schedule.getDayOfWeek()
+                        "STUDENT_CONFLICT",
+                        String.format("Student %s already has another class during this time.",
+                                student.getFullName())
                 );
             }
         }

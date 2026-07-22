@@ -13,7 +13,18 @@ package com.owlexa.owlexabackend.common.exception;
  *   - 422 → show dialog "không thể thực hiện vì [message]"
  */
 public class BusinessRuleException extends RuntimeException {
+    private String code;
+
     public BusinessRuleException(String message) {
         super(message);
+    }
+
+    public BusinessRuleException(String code, String message) {
+        super(message);
+        this.code = code;
+    }
+
+    public String getCode() {
+        return code;
     }
 }

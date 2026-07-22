@@ -61,12 +61,13 @@ public class ScheduleController {
         scheduleService.delete(scheduleId);
     }
 
-    @PatchMapping("/owner/classes/{classId}/schedules/{scheduleId}/toggle")
-    public ScheduleResponse toggleActive(
+    @PatchMapping("/owner/classes/{classId}/schedules/{scheduleId}/type")
+    public ScheduleResponse updateType(
             @PathVariable Long classId,
-            @PathVariable Long scheduleId
+            @PathVariable Long scheduleId,
+            @RequestBody com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType type
     ) {
-        return scheduleService.toggleActive(scheduleId);
+        return scheduleService.updateType(scheduleId, type);
     }
 
     // ── TEACHER: View own schedule ───────────────────────────────────────────

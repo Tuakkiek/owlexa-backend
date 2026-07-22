@@ -55,6 +55,7 @@ class PaymentServiceTest {
     @Mock private RefundRepository refundRepository;
     @Mock private DiscountRepository discountRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
+    @Mock private BankTransferQrService bankTransferQrService;
 
     private PaymentService paymentService;
 
@@ -66,7 +67,7 @@ class PaymentServiceTest {
         paymentService = new PaymentService(
                 userRepository, membershipRepository, feeRecordRepository, paymentRepository,
                 auditLogRepository, installmentRepository, refundRepository, discountRepository,
-                classEnrollmentRepository
+                classEnrollmentRepository, bankTransferQrService
         );
         TenantContext.setCurrentTenantId(CURRENT_CENTER_ID);
 

@@ -74,6 +74,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -171,15 +172,43 @@ public class PaymentService {
      * entire remaining balance in one transaction. No partial amounts, no
      * custom amounts — the backend is the single source of truth.
      * <p>
-     * Any existing PENDING bank-transfer/SEPAY payments for this fee record
-     * are automatically voided to enforce the "one active QR at a time" rule.
+     * <b>Race-condition safety:</b> Uses pessimistic write lock on the FeeRecord
+     * to guarantee only one pending payment can exist at a time. If a valid
+     * pending payment already exists, it is returned instead of creating a new one.
+     * Only creates a new payment when:
+     * <ul>
+     *   <li>there is no pending payment, OR</li>
+     *   <li>the previous pending payment has expired</li>
+     * </ul>
+     * <p>
+     * <b>Idempotency:</b> Accepts an optional idempotency key. If a payment
+     * with the same key already exists, returns it without creating a duplicate.
+     *
+     * @param feeRecordId     the fee record to pay
+     * @param idempotencyKey  optional client-generated UUID for idempotency
+     * @return the existing or newly created pending payment
      */
     @Transactional
-    public PaymentResponse createStudentPendingBankTransfer(Long feeRecordId) {
+    public PaymentResponse createStudentPendingBankTransfer(Long feeRecordId, String idempotencyKey) {
         User currentUser = getCurrentUser();
-        Long centerId = requiredCurrentCenterId();
 
-        FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
+        // ── Idempotency guard: if a request with this key already succeeded, return it ──
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            var existingByIdempotency = paymentRepository.findByIdempotencyKey(idempotencyKey);
+            if (existingByIdempotency.isPresent()) {
+                Payment existing = existingByIdempotency.get();
+                // Verify ownership
+                if (!existing.getStudentUser().getId().equals(currentUser.getId())) {
+                    throw new AccessDeniedException("Idempotency key belongs to another student's payment");
+                }
+                log.debug("Idempotency key {} already processed — returning existing payment {}", 
+                        idempotencyKey, existing.getId());
+                return toResponse(existing, existing.getFeeRecord());
+            }
+        }
+
+        // ── Pessimistic lock on FeeRecord to prevent concurrent payment creation ──
+        FeeRecord feeRecord = paymentRepository.findFeeRecordByIdForUpdate(feeRecordId)
                 .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
 
         // Verify the fee record belongs to the authenticated student
@@ -195,26 +224,29 @@ public class PaymentService {
             throw new BusinessRuleException("This invoice is already fully paid");
         }
 
-        // Void any existing PENDING bank-transfer/SEPAY payments for this fee record
-        // to enforce "one QR at a time" and ensure the QR always reflects the
-        // current remaining balance.
-        List<Payment> existingPending = paymentRepository
-                .findAllByFeeRecordOrderByCreatedAtDesc(feeRecord)
-                .stream()
-                .filter(p -> p.getStatus() == TransactionStatus.PENDING)
-                .filter(p -> p.getMethod() == PaymentMethod.BANK_TRANSFER
-                        || p.getMethod() == PaymentMethod.SEPAY)
-                .toList();
+        // ── Check for existing valid pending payment (the core duplicate-prevention logic) ──
+        var existingPending = paymentRepository.findCurrentPendingByFeeRecordAndStudent(
+                feeRecordId, currentUser.getId());
 
-        for (Payment p : existingPending) {
-            p.setStatus(TransactionStatus.VOIDED);
-            p.setVoidReason("Superseded by new student QR payment");
-            p.setVoidedBy(currentUser);
-            p.setVoidedAt(Instant.now());
-            paymentRepository.save(p);
+        if (existingPending.isPresent()) {
+            Payment pending = existingPending.get();
+
+            // If the existing pending payment is NOT expired, return it — do NOT create another
+            if (pending.getExpiresAt() != null && Instant.now().isBefore(pending.getExpiresAt())) {
+                log.debug("Returning existing valid pending payment {} for feeRecord {}", 
+                        pending.getId(), feeRecordId);
+                return toResponse(pending, feeRecord);
+            }
+
+            // Existing pending is expired — mark it as EXPIRED and create a new one
+            pending.setStatus(TransactionStatus.EXPIRED);
+            pending.setVoidReason("Expired — superseded by new payment");
+            pending.setVoidedAt(Instant.now());
+            paymentRepository.save(pending);
+            log.debug("Expired pending payment {} for feeRecord {}", pending.getId(), feeRecordId);
         }
 
-        // Create new PENDING payment for the FULL remaining balance — no client input
+        // ── Create new PENDING payment for the FULL remaining balance ──
         PaymentMethod method = PaymentMethod.SEPAY;
         String receiptNumber = generateReceiptNumber();
         Instant expiresAt = Instant.now().plusSeconds((long) bankTransferExpiryMinutes * 60);
@@ -224,12 +256,13 @@ public class PaymentService {
                 .feeRecord(feeRecord)
                 .center(feeRecord.getCenter())
                 .studentUser(feeRecord.getStudentUser())
-                .collectedByUser(currentUser) // student initiates their own payment
+                .collectedByUser(currentUser)
                 .amount(remainingAmount)
                 .method(method)
                 .note("Student QR payment — full remaining balance")
                 .status(TransactionStatus.PENDING)
                 .expiresAt(expiresAt)
+                .idempotencyKey(idempotencyKey != null && !idempotencyKey.isBlank() ? idempotencyKey : null)
                 .build();
 
         payment = paymentRepository.save(payment);
@@ -241,9 +274,78 @@ public class PaymentService {
         auditLog(currentUser, feeRecord.getCenter(), "PAYMENT_PENDING", "Payment",
                 payment.getId(), "Student created QR payment for full remaining balance: "
                         + remainingAmount + " VND - Code: " + paymentCode
-                        + " - Expires: " + expiresAt);
+                        + " - Expires: " + expiresAt
+                        + (idempotencyKey != null ? " - IdempotencyKey: " + idempotencyKey : ""));
 
         return toResponse(payment, feeRecord);
+    }
+
+    // ── Get current pending payment for a fee record (no side effects) ─────
+
+    /**
+     * Returns the currently active pending payment for a fee record + student.
+     * Does NOT create anything. Used by the frontend to check if there's an
+     * unfinished payment to resume.
+     *
+     * @param feeRecordId the fee record
+     * @return the pending payment wrapped in Optional, or Optional.empty() if none exists
+     */
+    @Transactional(readOnly = true)
+    public Optional<PaymentResponse> getCurrentPendingPayment(Long feeRecordId) {
+        User currentUser = getCurrentUser();
+
+        FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
+                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
+
+        if (!feeRecord.getStudentUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You can only view your own payments");
+        }
+
+        var pending = paymentRepository.findCurrentPendingByFeeRecordAndStudent(
+                feeRecordId, currentUser.getId());
+
+        return pending.map(p -> toResponse(p, feeRecord));
+    }
+
+    // ── Cancel student's own pending payment ─────────────────────────────
+
+    /**
+     * Allows a student to cancel their own pending payment.
+     * Only cancellable while status == PENDING.
+     * After cancellation: status becomes VOIDED.
+     *
+     * @param paymentId the payment to cancel
+     * @return the cancelled payment response
+     */
+    @Transactional
+    public PaymentResponse cancelStudentPendingPayment(Long paymentId) {
+        User currentUser = getCurrentUser();
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+
+        // Only the student who owns the payment can cancel it
+        if (!payment.getStudentUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You can only cancel your own payments");
+        }
+
+        // Only PENDING payments can be cancelled
+        if (payment.getStatus() != TransactionStatus.PENDING) {
+            throw new BusinessRuleException(
+                    "Only pending payments can be cancelled. Current status: " + payment.getStatus());
+        }
+
+        payment.setStatus(TransactionStatus.VOIDED);
+        payment.setVoidReason("Cancelled by student");
+        payment.setVoidedBy(currentUser);
+        payment.setVoidedAt(Instant.now());
+        paymentRepository.save(payment);
+
+        auditLog(currentUser, payment.getCenter(), "PAYMENT_CANCELLED", "Payment",
+                payment.getId(), "Student cancelled pending payment " + payment.getReceiptNumber()
+                        + " - Code: " + payment.getSepayRef());
+
+        return toResponse(payment, payment.getFeeRecord());
     }
 
     // ── Student QR view (validate ownership) ──────────────────────────────

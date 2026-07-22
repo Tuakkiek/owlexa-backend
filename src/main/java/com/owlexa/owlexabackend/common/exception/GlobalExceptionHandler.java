@@ -74,11 +74,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<Map<String, Object>> handleBusinessRule(BusinessRuleException ex) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorBody(
-                422,
-                ex.getMessage(),
-                null
-        ));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", ex.getCode() != null ? ex.getCode() : "BUSINESS_RULE_VIOLATION");
+        body.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
     }
 
     @ExceptionHandler(TenancyViolationException.class)
