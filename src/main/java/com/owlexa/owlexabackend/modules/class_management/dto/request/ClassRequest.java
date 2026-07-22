@@ -16,7 +16,6 @@ public class ClassRequest {
     @NotBlank(message = "Class name is required")
     private String name;
 
-    @NotNull(message = "courseId is required")
     private Long courseId;
 
     @Min(value = 1, message = "Max student must be at least 1")
@@ -24,4 +23,6 @@ public class ClassRequest {
 
     @Min(value = 0, message = "Month fee cannot be negative")
     private Double monthlyFee;
+
+    private com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus status;
 }

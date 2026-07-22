@@ -2,6 +2,9 @@ package com.owlexa.owlexabackend.modules.course.controller;
 
 import com.owlexa.owlexabackend.modules.course.dto.request.CourseRequest;
 import com.owlexa.owlexabackend.modules.course.dto.response.CourseResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseStatisticsResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseClassResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseDeleteValidationResponse;
 import com.owlexa.owlexabackend.modules.course.service.CourseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,21 @@ public class CourseController {
     @GetMapping("/{courseId}")
     public CourseResponse findById(@PathVariable Long courseId) {
         return courseService.findById(courseId);
+    }
+
+    @GetMapping("/{courseId}/statistics")
+    public CourseStatisticsResponse getStatistics(@PathVariable Long courseId) {
+        return courseService.getStatistics(courseId);
+    }
+
+    @GetMapping("/{courseId}/classes")
+    public List<CourseClassResponse> getClasses(@PathVariable Long courseId) {
+        return courseService.getClasses(courseId);
+    }
+
+    @GetMapping("/{courseId}/delete-validation")
+    public CourseDeleteValidationResponse validateDelete(@PathVariable Long courseId) {
+        return courseService.validateDelete(courseId);
     }
 
     @PutMapping("/{courseId}")

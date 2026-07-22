@@ -94,5 +94,10 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
             @Param("endTime") LocalTime endTime,
             @Param("centerId") Long centerId);
 
+    List<Schedule> findAllByRoom_IdAndCenter_Id(Long roomId, Long centerId);
+
+    boolean existsByRoom_IdAndCenter_Id(Long roomId, Long centerId);
+
     void deleteByCenter_Id(Long centerId);
 }
+

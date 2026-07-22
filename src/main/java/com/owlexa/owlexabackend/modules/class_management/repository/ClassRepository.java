@@ -11,5 +11,9 @@ public interface ClassRepository extends JpaRepository<Class, Long> {
 
     boolean existsByNameAndCenter_Id(String name, Long centerId);
 
+    List<Class> findAllByCourse_IdAndCenter_Id(Long courseId, Long centerId);
+
+    boolean existsByCourse_Id(Long courseId);
+
     void deleteByCenter_Id(Long centerId);
 }
