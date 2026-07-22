@@ -41,7 +41,7 @@ class GlobalExceptionHandlerTest {
     void businessRuleException_shouldReturn422WithMessage() throws Exception {
         mockMvc.perform(get("/test/business-rule"))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.code").value("BUSINESS_RULE_VIOLATION"))
                 .andExpect(jsonPath("$.message").value("Học phí đã đóng đủ"));
     }
 

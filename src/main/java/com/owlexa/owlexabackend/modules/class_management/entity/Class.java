@@ -45,30 +45,23 @@ public class Class implements TenantAware {
     @JoinColumn(name = "course_id")
     private Course course;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
-    private User teacher;
-
     @Column(name = "max_students")
     private Integer maxStudents;
 
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "vstep_level")
-    private String vstepLevel;
-
     @Column(name = "monthly_fee")
     private Double monthlyFee;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, columnDefinition = "ENUM('PLANNED', 'ACTIVE', 'FINISHED')")
     @Builder.Default
-    private ClassStatus status = ClassStatus.PLANNING;
+    private ClassStatus status = ClassStatus.PLANNED;
 
     @Transient
     public Boolean getIsActive() {
-        return status == ClassStatus.OPEN || status == ClassStatus.IN_PROGRESS || status == ClassStatus.FULL;
+        return status == ClassStatus.ACTIVE;
     }
 
     public void setIsActive(Boolean isActive) {

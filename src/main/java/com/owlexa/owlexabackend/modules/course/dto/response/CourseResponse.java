@@ -16,7 +16,6 @@ public class CourseResponse {
     private Long id;
     private String code;
     private String name;
-    private String level;
     private String description;
     private Integer defaultDuration;
     private Double defaultMonthlyFee;

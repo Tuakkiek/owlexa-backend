@@ -6,6 +6,7 @@ import com.owlexa.owlexabackend.modules.room.entity.Room;
 import com.owlexa.owlexabackend.modules.room.repository.RoomRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
@@ -17,6 +18,12 @@ import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.class_management.service.validation.ClassLifecycleValidator;
+import com.owlexa.owlexabackend.modules.class_management.service.validation.TimeRangeValidator;
+import com.owlexa.owlexabackend.modules.class_management.service.validation.RoomConflictValidator;
+import com.owlexa.owlexabackend.modules.class_management.service.validation.TeacherConflictValidator;
+import com.owlexa.owlexabackend.modules.class_management.service.validation.StudentConflictValidator;
+import com.owlexa.owlexabackend.modules.class_management.service.validation.ScheduleValidationContext;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -38,6 +45,12 @@ public class ScheduleService {
     private final ScheduleRepository scheduleRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final RoomRepository roomRepository;
+
+    private final ClassLifecycleValidator classLifecycleValidator;
+    private final TimeRangeValidator timeRangeValidator;
+    private final RoomConflictValidator roomConflictValidator;
+    private final TeacherConflictValidator teacherConflictValidator;
+    private final StudentConflictValidator studentConflictValidator;
 
     // Create
     @Transactional
@@ -72,33 +85,31 @@ public class ScheduleService {
         Room room = roomRepository.findByIdAndCenter_Id(request.getRoomId(), centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + request.getRoomId() + " in this center"));
 
-        validateTimeRange(request.getStartTime(), request.getEndTime());
-
         if (scheduleRepository.existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(
                 classId,
                 request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()),
-                request.getEndTime(),
+                request.getStartTime(),
                 centerId
         )) {
             throw new DuplicateResourceException("Schedule already exists for this class at this time");
         }
 
-        // Conflict: teacher overlap
-        DayOfWeek day = DayOfWeek.of(request.getDayOfWeek());
-        long teacherOverlap = scheduleRepository.countOverlappingTeacherSchedules(
-                request.getTeacherUserId(), day,
-                request.getStartTime(), request.getEndTime(), centerId, null);
-        if (teacherOverlap > 0) {
-            throw new BusinessRuleException("Teacher has an overlapping schedule at this time");
-        }
+        ScheduleValidationContext validationContext = ScheduleValidationContext.builder()
+                .scheduleId(null)
+                .clazz(clazz)
+                .room(room)
+                .teacher(teacher)
+                .dayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()))
+                .startTime(request.getStartTime())
+                .endTime(request.getEndTime())
+                .centerId(centerId)
+                .build();
 
-        // Conflict: room overlap
-        long roomOverlap = scheduleRepository.countOverlappingRoomSchedules(
-                request.getRoomId(), day,
-                request.getStartTime(), request.getEndTime(), centerId, null);
-        if (roomOverlap > 0) {
-            throw new BusinessRuleException("Room is already booked at this time");
-        }
+        timeRangeValidator.validate(validationContext);
+        classLifecycleValidator.validate(validationContext);
+        roomConflictValidator.validate(validationContext);
+        teacherConflictValidator.validate(validationContext);
+        studentConflictValidator.validate(validationContext);
 
         Schedule schedule = Schedule.builder()
                 .clazz(clazz)
@@ -108,7 +119,7 @@ public class ScheduleService {
                 .dayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()))
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
-                .isActive(true)
+                .type(request.getType() != null ? request.getType() : ScheduleType.THEORY_CLASS)
                 .build();
 
         schedule = scheduleRepository.save(schedule);
@@ -186,7 +197,7 @@ public class ScheduleService {
 
         return scheduleRepository.findAllByCenter_Id(centerId)
                 .stream()
-                .filter(s -> s.isActive())
+                .filter(s -> s.getType() != ScheduleType.CANCELLED)
                 .map(this::toResponse)
                 .toList();
     }
@@ -267,30 +278,31 @@ public class ScheduleService {
         Room room = roomRepository.findByIdAndCenter_Id(request.getRoomId(), centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + request.getRoomId() + " in this center"));
 
-        validateTimeRange(request.getStartTime(), request.getEndTime());
+        ScheduleValidationContext validationContext = ScheduleValidationContext.builder()
+                .scheduleId(scheduleId)
+                .clazz(schedule.getClazz())
+                .room(room)
+                .teacher(teacher)
+                .dayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()))
+                .startTime(request.getStartTime())
+                .endTime(request.getEndTime())
+                .centerId(centerId)
+                .build();
 
-        // Conflict: teacher overlap (exclude self)
-        DayOfWeek day = request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek());
-        long teacherOverlap = scheduleRepository.countOverlappingTeacherSchedules(
-                request.getTeacherUserId(), day,
-                request.getStartTime(), request.getEndTime(), centerId, scheduleId);
-        if (teacherOverlap > 0) {
-            throw new BusinessRuleException("Teacher has an overlapping schedule at this time");
-        }
-
-        // Conflict: room overlap (exclude self)
-        long roomOverlap = scheduleRepository.countOverlappingRoomSchedules(
-                request.getRoomId(), day,
-                request.getStartTime(), request.getEndTime(), centerId, scheduleId);
-        if (roomOverlap > 0) {
-            throw new BusinessRuleException("Room is already booked at this time");
-        }
+        timeRangeValidator.validate(validationContext);
+        classLifecycleValidator.validate(validationContext);
+        roomConflictValidator.validate(validationContext);
+        teacherConflictValidator.validate(validationContext);
+        studentConflictValidator.validate(validationContext);
 
         schedule.setTeacherUser(teacher);
         schedule.setRoom(room);
         schedule.setDayOfWeek(request.getDayOfWeek() == null ? null : DayOfWeek.of(request.getDayOfWeek()));
         schedule.setStartTime(request.getStartTime());
         schedule.setEndTime(request.getEndTime());
+        if (request.getType() != null) {
+            schedule.setType(request.getType());
+        }
 
         schedule = scheduleRepository.save(schedule);
 
@@ -317,9 +329,9 @@ public class ScheduleService {
         scheduleRepository.delete(schedule);
     }
 
-    // Toggle active
+    // Update type
     @Transactional
-    public ScheduleResponse toggleActive(Long scheduleId) {
+    public ScheduleResponse updateType(Long scheduleId, ScheduleType newType) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
@@ -334,7 +346,7 @@ public class ScheduleService {
             throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
         }
 
-        schedule.setActive(!schedule.isActive());
+        schedule.setType(newType);
         schedule = scheduleRepository.save(schedule);
 
         return toResponse(schedule);
@@ -364,7 +376,7 @@ public class ScheduleService {
                 .dayOfWeek(schedule.getDayOfWeek().getValue())
                 .startTime(schedule.getStartTime())
                 .endTime(schedule.getEndTime())
-                .isActive(schedule.isActive())
+                .type(schedule.getType())
                 .createdAt(schedule.getCreatedAt())
                 .build();
     }

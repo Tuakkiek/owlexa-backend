@@ -67,9 +67,17 @@ class ScheduleServiceTest {
 
     @BeforeEach
     void setUp() {
+        var classLifecycleValidator = new com.owlexa.owlexabackend.modules.class_management.service.validation.ClassLifecycleValidator();
+        var timeRangeValidator = new com.owlexa.owlexabackend.modules.class_management.service.validation.TimeRangeValidator();
+        var roomConflictValidator = new com.owlexa.owlexabackend.modules.class_management.service.validation.RoomConflictValidator(scheduleRepository);
+        var teacherConflictValidator = new com.owlexa.owlexabackend.modules.class_management.service.validation.TeacherConflictValidator(scheduleRepository);
+        var studentConflictValidator = new com.owlexa.owlexabackend.modules.class_management.service.validation.StudentConflictValidator(classEnrollmentRepository, scheduleRepository);
+
         service = new ScheduleService(
                 userRepository, classRepository, membershipRepository,
-                scheduleRepository, classEnrollmentRepository, roomRepository
+                scheduleRepository, classEnrollmentRepository, roomRepository,
+                classLifecycleValidator, timeRangeValidator, roomConflictValidator,
+                teacherConflictValidator, studentConflictValidator
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
@@ -134,7 +142,7 @@ class ScheduleServiceTest {
         schedule.setStartTime(LocalTime.of(8, 0));
         schedule.setEndTime(LocalTime.of(10, 0));
         schedule.setRoom(buildRoom(ROOM_ID, centerId));
-        schedule.setActive(true);
+        schedule.setType(com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.THEORY_CLASS);
         return schedule;
     }
 
@@ -158,11 +166,8 @@ class ScheduleServiceTest {
         when(userRepository.findById(SCHEDULE_TEACHER_ID)).thenReturn(Optional.of(buildTeacher(SCHEDULE_TEACHER_ID)));
         when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
                 .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
-        when(scheduleRepository.existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(
-                any(), any(), any(), any()))
-                .thenReturn(false);
-        when(scheduleRepository.countOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(0L);
-        when(scheduleRepository.countOverlappingRoomSchedules(any(), any(), any(), any(), any(), any())).thenReturn(0L);
+        lenient().when(scheduleRepository.findOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+        lenient().when(scheduleRepository.findOverlappingRoomSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of());
         when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> {
             Schedule s = invocation.getArgument(0);
             s.setId(SCHEDULE_ID);
@@ -174,7 +179,21 @@ class ScheduleServiceTest {
         assertThat(response.getId()).isEqualTo(SCHEDULE_ID);
         assertThat(response.getRoomId()).isEqualTo(ROOM_ID);
         assertThat(response.getRoomName()).isEqualTo("Room " + ROOM_ID);
-        assertThat(response.isActive()).isTrue();
+        assertThat(response.getType()).isEqualTo(com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.THEORY_CLASS);
+    }
+
+    @Test
+    @DisplayName("updateType: schedule type THEORY_CLASS → set CANCELLED")
+    void updateType_shouldUpdateType() {
+        Schedule existing = buildSchedule(CENTER_ID);
+        existing.setType(com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.THEORY_CLASS);
+        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(existing));
+        when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ScheduleResponse response = service.updateType(SCHEDULE_ID, com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.CANCELLED);
+
+        assertThat(existing.getType()).isEqualTo(com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.CANCELLED);
+        assertThat(response.getType()).isEqualTo(com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.CANCELLED);
     }
 
     @Test
@@ -234,8 +253,10 @@ class ScheduleServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.create(CLASS_ID, bad))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("startTime must be before endTime");
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Start time must be before end time")
+                .extracting("code")
+                .isEqualTo("INVALID_TIME_RANGE");
     }
 
     @Test
@@ -339,8 +360,8 @@ class ScheduleServiceTest {
         when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
                 .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID)));
-        when(scheduleRepository.countOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(0L);
-        when(scheduleRepository.countOverlappingRoomSchedules(any(), any(), any(), any(), any(), any())).thenReturn(0L);
+        lenient().when(scheduleRepository.findOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+        lenient().when(scheduleRepository.findOverlappingRoomSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of());
         when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ScheduleRequest req = ScheduleRequest.builder()
@@ -378,19 +399,7 @@ class ScheduleServiceTest {
         org.mockito.Mockito.verify(scheduleRepository).delete(existing);
     }
 
-    @Test
-    @DisplayName("toggleActive: schedule active → set inactive")
-    void toggleActive_shouldFlipActive() {
-        Schedule existing = buildSchedule(CENTER_ID);
-        existing.setActive(true);
-        when(scheduleRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(existing));
-        when(scheduleRepository.save(any(Schedule.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ScheduleResponse response = service.toggleActive(SCHEDULE_ID);
-
-        assertThat(existing.isActive()).isFalse();
-        assertThat(response.isActive()).isFalse();
-    }
 
     @Test
     @DisplayName("create: teacher overlap → BusinessRuleException")
@@ -401,12 +410,16 @@ class ScheduleServiceTest {
         when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
                 .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID)));
-        when(scheduleRepository.existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(any(), any(), any(), any())).thenReturn(false);
-        when(scheduleRepository.countOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        Schedule conflict = new Schedule();
+        conflict.setDayOfWeek(DayOfWeek.MONDAY);
+        conflict.setStartTime(LocalTime.of(8, 0));
+        conflict.setEndTime(LocalTime.of(10, 0));
+        conflict.setTeacherUser(buildTeacher(SCHEDULE_TEACHER_ID));
+        when(scheduleRepository.findOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of(conflict));
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Teacher has an overlapping schedule");
+                .hasMessageContaining("Teacher Teacher 200 is already teaching another class during this time.");
     }
 
     @Test
@@ -418,13 +431,16 @@ class ScheduleServiceTest {
         when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
                 .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID)));
-        when(scheduleRepository.existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(any(), any(), any(), any())).thenReturn(false);
-        when(scheduleRepository.countOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(0L);
-        when(scheduleRepository.countOverlappingRoomSchedules(any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        Schedule conflict = new Schedule();
+        conflict.setDayOfWeek(DayOfWeek.MONDAY);
+        conflict.setStartTime(LocalTime.of(8, 0));
+        conflict.setEndTime(LocalTime.of(10, 0));
+        conflict.setRoom(buildRoom(ROOM_ID, CENTER_ID));
+        when(scheduleRepository.findOverlappingRoomSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of(conflict));
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Room is already booked");
+                .hasMessageContaining("Room Room 10 is already occupied on Monday from 08:00 to 10:00.");
     }
 
     @Test
@@ -436,11 +452,16 @@ class ScheduleServiceTest {
         when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
                 .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID)));
-        when(scheduleRepository.countOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(1L);
+        Schedule conflict = new Schedule();
+        conflict.setDayOfWeek(DayOfWeek.MONDAY);
+        conflict.setStartTime(LocalTime.of(8, 0));
+        conflict.setEndTime(LocalTime.of(10, 0));
+        conflict.setTeacherUser(buildTeacher(SCHEDULE_TEACHER_ID));
+        when(scheduleRepository.findOverlappingTeacherSchedules(any(), any(), any(), any(), any(), any())).thenReturn(List.of(conflict));
 
         assertThatThrownBy(() -> service.update(CLASS_ID, SCHEDULE_ID, buildCreateRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Teacher has an overlapping schedule");
+                .hasMessageContaining("Teacher Teacher 200 is already teaching another class during this time.");
     }
 
     @Test

@@ -96,7 +96,7 @@ class EnrollmentServiceTest {
         clazz.setCenter(center);
         clazz.setMaxStudents(maxStudents);
         clazz.setMonthlyFee(1500000.0);
-        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.OPEN);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE);
         return clazz;
     }
 
@@ -144,7 +144,7 @@ class EnrollmentServiceTest {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.empty());
         when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID,
                 List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED))).thenReturn(5L);
         when(scheduleRepository.findAllByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID)).thenReturn(List.of());
@@ -200,7 +200,9 @@ class EnrollmentServiceTest {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(true);
+        ClassEnrollment enrollment = new ClassEnrollment();
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.of(enrollment));
 
         assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
                 .isInstanceOf(DuplicateResourceException.class);
@@ -212,7 +214,7 @@ class EnrollmentServiceTest {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.empty());
         when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID,
                 List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED))).thenReturn(20L);
 

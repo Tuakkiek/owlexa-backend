@@ -63,27 +63,15 @@ public class ClassService {
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
 
-        User primaryTeacher = null;
-        if (request.getTeacherUserId() != null) {
-            primaryTeacher = userRepository.findById(request.getTeacherUserId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Teacher not found with id: " + request.getTeacherUserId()));
-            if (primaryTeacher.getRole() != Role.TEACHER) {
-                throw new BadRequestException("User is not a TEACHER");
-            }
-            boolean teacherInCenter = membershipRepository.existsByUser_IdAndCenter_Id(primaryTeacher.getId(), centerId);
-            if (!teacherInCenter) {
-                throw new BadRequestException("Teacher is not a member of this center");
-            }
-        }
+        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : course.getDefaultMaxStudents();
+        Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : course.getDefaultMonthlyFee();
 
         Class newClass = Class.builder()
                 .name(request.getName().trim())
                 .course(course)
-                .teacher(primaryTeacher)
-                .status(ClassStatus.PLANNING)
-                .vstepLevel(request.getVstepLevel())
-                .maxStudents(request.getMaxStudent())
-                .monthlyFee(request.getMonthlyFee())
+                .status(ClassStatus.PLANNED)
+                .maxStudents(maxStudents)
+                .monthlyFee(monthlyFee)
                 .center(center)
                 .build();
 
@@ -189,7 +177,7 @@ public class ClassService {
         List<Class> allClasses = classRepository.findAllByCenter_Id(centerId);
 
         return allClasses.stream()
-                .filter(clazz -> Boolean.TRUE.equals(clazz.getIsActive()))
+                .filter(clazz -> clazz.getStatus() == ClassStatus.ACTIVE)
                 .map(clazz -> {
                     List<StudentResponse> students = classEnrollmentRepository
                             .findAllByClazz_IdAndStatus(clazz.getId(), EnrollmentStatus.ACTIVE)
@@ -233,29 +221,15 @@ public class ClassService {
             throw new DuplicateResourceException("Class name is already exists in this center");
         }
 
-        existingClass.setName(newName);
-        existingClass.setVstepLevel(request.getVstepLevel());
-        existingClass.setMaxStudents(request.getMaxStudent());
-        existingClass.setMonthlyFee(request.getMonthlyFee());
-
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
         existingClass.setCourse(course);
 
-        if (request.getTeacherUserId() != null) {
-            User primaryTeacher = userRepository.findById(request.getTeacherUserId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Teacher not found with id: " + request.getTeacherUserId()));
-            if (primaryTeacher.getRole() != Role.TEACHER) {
-                throw new BadRequestException("User is not a TEACHER");
-            }
-            boolean teacherInCenter = membershipRepository.existsByUser_IdAndCenter_Id(primaryTeacher.getId(), centerId);
-            if (!teacherInCenter) {
-                throw new BadRequestException("Teacher is not a member of this center");
-            }
-            existingClass.setTeacher(primaryTeacher);
-        } else {
-            existingClass.setTeacher(null);
-        }
+        existingClass.setName(newName);
+        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : course.getDefaultMaxStudents();
+        Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : course.getDefaultMonthlyFee();
+        existingClass.setMaxStudents(maxStudents);
+        existingClass.setMonthlyFee(monthlyFee);
 
         existingClass = classRepository.save(existingClass);
 
@@ -287,7 +261,6 @@ public class ClassService {
         return ClassResponse.builder()
                 .id(clazz.getId())
                 .name(clazz.getName())
-                .vstepLevel(clazz.getVstepLevel())
                 .maxStudents(clazz.getMaxStudents())
                 .monthFee(clazz.getMonthlyFee())
                 .status(clazz.getStatus())
@@ -296,75 +269,26 @@ public class ClassService {
                 .courseId(clazz.getCourse() != null ? clazz.getCourse().getId() : null)
                 .courseName(clazz.getCourse() != null ? clazz.getCourse().getName() : null)
                 .courseCode(clazz.getCourse() != null ? clazz.getCourse().getCode() : null)
-                .teacherUserId(clazz.getTeacher() != null ? clazz.getTeacher().getId() : null)
-                .teacherFullName(clazz.getTeacher() != null ? clazz.getTeacher().getFullName() : null)
-                .teacherPhoneNumber(clazz.getTeacher() != null ? clazz.getTeacher().getPhoneNumber() : null)
                 .build();
     }
 
-    // ── Lifecycle Transitions ─────────────────────────────────────────
+    // ── Lifecycle: Update Status (any status → any status) ────────────
 
     @Transactional
-    public ClassResponse openForEnrollment(Long classId) {
-        Class clazz = findAndValidateOwnership(classId);
-        if (clazz.getStatus() != ClassStatus.PLANNING) {
-            throw new BusinessRuleException("Only PLANNING classes can be opened");
-        }
-        clazz.setStatus(ClassStatus.OPEN);
-        return toResponse(classRepository.save(clazz));
-    }
-
-    @Transactional
-    public ClassResponse startClass(Long classId) {
-        Class clazz = findAndValidateOwnership(classId);
-        if (clazz.getStatus() != ClassStatus.OPEN && clazz.getStatus() != ClassStatus.FULL) {
-            throw new BusinessRuleException("Only OPEN or FULL classes can start");
-        }
-        clazz.setStatus(ClassStatus.IN_PROGRESS);
-        return toResponse(classRepository.save(clazz));
-    }
-
-    @Transactional
-    public ClassResponse finishClass(Long classId) {
-        Class clazz = findAndValidateOwnership(classId);
-        if (clazz.getStatus() != ClassStatus.IN_PROGRESS) {
-            throw new BusinessRuleException("Only IN_PROGRESS classes can finish");
-        }
-        clazz.setStatus(ClassStatus.FINISHED);
-        return toResponse(classRepository.save(clazz));
-    }
-
-    @Transactional
-    public ClassResponse archiveClass(Long classId) {
-        Class clazz = findAndValidateOwnership(classId);
-        if (clazz.getStatus() != ClassStatus.FINISHED && clazz.getStatus() != ClassStatus.CANCELLED) {
-            throw new BusinessRuleException("Only FINISHED or CANCELLED classes can be archived");
-        }
-        clazz.setStatus(ClassStatus.ARCHIVED);
-        return toResponse(classRepository.save(clazz));
-    }
-
-    @Transactional
-    public ClassResponse cancelClass(Long classId) {
-        Class clazz = findAndValidateOwnership(classId);
-        if (clazz.getStatus() == ClassStatus.IN_PROGRESS || clazz.getStatus() == ClassStatus.FINISHED
-                || clazz.getStatus() == ClassStatus.ARCHIVED) {
-            throw new BusinessRuleException("Cannot cancel class with status: " + clazz.getStatus());
-        }
-        clazz.setStatus(ClassStatus.CANCELLED);
-        return toResponse(classRepository.save(clazz));
-    }
-
-    private Class findAndValidateOwnership(Long classId) {
+    public ClassResponse updateStatus(Long classId, ClassStatus newStatus) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
         assertOwnerAndCenterMembership(currentUser, centerId);
+
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class belongs to another center");
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
-        return clazz;
+
+        clazz.setStatus(newStatus);
+        clazz = classRepository.save(clazz);
+        return toResponse(clazz);
     }
     // Get current user
     private User getCurrentUser() {
