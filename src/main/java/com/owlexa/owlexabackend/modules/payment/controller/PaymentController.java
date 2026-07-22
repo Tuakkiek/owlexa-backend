@@ -75,6 +75,28 @@ public class PaymentController {
         return bankTransferQrService.buildQrResponse(payment);
     }
 
+    // ── Student self-service QR endpoints ─────────────────────────────────
+
+    /**
+     * Creates a QR payment for the FULL remaining balance of a fee record.
+     * The student cannot choose the amount — the backend always uses the
+     * current remaining balance as the single source of truth.
+     */
+    @PostMapping("/student/fee-record/{feeRecordId}/payments/qr")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PaymentResponse createStudentQrPayment(@PathVariable Long feeRecordId) {
+        return paymentService.createStudentPendingBankTransfer(feeRecordId);
+    }
+
+    /**
+     * Returns QR display data for a student-owned payment.
+     * Validates that the authenticated student owns the payment.
+     */
+    @GetMapping("/student/payments/{paymentId}/qr")
+    public BankTransferQrResponse getStudentPaymentQr(@PathVariable Long paymentId) {
+        return paymentService.getStudentPaymentQr(paymentId);
+    }
+
     @GetMapping({
             "/owner/fee-record/{feeRecordId}/payments",
             "/cashier/fee-record/{feeRecordId}/payments"

@@ -58,6 +58,7 @@ import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -76,6 +77,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentService {
 
     private final UserRepository userRepository;
@@ -159,6 +161,118 @@ public class PaymentService {
         return toResponse(payment, feeRecord);
     }
 
+    // ── Student QR Payment (always full remaining balance) ─────────────────
+
+    /**
+     * Creates a PENDING bank-transfer payment for the FULL remaining balance
+     * of a fee record. Only callable by the student who owns the fee record.
+     * <p>
+     * Business rule: Student self-service QR payments MUST always cover the
+     * entire remaining balance in one transaction. No partial amounts, no
+     * custom amounts — the backend is the single source of truth.
+     * <p>
+     * Any existing PENDING bank-transfer/SEPAY payments for this fee record
+     * are automatically voided to enforce the "one active QR at a time" rule.
+     */
+    @Transactional
+    public PaymentResponse createStudentPendingBankTransfer(Long feeRecordId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
+                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
+
+        // Verify the fee record belongs to the authenticated student
+        if (!feeRecord.getStudentUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You can only pay your own fee records");
+        }
+
+        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
+        BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
+
+        if (remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessRuleException("This invoice is already fully paid");
+        }
+
+        // Void any existing PENDING bank-transfer/SEPAY payments for this fee record
+        // to enforce "one QR at a time" and ensure the QR always reflects the
+        // current remaining balance.
+        List<Payment> existingPending = paymentRepository
+                .findAllByFeeRecordOrderByCreatedAtDesc(feeRecord)
+                .stream()
+                .filter(p -> p.getStatus() == TransactionStatus.PENDING)
+                .filter(p -> p.getMethod() == PaymentMethod.BANK_TRANSFER
+                        || p.getMethod() == PaymentMethod.SEPAY)
+                .toList();
+
+        for (Payment p : existingPending) {
+            p.setStatus(TransactionStatus.VOIDED);
+            p.setVoidReason("Superseded by new student QR payment");
+            p.setVoidedBy(currentUser);
+            p.setVoidedAt(Instant.now());
+            paymentRepository.save(p);
+        }
+
+        // Create new PENDING payment for the FULL remaining balance — no client input
+        PaymentMethod method = PaymentMethod.SEPAY;
+        String receiptNumber = generateReceiptNumber();
+        Instant expiresAt = Instant.now().plusSeconds((long) bankTransferExpiryMinutes * 60);
+
+        Payment payment = Payment.builder()
+                .receiptNumber(receiptNumber)
+                .feeRecord(feeRecord)
+                .center(feeRecord.getCenter())
+                .studentUser(feeRecord.getStudentUser())
+                .collectedByUser(currentUser) // student initiates their own payment
+                .amount(remainingAmount)
+                .method(method)
+                .note("Student QR payment — full remaining balance")
+                .status(TransactionStatus.PENDING)
+                .expiresAt(expiresAt)
+                .build();
+
+        payment = paymentRepository.save(payment);
+
+        String paymentCode = generatePaymentCode(payment.getId());
+        payment.setSepayRef(paymentCode);
+        payment = paymentRepository.save(payment);
+
+        auditLog(currentUser, feeRecord.getCenter(), "PAYMENT_PENDING", "Payment",
+                payment.getId(), "Student created QR payment for full remaining balance: "
+                        + remainingAmount + " VND - Code: " + paymentCode
+                        + " - Expires: " + expiresAt);
+
+        return toResponse(payment, feeRecord);
+    }
+
+    // ── Student QR view (validate ownership) ──────────────────────────────
+
+    /**
+     * Returns QR data for a payment, validating that the authenticated student
+     * owns the payment. This is the student-specific companion to the
+     * cashier/owner QR endpoint.
+     */
+    @Transactional(readOnly = true)
+    public BankTransferQrResponse getStudentPaymentQr(Long paymentId) {
+        User currentUser = getCurrentUser();
+
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+
+        if (!payment.getStudentUser().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("You can only view QR codes for your own payments");
+        }
+
+        if (payment.getStatus() != TransactionStatus.PENDING
+                && payment.getStatus() != TransactionStatus.ACTIVE) {
+            throw new BusinessRuleException(
+                    "QR is only available for pending or confirmed bank transfer payments");
+        }
+
+        return bankTransferQrService.buildQrResponse(payment);
+    }
+
     /**
      * Generates a fixed-length, human-readable payment code.
      * Format: {prefix}{id:06d}  e.g., OWX000001, OWX000015
@@ -174,6 +288,12 @@ public class PaymentService {
     public PaymentResponse confirmBankTransferPayment(Long paymentId, SePayWebhookRequest webhookRequest) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+
+        // ── TEMPORARY DEBUG LOGGING (remove for production) ──
+        TransactionStatus statusBefore = payment.getStatus();
+        log.debug("[SEPAY-WEBHOOK] Payment id={}: status BEFORE = {}, expiresAt = {}",
+                paymentId, statusBefore, payment.getExpiresAt());
+        // ── END TEMPORARY DEBUG ──
 
         if (payment.getStatus() == TransactionStatus.ACTIVE) {
             throw new BusinessRuleException("Payment " + paymentId + " is already confirmed");
@@ -202,6 +322,11 @@ public class PaymentService {
             payment.setNote((existingNote != null ? existingNote : "") + sepayNote);
         }
         paymentRepository.save(payment);
+
+        // ── TEMPORARY DEBUG LOGGING (remove for production) ──
+        log.debug("[SEPAY-WEBHOOK] Payment id={}: status AFTER = {}, sepayRef = {}",
+                paymentId, payment.getStatus(), payment.getSepayRef());
+        // ── END TEMPORARY DEBUG ──
 
         FeeRecord feeRecord = payment.getFeeRecord();
 

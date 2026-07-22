@@ -9,7 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Component
+@Slf4j
 public class SePayWebhookVerifier {
 
     private static final String HMAC_ALGO = "HmacSHA256";
@@ -57,6 +60,16 @@ public class SePayWebhookVerifier {
         }
 
         String expectedHeader = "sha256=" + expectedHex;
+
+        // ── TEMPORARY DEBUG LOGGING (remove for production) ──
+        // Log first 12 chars only — NEVER log the full HMAC in production
+        log.debug("[SEPAY-WEBHOOK-HMAC] Computed HMAC starts with: sha256={}...",
+                expectedHex.substring(0, Math.min(12, expectedHex.length())));
+        log.debug("[SEPAY-WEBHOOK-HMAC] Received header starts with: {}...",
+                signatureHeader.trim().length() > 20
+                        ? signatureHeader.trim().substring(0, 20)
+                        : signatureHeader.trim());
+        // ── END TEMPORARY DEBUG ──
 
         if (!constantTimeEquals(expectedHeader, signatureHeader.trim())) {
             return VerificationResult.failure("Signature mismatch");

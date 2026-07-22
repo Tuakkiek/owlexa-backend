@@ -48,27 +48,47 @@ public class SePayWebhookService {
         }
 
         // 3. Resolve payment code -> paymentId
+        // Primary: use SePay-extracted code field
+        // Fallback: scan raw transfer content for the OWX prefix pattern
+        // (banking apps often modify the transfer content, so code may be null)
         Optional<Long> paymentIdOpt = codeResolver.resolvePaymentId(req.getCode());
+        if (paymentIdOpt.isEmpty() && req.getContent() != null && !req.getContent().isBlank()) {
+            log.debug("[SEPAY-WEBHOOK] code field is null/blank, scanning content for payment code");
+            paymentIdOpt = codeResolver.resolveFromContent(req.getContent());
+        }
         if (paymentIdOpt.isEmpty()) {
             event.setProcessingStatus(SePayEventStatus.UNMATCHED);
             event.setProcessingNote("Could not resolve payment code: " + req.getCode());
             event.setProcessedAt(LocalDateTime.now());
-            log.warn("SePay webhook id={} unmatched: code={}, content={}",
+            log.warn("[SEPAY-WEBHOOK] SePay webhook id={} unmatched: code={}, content={}",
                     event.getSepayTransactionId(), event.getPaymentCode(), event.getContent());
             return eventRepository.save(event);
         }
 
         Long paymentId = paymentIdOpt.get();
         event.setMatchedPaymentId(paymentId);
+        // ── TEMPORARY DEBUG LOGGING ──
+        log.debug("[SEPAY-WEBHOOK] Payment code resolved: code='{}' -> paymentId={}",
+                req.getCode(), paymentId);
+        // ── END TEMPORARY DEBUG ──
 
         // 4. Confirm the pending payment via PaymentService
         try {
+            // ── TEMPORARY DEBUG LOGGING ──
+            log.debug("[SEPAY-WEBHOOK] Attempting to confirm paymentId={}", paymentId);
+            // ── END TEMPORARY DEBUG ──
+
             paymentService.confirmBankTransferPayment(paymentId, req);
 
             event.setProcessingStatus(SePayEventStatus.MATCHED);
             event.setProcessingNote("Payment confirmed successfully");
+            // ── TEMPORARY DEBUG LOGGING ──
+            log.debug("[SEPAY-WEBHOOK] CONFIRMED: paymentId={} for sepayTxId={}",
+                    paymentId, event.getSepayTransactionId());
+            // ── END TEMPORARY DEBUG ──
         } catch (Exception e) {
-            log.error("Failed to process SePay webhook id={} for paymentId={}", req.getId(), paymentId, e);
+            log.error("[SEPAY-WEBHOOK] Failed to process SePay webhook id={} for paymentId={}",
+                    req.getId(), paymentId, e);
             event.setProcessingStatus(SePayEventStatus.FAILED);
             event.setProcessingNote("Error: " + e.getMessage());
         }
