@@ -40,7 +40,6 @@ class CourseServiceTest {
         course.setId(id);
         course.setCode(code);
         course.setName(name);
-        course.setLevel("B1");
         course.setIsActive(true);
         return course;
     }
@@ -49,7 +48,6 @@ class CourseServiceTest {
         return CourseRequest.builder()
                 .code("VSTEP-B1")
                 .name("VSTEP B1")
-                .level("B1")
                 .defaultMonthlyFee(1500000.0)
                 .defaultMaxStudents(20)
                 .build();
@@ -125,7 +123,6 @@ class CourseServiceTest {
         CourseRequest req = CourseRequest.builder()
                 .code("VSTEP-B1")
                 .name("VSTEP B1 New")
-                .level("B1")
                 .build();
 
         CourseResponse response = service.update(COURSE_ID, req);

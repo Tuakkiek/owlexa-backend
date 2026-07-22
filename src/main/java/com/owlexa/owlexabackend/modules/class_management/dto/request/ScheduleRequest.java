@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
 
 import java.time.LocalTime;
 
@@ -31,4 +32,6 @@ public class ScheduleRequest {
 
     @NotNull(message = "endTime is required")
     private LocalTime endTime;
+
+    private ScheduleType type;
 }

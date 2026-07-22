@@ -17,17 +17,20 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Daily job that automatically drops students with unpaid overdue fees.
+ * Daily job that suspends students with unpaid or partially-paid overdue fees.
  *
  * <p>Workflow:
  * <ol>
- *   <li>Find all UNPAID FeeRecords with dueDate before today</li>
- *   <li>For each, find the corresponding active ClassEnrollment</li>
- *   <li>Set enrollment status to DROPPED</li>
+ *   <li>Find all UNPAID or PARTIAL FeeRecords with dueDate before today</li>
+ *   <li>For each, find the corresponding ACTIVE ClassEnrollment</li>
+ *   <li>Set enrollment status to SUSPENDED (preserving all history)</li>
  * </ol>
  *
+ * <p>SUSPENDED enrollments are automatically reactivated when the student
+ * makes a payment that clears the overdue condition (see {@code PaymentService.collectCash}).
+ *
  * <p>Idempotent: safe to run multiple times.
- * Only drops ACTIVE enrollments — already DROPPED/PENDING are skipped.
+ * Only suspends ACTIVE enrollments — already SUSPENDED/DROPPED/PENDING are skipped.
  */
 @Slf4j
 @Component
@@ -37,23 +40,26 @@ public class OverdueEnrollmentJob {
     private final FeeRecordRepository feeRecordRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
 
+    /** Statuses that indicate the student still owes money and may become overdue. */
+    private static final List<FeeStatus> NOT_FULLY_PAID = List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL);
+
     @Value("${app.enrollment.overdue-cron:0 0 2 * * *}")
     @SuppressWarnings("unused")
     private String cronExpression;
 
     @Scheduled(cron = "${app.enrollment.overdue-cron:0 0 2 * * *}")
     @Transactional
-    public void dropOverdueEnrollments() {
+    public void suspendOverdueEnrollments() {
         LocalDate today = LocalDate.now();
 
         List<FeeRecord> overdueFees = feeRecordRepository
-                .findAllByStatusAndDueDateBefore(FeeStatus.UNPAID, today);
+                .findAllByStatusInAndDueDateBefore(NOT_FULLY_PAID, today);
 
         if (overdueFees.isEmpty()) {
             return;
         }
 
-        int droppedCount = 0;
+        int suspendedCount = 0;
         for (FeeRecord fee : overdueFees) {
             if (fee.getClazz() == null) continue;
 
@@ -63,21 +69,21 @@ public class OverdueEnrollmentJob {
                             fee.getStudentUser().getId())
                     .ifPresent(enrollment -> {
                         if (enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
-                            enrollment.setStatus(EnrollmentStatus.DROPPED);
+                            enrollment.setStatus(EnrollmentStatus.SUSPENDED);
                             classEnrollmentRepository.save(enrollment);
-                            log.info("OverdueEnrollmentJob: dropped enrollment {} — studentId={} classId={} feeId={}",
+                            log.info("OverdueEnrollmentJob: suspended enrollment {} — studentId={} classId={} feeId={}",
                                     enrollment.getId(),
                                     fee.getStudentUser().getId(),
                                     fee.getClazz().getId(),
                                     fee.getId());
                         }
                     });
-            droppedCount++;
+            suspendedCount++;
         }
 
-        if (droppedCount > 0) {
-            log.info("OverdueEnrollmentJob: processed {} overdue fee records, dropped ACTIVE enrollments",
-                    droppedCount);
+        if (suspendedCount > 0) {
+            log.info("OverdueEnrollmentJob: processed {} overdue fee records, suspended ACTIVE enrollments",
+                    suspendedCount);
         }
     }
 }

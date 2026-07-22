@@ -37,9 +37,6 @@ public class Course {
     @Column(nullable = false)
     private String name;
 
-    @Column(length = 50)
-    private String level;
-
     @Column(columnDefinition = "TEXT")
     private String description;
 

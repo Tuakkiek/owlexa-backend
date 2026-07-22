@@ -60,8 +60,9 @@ public class Schedule implements TenantAware {
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean isActive;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private ScheduleType type = ScheduleType.THEORY_CLASS;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

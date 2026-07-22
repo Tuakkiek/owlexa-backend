@@ -1,4 +1,5 @@
 package com.owlexa.owlexabackend.modules.payment.dto.response;
+import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,6 +32,8 @@ public class FeeRecordResponse {
     private String month;
     private LocalDate dueDate;
     private FeeStatus status;
+
+    private EnrollmentStatus enrollmentStatus;
 
     private Instant createdAt;
 }

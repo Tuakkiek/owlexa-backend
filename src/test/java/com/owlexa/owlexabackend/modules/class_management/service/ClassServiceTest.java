@@ -104,7 +104,6 @@ class ClassServiceTest {
         clazz.setId(id);
         clazz.setName(name);
         clazz.setCenter(buildCenter(centerId));
-        clazz.setVstepLevel("B1");
         clazz.setMaxStudents(20);
         clazz.setMonthlyFee(1500000.0);
         clazz.setStatus(status);
@@ -116,7 +115,6 @@ class ClassServiceTest {
         course.setId(id);
         course.setCode("VSTEP-B1");
         course.setName("VSTEP B1");
-        course.setLevel("B1");
         course.setIsActive(true);
         return course;
     }
@@ -134,22 +132,11 @@ class ClassServiceTest {
         return ClassRequest.builder()
                 .name("VSTEP B1 Morning")
                 .courseId(COURSE_ID)
-                .vstepLevel("B1")
                 .maxStudent(20)
                 .monthlyFee(1500000.0)
                 .build();
     }
 
-    private ClassRequest buildCreateRequestWithTeacher(Long teacherId) {
-        return ClassRequest.builder()
-                .name("VSTEP B1 Morning")
-                .courseId(COURSE_ID)
-                .teacherUserId(teacherId)
-                .vstepLevel("B1")
-                .maxStudent(20)
-                .monthlyFee(1500000.0)
-                .build();
-    }
 
     @Test
     @DisplayName("create: OWNER + tên chưa tồn tại + course hợp lệ → tạo class thành công")
@@ -168,7 +155,7 @@ class ClassServiceTest {
         assertThat(response.getId()).isEqualTo(CLASS_ID);
         assertThat(response.getName()).isEqualTo("VSTEP B1 Morning");
         assertThat(response.getCenterId()).isEqualTo(CENTER_ID);
-        assertThat(response.getStatus()).isEqualTo(ClassStatus.PLANNING);
+        assertThat(response.getStatus()).isEqualTo(ClassStatus.PLANNED);
         assertThat(response.getIsActive()).isFalse();
     }
 
@@ -226,7 +213,7 @@ class ClassServiceTest {
     void findAll_shouldReturnAllClassesInCenter() {
         when(classRepository.findAllByCenter_Id(CENTER_ID))
                 .thenReturn(List.of(
-                        buildClass(1L, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS),
+                        buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE),
                         buildClass(2L, CENTER_ID, "Class B", ClassStatus.FINISHED)
                 ));
 
@@ -252,16 +239,16 @@ class ClassServiceTest {
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
 
         Schedule s1 = new Schedule();
-        s1.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS));
+        s1.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE));
         Schedule s2 = new Schedule();
-        s2.setClazz(buildClass(2L, CENTER_ID, "Class B", ClassStatus.IN_PROGRESS));
+        s2.setClazz(buildClass(2L, CENTER_ID, "Class B", ClassStatus.ACTIVE));
         Schedule s3 = new Schedule();
-        s3.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS));
+        s3.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE));
 
         when(scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID))
                 .thenReturn(List.of(s1, s2, s3));
-        when(classRepository.findById(1L)).thenReturn(Optional.of(buildClass(1L, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS)));
-        when(classRepository.findById(2L)).thenReturn(Optional.of(buildClass(2L, CENTER_ID, "Class B", ClassStatus.IN_PROGRESS)));
+        when(classRepository.findById(1L)).thenReturn(Optional.of(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE)));
+        when(classRepository.findById(2L)).thenReturn(Optional.of(buildClass(2L, CENTER_ID, "Class B", ClassStatus.ACTIVE)));
 
         List<ClassResponse> response = service.findMyClassesAsTeacher();
 
@@ -290,10 +277,10 @@ class ClassServiceTest {
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
 
         Schedule s = new Schedule();
-        s.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS));
+        s.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE));
         when(scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID))
                 .thenReturn(List.of(s));
-        when(classRepository.findById(1L)).thenReturn(Optional.of(buildClass(1L, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS)));
+        when(classRepository.findById(1L)).thenReturn(Optional.of(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE)));
 
         ClassEnrollment e1 = new ClassEnrollment();
         User student1 = new User();
@@ -320,7 +307,7 @@ class ClassServiceTest {
     void findAllClassesWithStudentsForOwner_shouldReturnOnlyActiveClasses() {
         when(classRepository.findAllByCenter_Id(CENTER_ID))
                 .thenReturn(List.of(
-                        buildClass(1L, CENTER_ID, "Class Active", ClassStatus.IN_PROGRESS),
+                        buildClass(1L, CENTER_ID, "Class Active", ClassStatus.ACTIVE),
                         buildClass(2L, CENTER_ID, "Class Inactive", ClassStatus.FINISHED)
                 ));
         when(classEnrollmentRepository.findAllByClazz_IdAndStatus(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any()))
@@ -353,7 +340,7 @@ class ClassServiceTest {
     @Test
     @DisplayName("update: class thuộc center khác → TenancyViolationException")
     void update_whenClassInOtherCenter_shouldThrowTenancyViolation() {
-        Class existing = buildClass(CLASS_ID, OTHER_CENTER_ID, "Old Name", ClassStatus.IN_PROGRESS);
+        Class existing = buildClass(CLASS_ID, OTHER_CENTER_ID, "Old Name", ClassStatus.ACTIVE);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.update(CLASS_ID, buildCreateRequest()))
@@ -363,7 +350,7 @@ class ClassServiceTest {
     @Test
     @DisplayName("update: đổi tên + tên mới đã tồn tại trong center → DuplicateResourceException")
     void update_whenNewNameExistsInCenter_shouldThrowDuplicate() {
-        Class existing = buildClass(CLASS_ID, CENTER_ID, "Old Name", ClassStatus.IN_PROGRESS);
+        Class existing = buildClass(CLASS_ID, CENTER_ID, "Old Name", ClassStatus.ACTIVE);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
         when(classRepository.existsByNameAndCenter_Id("VSTEP B1 Morning", CENTER_ID)).thenReturn(true);
 
@@ -374,7 +361,7 @@ class ClassServiceTest {
     @Test
     @DisplayName("update: giữ nguyên tên (case-insensitive) → OK, không check duplicate")
     void update_whenKeepingSameName_caseInsensitive_shouldNotThrowDuplicate() {
-        Class existing = buildClass(CLASS_ID, CENTER_ID, "VSTEP B1 Morning", ClassStatus.IN_PROGRESS);
+        Class existing = buildClass(CLASS_ID, CENTER_ID, "VSTEP B1 Morning", ClassStatus.ACTIVE);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID)));
         when(classRepository.save(any(Class.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -382,7 +369,6 @@ class ClassServiceTest {
         ClassRequest req = ClassRequest.builder()
                 .name("vstep b1 morning")
                 .courseId(COURSE_ID)
-                .vstepLevel("B2")
                 .maxStudent(25)
                 .monthlyFee(2000000.0)
                 .build();
@@ -390,13 +376,12 @@ class ClassServiceTest {
         ClassResponse response = service.update(CLASS_ID, req);
 
         assertThat(response.getName()).isEqualTo("vstep b1 morning");
-        assertThat(response.getVstepLevel()).isEqualTo("B2");
     }
 
     @Test
     @DisplayName("delete: class thuộc center khác → TenancyViolationException")
     void delete_whenClassInOtherCenter_shouldThrowTenancyViolation() {
-        Class existing = buildClass(CLASS_ID, OTHER_CENTER_ID, "Class A", ClassStatus.IN_PROGRESS);
+        Class existing = buildClass(CLASS_ID, OTHER_CENTER_ID, "Class A", ClassStatus.ACTIVE);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.delete(CLASS_ID))
@@ -406,7 +391,7 @@ class ClassServiceTest {
     @Test
     @DisplayName("delete: class hợp lệ → xóa thành công")
     void delete_whenValid_shouldDeleteClass() {
-        Class existing = buildClass(CLASS_ID, CENTER_ID, "Class A", ClassStatus.IN_PROGRESS);
+        Class existing = buildClass(CLASS_ID, CENTER_ID, "Class A", ClassStatus.ACTIVE);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
 
         service.delete(CLASS_ID);
@@ -433,56 +418,4 @@ class ClassServiceTest {
                 .hasMessageContaining("Tenant context");
     }
 
-    @Test
-    @DisplayName("create: with primary teacher → class created with teacher info in response")
-    void create_whenWithPrimaryTeacher_shouldIncludeTeacherInResponse() {
-        Long teacherId = 50L;
-        when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter(CENTER_ID)));
-        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID)));
-        when(classRepository.existsByNameAndCenter_Id("VSTEP B1 Morning", CENTER_ID)).thenReturn(false);
-        when(userRepository.findById(teacherId)).thenReturn(Optional.of(buildTeacher(teacherId, CENTER_ID)));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(teacherId, CENTER_ID)).thenReturn(true);
-        when(classRepository.save(any(Class.class))).thenAnswer(invocation -> {
-            Class c = invocation.getArgument(0);
-            c.setId(CLASS_ID);
-            return c;
-        });
-
-        ClassResponse response = service.create(buildCreateRequestWithTeacher(teacherId));
-
-        assertThat(response.getTeacherUserId()).isEqualTo(teacherId);
-        assertThat(response.getTeacherFullName()).isEqualTo("Teacher " + teacherId);
-        assertThat(response.getTeacherPhoneNumber()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("create: with non-TEACHER as primary teacher → BadRequestException")
-    void create_whenPrimaryTeacherIsNotTeacher_shouldThrowBadRequest() {
-        Long teacherId = 50L;
-        when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter(CENTER_ID)));
-        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID)));
-        when(classRepository.existsByNameAndCenter_Id("VSTEP B1 Morning", CENTER_ID)).thenReturn(false);
-        User student = buildTeacher(teacherId, CENTER_ID);
-        student.setRole(Role.STUDENT);
-        when(userRepository.findById(teacherId)).thenReturn(Optional.of(student));
-
-        assertThatThrownBy(() -> service.create(buildCreateRequestWithTeacher(teacherId)))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a TEACHER");
-    }
-
-    @Test
-    @DisplayName("create: with teacher not in center → BadRequestException")
-    void create_whenPrimaryTeacherNotInCenter_shouldThrowBadRequest() {
-        Long teacherId = 50L;
-        when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter(CENTER_ID)));
-        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID)));
-        when(classRepository.existsByNameAndCenter_Id("VSTEP B1 Morning", CENTER_ID)).thenReturn(false);
-        when(userRepository.findById(teacherId)).thenReturn(Optional.of(buildTeacher(teacherId, CENTER_ID)));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(teacherId, CENTER_ID)).thenReturn(false);
-
-        assertThatThrownBy(() -> service.create(buildCreateRequestWithTeacher(teacherId)))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a member of this center");
-    }
 }

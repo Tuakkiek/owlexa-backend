@@ -19,16 +19,9 @@ public class ClassRequest {
     @NotNull(message = "courseId is required")
     private Long courseId;
 
-    private Long teacherUserId;
-
-    @NotBlank(message = "Vstep level is required")
-    private String vstepLevel;
-
-    @NotNull(message = "Max student is required")
     @Min(value = 1, message = "Max student must be at least 1")
     private Integer maxStudent;
 
-    @NotNull(message = "Month fee is required")
     @Min(value = 0, message = "Month fee cannot be negative")
     private Double monthlyFee;
 }

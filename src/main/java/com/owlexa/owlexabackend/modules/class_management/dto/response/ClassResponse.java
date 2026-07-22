@@ -13,7 +13,6 @@ public class ClassResponse {
 
     private Long id;
     private String name;
-    private String vstepLevel;
     private Integer maxStudents;
     private Double monthFee;
     private ClassStatus status;
@@ -24,7 +23,4 @@ public class ClassResponse {
     private String courseName;
     private String courseCode;
 
-    private Long teacherUserId;
-    private String teacherFullName;
-    private String teacherPhoneNumber;
 }

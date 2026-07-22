@@ -19,8 +19,6 @@ public class CourseRequest {
     @NotBlank(message = "name is required")
     private String name;
 
-    private String level;
-
     private String description;
 
     private Integer defaultDuration;

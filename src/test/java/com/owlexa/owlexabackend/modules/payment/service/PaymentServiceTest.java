@@ -5,6 +5,7 @@ import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.payment.dto.request.CashPaymentRequest;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
@@ -53,6 +54,8 @@ class PaymentServiceTest {
     @Mock private InstallmentRepository installmentRepository;
     @Mock private RefundRepository refundRepository;
     @Mock private DiscountRepository discountRepository;
+    @Mock private ClassEnrollmentRepository classEnrollmentRepository;
+    @Mock private BankTransferQrService bankTransferQrService;
 
     private PaymentService paymentService;
 
@@ -63,7 +66,8 @@ class PaymentServiceTest {
     void setUp() {
         paymentService = new PaymentService(
                 userRepository, membershipRepository, feeRecordRepository, paymentRepository,
-                auditLogRepository, installmentRepository, refundRepository, discountRepository
+                auditLogRepository, installmentRepository, refundRepository, discountRepository,
+                classEnrollmentRepository, bankTransferQrService
         );
         TenantContext.setCurrentTenantId(CURRENT_CENTER_ID);
 

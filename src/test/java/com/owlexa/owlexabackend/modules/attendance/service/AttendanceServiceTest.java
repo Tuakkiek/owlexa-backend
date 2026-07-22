@@ -103,7 +103,7 @@ class AttendanceServiceTest {
         clazz.setId(CLASS_ID);
         clazz.setName("Class A");
         clazz.setCenter(center);
-        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE);
 
         Schedule schedule = new Schedule();
         schedule.setId(SCHEDULE_ID);
@@ -121,7 +121,7 @@ class AttendanceServiceTest {
         clazz.setId(CLASS_ID);
         clazz.setName("Class A");
         clazz.setCenter(center);
-        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE);
 
         Schedule schedule = new Schedule();
         schedule.setId(SCHEDULE_ID);

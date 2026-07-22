@@ -96,7 +96,7 @@ class EnrollmentServiceTest {
         clazz.setCenter(center);
         clazz.setMaxStudents(maxStudents);
         clazz.setMonthlyFee(1500000.0);
-        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.OPEN);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE);
         return clazz;
     }
 
@@ -139,26 +139,35 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("enroll: OWNER + class có chỗ + student mới → tạo enrollment PENDING")
-    void enroll_whenValid_shouldCreatePendingEnrollment() {
+    @DisplayName("enroll: OWNER + class có chỗ + student mới → tạo enrollment ACTIVE + sinh FeeRecord")
+    void enroll_whenValid_shouldCreateActiveEnrollmentAndFeeRecord() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
-        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE))).thenReturn(5L);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.empty());
+        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID,
+                List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED))).thenReturn(5L);
         when(scheduleRepository.findAllByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID)).thenReturn(List.of());
         when(classEnrollmentRepository.save(any(ClassEnrollment.class))).thenAnswer(invocation -> {
             ClassEnrollment e = invocation.getArgument(0);
             e.setId(999L);
             return e;
         });
+        // FeeRecord does not exist yet → should be created
+        when(feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(
+                org.mockito.ArgumentMatchers.eq(STUDENT_ID),
+                org.mockito.ArgumentMatchers.eq(CLASS_ID),
+                org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+        when(feeRecordRepository.save(any(FeeRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         EnrollmentResponse response = service.enroll(CLASS_ID, buildEnrollRequest());
 
         assertThat(response.getClassId()).isEqualTo(CLASS_ID);
         assertThat(response.getStudentUserId()).isEqualTo(STUDENT_ID);
-        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.PENDING);
+        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
         assertThat(response.getCenterId()).isEqualTo(CENTER_ID);
+        org.mockito.Mockito.verify(feeRecordRepository).save(any(FeeRecord.class));
     }
 
     @Test
@@ -191,7 +200,9 @@ class EnrollmentServiceTest {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(true);
+        ClassEnrollment enrollment = new ClassEnrollment();
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.of(enrollment));
 
         assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
                 .isInstanceOf(DuplicateResourceException.class);
@@ -203,8 +214,9 @@ class EnrollmentServiceTest {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(false);
-        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE))).thenReturn(20L);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.empty());
+        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(CLASS_ID,
+                List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED))).thenReturn(20L);
 
         assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
                 .isInstanceOf(BusinessRuleException.class)
@@ -309,19 +321,21 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("findAllByClass: trả về danh sách enrollment PENDING + ACTIVE")
-    void findAllByClass_shouldReturnPendingAndActiveEnrollments() {
+    @DisplayName("findAllByClass: trả về danh sách enrollment PENDING + ACTIVE + SUSPENDED")
+    void findAllByClass_shouldReturnPendingActiveAndSuspendedEnrollments() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID, 20);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        when(classEnrollmentRepository.findAllByClazz_IdAndStatusIn(CLASS_ID, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE)))
+        when(classEnrollmentRepository.findAllByClazz_IdAndStatusIn(CLASS_ID,
+                List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)))
                 .thenReturn(List.of(
                         buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.PENDING),
-                        buildEnrollment(2L, 101L, EnrollmentStatus.ACTIVE)
+                        buildEnrollment(2L, 101L, EnrollmentStatus.ACTIVE),
+                        buildEnrollment(3L, 102L, EnrollmentStatus.SUSPENDED)
                 ));
 
         List<EnrollmentResponse> response = service.findAllByClass(CLASS_ID);
 
-        assertThat(response).hasSize(2);
+        assertThat(response).hasSize(3);
     }
 
     @Test

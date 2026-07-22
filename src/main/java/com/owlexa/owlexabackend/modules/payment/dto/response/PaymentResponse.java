@@ -39,6 +39,7 @@ public class PaymentResponse {
     private String centerName;
     private TransactionStatus status;
     private Instant createdAt;
+    private Instant expiresAt;
 
     private BigDecimal feeRecordAmount;
     private BigDecimal feeRecordPaidAmount;

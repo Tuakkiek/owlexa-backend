@@ -12,10 +12,6 @@ import java.util.Optional;
 
 public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
-    List<FeeRecord> findAllByClazz_IdAndMonth(Long classId, String month);
-
-    List<FeeRecord> findAllByCenter_IdAndMonth(Long centerId, String month);
-
     List<FeeRecord> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
 
     List<FeeRecord> findAllByCenter_IdAndStatusAndDueDateBefore(
@@ -30,9 +26,11 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
             String month
     );
 
-    boolean existsByClazz_IdAndMonth(Long classId, String month);
-
     List<FeeRecord> findAllByStatusAndDueDateBefore(FeeStatus status, LocalDate date);
+
+    @Query("SELECT fr FROM FeeRecord fr WHERE fr.status IN :statuses AND fr.dueDate < :dueDate")
+    List<FeeRecord> findAllByStatusInAndDueDateBefore(@Param("statuses") List<FeeStatus> statuses,
+                                                       @Param("dueDate") LocalDate dueDate);
 
     boolean existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
             Long studentUserId, Long classId, FeeStatus status, LocalDate date);
@@ -61,4 +59,9 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
     @Query("SELECT COALESCE(SUM(fr.amount - COALESCE(fr.paidAmount, 0)), 0) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status IN :statuses")
     BigDecimal sumRemainingByCenterIdAndStatusIn(@Param("centerId") Long centerId,
                                                   @Param("statuses") List<FeeStatus> statuses);
+
+    // ── Pending fees (UNPAID + PARTIAL, regardless of due date) ──────────
+
+    List<FeeRecord> findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(Long centerId, List<FeeStatus> statuses);
 }
+

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,74 +64,113 @@ class OverdueEnrollmentJobTest {
     }
 
     @Test
-    @DisplayName("dropOverdueEnrollments: UNPAID + past dueDate → drops ACTIVE enrollment")
-    void whenUnpaidAndPastDue_shouldDropEnrollment() {
+    @DisplayName("suspendOverdueEnrollments: UNPAID + past dueDate → suspends ACTIVE enrollment")
+    void whenUnpaidAndPastDue_shouldSuspendEnrollment() {
         FeeRecord unpaid = buildFeeRecord(FEE_ID, FeeStatus.UNPAID, LocalDate.now().minusDays(1));
-        when(feeRecordRepository.findAllByStatusAndDueDateBefore(FeeStatus.UNPAID, LocalDate.now()))
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
                 .thenReturn(List.of(unpaid));
 
         ClassEnrollment active = buildEnrollment(EnrollmentStatus.ACTIVE);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
                 .thenReturn(Optional.of(active));
 
-        job.dropOverdueEnrollments();
+        job.suspendOverdueEnrollments();
 
         verify(classEnrollmentRepository).save(active);
-        assert active.getStatus() == EnrollmentStatus.DROPPED;
+        assert active.getStatus() == EnrollmentStatus.SUSPENDED;
     }
 
     @Test
-    @DisplayName("dropOverdueEnrollments: UNPAID but dueDate is future → no action")
-    void whenUnpaidButNotDue_shouldNotDrop() {
-        FeeRecord unpaid = buildFeeRecord(FEE_ID, FeeStatus.UNPAID, LocalDate.now().plusDays(5));
-        when(feeRecordRepository.findAllByStatusAndDueDateBefore(FeeStatus.UNPAID, LocalDate.now()))
+    @DisplayName("suspendOverdueEnrollments: PARTIAL + past dueDate → suspends ACTIVE enrollment")
+    void whenPartialAndPastDue_shouldSuspendEnrollment() {
+        FeeRecord partial = buildFeeRecord(FEE_ID, FeeStatus.PARTIAL, LocalDate.now().minusDays(1));
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
+                .thenReturn(List.of(partial));
+
+        ClassEnrollment active = buildEnrollment(EnrollmentStatus.ACTIVE);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
+                .thenReturn(Optional.of(active));
+
+        job.suspendOverdueEnrollments();
+
+        verify(classEnrollmentRepository).save(active);
+        assert active.getStatus() == EnrollmentStatus.SUSPENDED;
+    }
+
+    @Test
+    @DisplayName("suspendOverdueEnrollments: UNPAID but dueDate is future → no action")
+    void whenUnpaidButNotDue_shouldNotSuspend() {
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
                 .thenReturn(List.of()); // query only returns past-due
 
-        job.dropOverdueEnrollments();
+        job.suspendOverdueEnrollments();
 
         verify(classEnrollmentRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("dropOverdueEnrollments: PAID + past dueDate → no action")
-    void whenPaidAndPastDue_shouldNotDrop() {
-        // PAID records are not returned by the query (only UNPAID)
-        when(feeRecordRepository.findAllByStatusAndDueDateBefore(FeeStatus.UNPAID, LocalDate.now()))
+    @DisplayName("suspendOverdueEnrollments: PAID + past dueDate → no action")
+    void whenPaidAndPastDue_shouldNotSuspend() {
+        // PAID records are not returned by the query (only UNPAID + PARTIAL)
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
                 .thenReturn(List.of());
 
-        job.dropOverdueEnrollments();
+        job.suspendOverdueEnrollments();
 
         verify(classEnrollmentRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("dropOverdueEnrollments: enrollment already DROPPED → no change")
-    void whenAlreadyDropped_shouldNotModify() {
+    @DisplayName("suspendOverdueEnrollments: enrollment already SUSPENDED → no change")
+    void whenAlreadySuspended_shouldNotModify() {
         FeeRecord unpaid = buildFeeRecord(FEE_ID, FeeStatus.UNPAID, LocalDate.now().minusDays(1));
-        when(feeRecordRepository.findAllByStatusAndDueDateBefore(FeeStatus.UNPAID, LocalDate.now()))
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
                 .thenReturn(List.of(unpaid));
 
-        ClassEnrollment dropped = buildEnrollment(EnrollmentStatus.DROPPED);
+        ClassEnrollment suspended = buildEnrollment(EnrollmentStatus.SUSPENDED);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
-                .thenReturn(Optional.of(dropped));
+                .thenReturn(Optional.of(suspended));
 
-        job.dropOverdueEnrollments();
+        job.suspendOverdueEnrollments();
 
         verify(classEnrollmentRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("dropOverdueEnrollments: enrollment is PENDING → no change")
+    @DisplayName("suspendOverdueEnrollments: enrollment is PENDING → no change")
     void whenPending_shouldNotModify() {
         FeeRecord unpaid = buildFeeRecord(FEE_ID, FeeStatus.UNPAID, LocalDate.now().minusDays(1));
-        when(feeRecordRepository.findAllByStatusAndDueDateBefore(FeeStatus.UNPAID, LocalDate.now()))
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
                 .thenReturn(List.of(unpaid));
 
         ClassEnrollment pending = buildEnrollment(EnrollmentStatus.PENDING);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
                 .thenReturn(Optional.of(pending));
 
-        job.dropOverdueEnrollments();
+        job.suspendOverdueEnrollments();
+
+        verify(classEnrollmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("suspendOverdueEnrollments: enrollment is DROPPED → no change")
+    void whenDropped_shouldNotModify() {
+        FeeRecord unpaid = buildFeeRecord(FEE_ID, FeeStatus.UNPAID, LocalDate.now().minusDays(1));
+        when(feeRecordRepository.findAllByStatusInAndDueDateBefore(
+                eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL)), eq(LocalDate.now())))
+                .thenReturn(List.of(unpaid));
+
+        ClassEnrollment dropped = buildEnrollment(EnrollmentStatus.DROPPED);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
+                .thenReturn(Optional.of(dropped));
+
+        job.suspendOverdueEnrollments();
 
         verify(classEnrollmentRepository, never()).save(any());
     }

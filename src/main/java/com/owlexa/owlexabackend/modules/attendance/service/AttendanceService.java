@@ -56,9 +56,9 @@ public class AttendanceService {
 
         assertCanMarkAttendance(currentUser, centerId, schedule);
 
-        if (schedule.getClazz().getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.IN_PROGRESS) {
+        if (schedule.getClazz().getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE) {
             throw new BusinessRuleException(
-                    "Attendance can only be marked for IN_PROGRESS classes. Current: " + schedule.getClazz().getStatus());
+                    "Attendance can only be marked for ACTIVE classes. Current: " + schedule.getClazz().getStatus());
         }
 
         List<AttendanceResponse> responses = new ArrayList<>();

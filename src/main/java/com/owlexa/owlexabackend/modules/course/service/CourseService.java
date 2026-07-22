@@ -27,7 +27,6 @@ public class CourseService {
         Course course = Course.builder()
                 .code(request.getCode().trim())
                 .name(request.getName().trim())
-                .level(request.getLevel())
                 .description(request.getDescription())
                 .defaultDuration(request.getDefaultDuration())
                 .defaultMonthlyFee(request.getDefaultMonthlyFee())
@@ -74,7 +73,6 @@ public class CourseService {
 
         course.setCode(request.getCode().trim());
         course.setName(request.getName().trim());
-        course.setLevel(request.getLevel());
         course.setDescription(request.getDescription());
         course.setDefaultDuration(request.getDefaultDuration());
         course.setDefaultMonthlyFee(request.getDefaultMonthlyFee());
@@ -99,7 +97,6 @@ public class CourseService {
                 .id(course.getId())
                 .code(course.getCode())
                 .name(course.getName())
-                .level(course.getLevel())
                 .description(course.getDescription())
                 .defaultDuration(course.getDefaultDuration())
                 .defaultMonthlyFee(course.getDefaultMonthlyFee())
