@@ -20,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -81,11 +82,38 @@ public class PaymentController {
      * Creates a QR payment for the FULL remaining balance of a fee record.
      * The student cannot choose the amount — the backend always uses the
      * current remaining balance as the single source of truth.
+     * <p>
+     * Supports Idempotency-Key header for safe retries.
+     * Uses pessimistic locking to prevent duplicate pending payments.
      */
     @PostMapping("/student/fee-record/{feeRecordId}/payments/qr")
     @ResponseStatus(HttpStatus.CREATED)
-    public PaymentResponse createStudentQrPayment(@PathVariable Long feeRecordId) {
-        return paymentService.createStudentPendingBankTransfer(feeRecordId);
+    public PaymentResponse createStudentQrPayment(
+            @PathVariable Long feeRecordId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        return paymentService.createStudentPendingBankTransfer(feeRecordId, idempotencyKey);
+    }
+
+    /**
+     * Returns the current pending payment for a fee record (if any).
+     * Used by the frontend to check for unfinished payments and resume them.
+     * Returns 200 with the payment if one exists, or 204 No Content if none exists.
+     * Returns 404 only when the fee record itself is not found or the student is not authorized.
+     */
+    @GetMapping("/student/fee-record/{feeRecordId}/payments/pending")
+    public ResponseEntity<PaymentResponse> getCurrentPendingPayment(@PathVariable Long feeRecordId) {
+        return paymentService.getCurrentPendingPayment(feeRecordId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Allows a student to cancel their own pending payment.
+     * Only cancellable while status == PENDING.
+     */
+    @PostMapping("/student/payments/{paymentId}/cancel")
+    public PaymentResponse cancelStudentPayment(@PathVariable Long paymentId) {
+        return paymentService.cancelStudentPendingPayment(paymentId);
     }
 
     /**

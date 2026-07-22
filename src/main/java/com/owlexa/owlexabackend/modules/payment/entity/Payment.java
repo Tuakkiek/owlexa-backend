@@ -86,6 +86,9 @@ public class Payment implements TenantAware {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    @Column(name = "idempotency_key", unique = true, length = 64)
+    private String idempotencyKey;
+
     @Override
     public Long getCenterId() {
         return center != null ? center.getId() : null;
