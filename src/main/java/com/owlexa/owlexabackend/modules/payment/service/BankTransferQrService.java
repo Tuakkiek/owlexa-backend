@@ -3,22 +3,30 @@ package com.owlexa.owlexabackend.modules.payment.service;
 import com.owlexa.owlexabackend.modules.payment.dto.response.BankTransferQrResponse;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
 import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 /**
- * Responsible ONLY for generating bank transfer QR data.
+ * Generates VietQR-compliant bank transfer QR data.
+ * Uses the VietQR Image API (img.vietqr.io) to produce QR images
+ * that Vietnamese banking apps can scan directly.
+ *
  * Does NOT perform payment business logic — that stays in PaymentService.
  */
 @Service
-@RequiredArgsConstructor
+@Slf4j
 public class BankTransferQrService {
 
     @Value("${app.payment.bank-transfer.bank-name:MB Bank}")
     private String bankName;
+
+    @Value("${app.payment.bank-transfer.bank-code:MB}")
+    private String bankCode;
 
     @Value("${app.payment.bank-transfer.account-number:}")
     private String accountNumber;
@@ -29,10 +37,13 @@ public class BankTransferQrService {
     @Value("${app.payment.bank-transfer.qr-template:compact2}")
     private String qrTemplate;
 
+    /** VietQR image API base URL. */
+    private static final String VIETQR_IMAGE_BASE = "https://img.vietqr.io/image";
+
     /**
      * Builds QR display data for a pending bank transfer payment.
-     * The frontend only displays what this method returns —
-     * it never constructs QR data on its own.
+     * Returns both a VietQR image URL (qrImage) and a QR-content string (qrContent)
+     * so the frontend can display a banking-app-scannable QR.
      */
     public BankTransferQrResponse buildQrResponse(Payment payment) {
         String paymentCode = payment.getSepayRef() != null
@@ -41,10 +52,9 @@ public class BankTransferQrService {
         BigDecimal amount = payment.getAmount();
         String transferContent = paymentCode + " thanh toan hoc phi";
 
-        // VietQR-compatible QR content string.
-        // Frontend can use any QR library to render this string as a QR image,
-        // or call VietQR's image API with these parameters.
-        String qrContent = buildVietQrContent(amount, transferContent);
+        // Generate VietQR image API URL — this URL returns a PNG image
+        // that Vietnamese banking apps can scan directly.
+        String qrImageUrl = buildVietQrImageUrl(amount, transferContent);
 
         String status;
         if (payment.getStatus() == TransactionStatus.ACTIVE) {
@@ -57,6 +67,9 @@ public class BankTransferQrService {
             status = "PENDING";
         }
 
+        log.debug("Generated VietQR for payment {}: bankCode={}, amount={}, template={}",
+                payment.getId(), bankCode, amount.longValue(), qrTemplate);
+
         return BankTransferQrResponse.builder()
                 .paymentId(payment.getId())
                 .paymentCode(paymentCode)
@@ -65,29 +78,37 @@ public class BankTransferQrService {
                 .accountNumber(accountNumber)
                 .accountHolder(accountHolder)
                 .transferContent(transferContent)
-                .qrContent(qrContent)
-                .qrImage(null) // frontend generates QR image from qrContent
+                .qrContent(qrImageUrl)          // VietQR image URL — can be rendered by QRCodeSVG or displayed as <img>
+                .qrImage(qrImageUrl)            // VietQR image URL — frontend displays as <img> for banking apps
                 .expiresAt(payment.getExpiresAt())
                 .status(status)
                 .build();
     }
 
     /**
-     * Builds a VietQR-compliant content string.
-     * Format follows VietQR standard: bank_id, account_no, amount, description.
-     * This raw string can be rendered as QR by any standard QR library.
+     * Builds a VietQR image API URL.
+     * The returned URL points to a PNG image that encodes a VietQR-compliant
+     * QR code with bank account, amount, and transfer content already embedded.
+     *
+     * URL format:
+     *   https://img.vietqr.io/image/{bankCode}-{accountNumber}-{template}.png
+     *     ?amount={amount}&addInfo={transferContent}&accountName={accountHolder}
+     *
+     * @param amount      transfer amount in VND
+     * @param description transfer content (payment code + note)
+     * @return fully qualified VietQR image URL
      */
-    private String buildVietQrContent(BigDecimal amount, String description) {
-        // VietQR standard format:
-        // 00020101021238570010A00000072701270006<bank_id>0208QRIBFTTA5303704<amount>5405<amount>5802VN62<desc_length><desc>
-        // For simplicity and frontend flexibility, we provide the essential fields
-        // and let the frontend use a library like vietqr or qrcode to render.
-        // The format below is a compact representation:
-        StringBuilder sb = new StringBuilder();
-        sb.append("BANK:").append(bankName).append("|");
-        sb.append("ACC:").append(accountNumber).append("|");
-        sb.append("AMOUNT:").append(amount.longValue()).append("|");
-        sb.append("CONTENT:").append(description);
-        return sb.toString();
+    private String buildVietQrImageUrl(BigDecimal amount, String description) {
+        String encodedAccountHolder = URLEncoder.encode(accountHolder, StandardCharsets.UTF_8);
+        String encodedAddInfo = URLEncoder.encode(description, StandardCharsets.UTF_8);
+
+        return String.format("%s/%s-%s-%s.png?amount=%d&addInfo=%s&accountName=%s",
+                VIETQR_IMAGE_BASE,
+                bankCode,
+                accountNumber,
+                qrTemplate,
+                amount.longValue(),
+                encodedAddInfo,
+                encodedAccountHolder);
     }
 }
