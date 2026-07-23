@@ -14,6 +14,6 @@ import java.util.List;
 @Builder
 public class InstallmentScheduleRequest {
 
-    @NotNull(message = "installments is required")
+    @NotNull(message = "Danh sách kỳ hạn không được để trống")
     private List<InstallmentRequest> installments;
 }

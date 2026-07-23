@@ -17,14 +17,14 @@ import java.math.BigDecimal;
 @Builder
 public class DiscountRequest {
 
-    @NotBlank(message = "name is required")
+    @NotBlank(message = "Tên chiết khấu không được để trống")
     private String name;
 
-    @NotNull(message = "type is required")
+    @NotNull(message = "Loại chiết khấu không được để trống")
     private DiscountType type;
 
-    @NotNull(message = "value is required")
-    @Positive(message = "value must be positive")
+    @NotNull(message = "Giá trị chiết khấu không được để trống")
+    @Positive(message = "Giá trị chiết khấu phải lớn hơn 0")
     private BigDecimal value;
 
     private String reason;

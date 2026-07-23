@@ -24,7 +24,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
-                "Malformed JSON request",
+                "Yêu cầu định dạng JSON không hợp lệ",
                 null
         ));
     }
@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
-                "Validation failed",
+                "Dữ liệu gửi lên không hợp lệ",
                 errors
         ));
     }
@@ -85,7 +85,7 @@ public class GlobalExceptionHandler {
         log.warn("Tenancy violation attempt: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorBody(
                 403,
-                "Resource not found",
+                "Không tìm thấy dữ liệu",
                 null
         ));
     }
@@ -105,7 +105,7 @@ public class GlobalExceptionHandler {
         log.warn("Authentication failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody(
                 401,
-                "Authentication required",
+                "Yêu cầu xác thực tài khoản",
                 null
         ));
     }
@@ -115,7 +115,7 @@ public class GlobalExceptionHandler {
         log.error("[409] DataIntegrityViolationException thrown: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(
                 409,
-                "Database constraint violation: cannot delete or modify because this resource is referenced by other records",
+                "Lỗi ràng buộc dữ liệu: Không thể xóa hoặc sửa đổi vì dữ liệu này đang được liên kết bởi các bản ghi khác.",
                 null
         ));
     }
@@ -126,7 +126,7 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception [traceId={}]: ", traceId, ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(
                 500,
-                "Internal server error",
+                "Lỗi hệ thống nội bộ",
                 java.util.Map.of("traceId", traceId)
         ));
     }
@@ -136,7 +136,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", 400);
-        body.put("message", "Bulk teacher validation failed");
+        body.put("message", "Kiểm tra dữ liệu giáo viên hàng loạt thất bại");
         body.put("errors", ex.getErrors());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
@@ -147,7 +147,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", 400);
-        body.put("message", "Bulk student validation failed");
+        body.put("message", "Kiểm tra dữ liệu học sinh hàng loạt thất bại");
         body.put("errors", ex.getErrors());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);

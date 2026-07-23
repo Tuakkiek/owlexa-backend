@@ -6,6 +6,8 @@ import java.util.List;
 
 public interface ClassRepository extends JpaRepository<Class, Long> {
     List<Class> findAllByCenter_Id(Long centerId);
+    
+    java.util.Optional<Class> findByIdAndCenter_Id(Long id, Long centerId);
 
     long countByCenter_Id(Long centerId);
 

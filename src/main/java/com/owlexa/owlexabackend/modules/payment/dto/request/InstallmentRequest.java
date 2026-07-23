@@ -16,10 +16,10 @@ import java.time.LocalDate;
 @Builder
 public class InstallmentRequest {
 
-    @NotNull(message = "dueDate is required")
+    @NotNull(message = "Ngày hạn thanh toán không được để trống")
     private LocalDate dueDate;
 
-    @NotNull(message = "expectedAmount is required")
-    @Positive(message = "expectedAmount must be positive")
+    @NotNull(message = "Số tiền kỳ hạn không được để trống")
+    @Positive(message = "Số tiền kỳ hạn phải lớn hơn 0")
     private BigDecimal expectedAmount;
 }

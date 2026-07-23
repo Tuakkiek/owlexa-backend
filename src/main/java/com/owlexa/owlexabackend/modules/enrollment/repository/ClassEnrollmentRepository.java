@@ -26,5 +26,8 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
     List<ClassEnrollment> findAllByStudentUser_IdAndCenter_Id(Long studentUserId, Long centerId);
 
+    List<ClassEnrollment> findAllByStudentUser_IdAndCenter_IdAndStatusIn(
+            Long studentUserId, Long centerId, List<EnrollmentStatus> statuses);
+
     void deleteByCenter_Id(Long centerId);
 }

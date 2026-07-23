@@ -128,10 +128,10 @@ public class RoomService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phòng học với ID: " + roomId + " tại trung tâm này"));
 
         if (scheduleRepository.existsByRoom_IdAndCenter_Id(roomId, centerId)) {
-            throw new BusinessRuleException("ROOM_IN_USE", "Room " + room.getName() + " cannot be deleted because it is already used by existing schedules.");
+            throw new BusinessRuleException("ROOM_IN_USE", "Phòng học " + room.getName() + " đang được sử dụng trong lịch học, không thể xóa.");
         }
 
         roomRepository.delete(room);

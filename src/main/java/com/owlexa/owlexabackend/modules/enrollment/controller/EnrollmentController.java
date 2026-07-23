@@ -30,6 +30,11 @@ public class EnrollmentController {
         return enrollmentService.findAllByClass(classId);
     }
 
+    @GetMapping("/dropped")
+    public List<EnrollmentResponse> findDroppedByClass(@PathVariable Long classId) {
+        return enrollmentService.findDroppedByClass(classId);
+    }
+
     @PatchMapping("/{studentUserId}/approve")
     public EnrollmentResponse approve(
             @PathVariable Long classId,

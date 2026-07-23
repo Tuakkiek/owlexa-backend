@@ -13,6 +13,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     List<Schedule> findAllByTeacherUser_IdAndCenter_Id(Long teacherUserId, Long centerId);
 
+    boolean existsByClazz_IdAndTeacherUser_IdAndCenter_Id(Long clazzId, Long teacherUserId, Long centerId);
+
     List<Schedule> findAllByCenter_Id(Long centerId);
 
     boolean existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(

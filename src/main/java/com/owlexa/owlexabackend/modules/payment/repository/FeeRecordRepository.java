@@ -14,6 +14,17 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     List<FeeRecord> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
 
+    @Query("SELECT fr FROM FeeRecord fr WHERE fr.studentUser.id = :studentUserId " +
+           "AND fr.clazz.id IN (" +
+           "  SELECT e.clazz.id FROM ClassEnrollment e " +
+           "  WHERE e.studentUser.id = :studentUserId " +
+           "  AND e.status IN (com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE, " +
+           "                  com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.PENDING, " +
+           "                  com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.SUSPENDED)" +
+           ") " +
+           "ORDER BY fr.createdAt DESC")
+    List<FeeRecord> findAllActiveEnrollmentFeesByStudentUserId(@Param("studentUserId") Long studentUserId);
+
     List<FeeRecord> findAllByCenter_IdAndStatusAndDueDateBefore(
             Long centerId,
             FeeStatus status,

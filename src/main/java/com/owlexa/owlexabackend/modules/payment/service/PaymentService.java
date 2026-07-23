@@ -123,7 +123,7 @@ public class PaymentService {
         BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
 
         if (request.getAmount().compareTo(remainingAmount) > 0) {
-            throw new BusinessRuleException("Payment amount exceeds remaining balance");
+            throw new BusinessRuleException("Số tiền thanh toán vượt quá dư nợ còn lại");
         }
 
         PaymentMethod method = request.getMethod() != null ? request.getMethod() : PaymentMethod.SEPAY;
@@ -216,12 +216,21 @@ public class PaymentService {
             throw new AccessDeniedException("You can only pay your own fee records");
         }
 
+        boolean activeEnrollment = classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(feeRecord.getClazz().getId(), currentUser.getId())
+                .map(e -> e.getStatus() != EnrollmentStatus.DROPPED)
+                .orElse(false);
+
+        if (!activeEnrollment) {
+            throw new BusinessRuleException("Không thể đóng học phí cho lớp học mà bạn không còn tham gia");
+        }
+
         BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
         BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
         BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
 
         if (remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessRuleException("This invoice is already fully paid");
+            throw new BusinessRuleException("Hóa đơn này đã được thanh toán đầy đủ");
         }
 
         // ── Check for existing valid pending payment (the core duplicate-prevention logic) ──
@@ -332,7 +341,7 @@ public class PaymentService {
         // Only PENDING payments can be cancelled
         if (payment.getStatus() != TransactionStatus.PENDING) {
             throw new BusinessRuleException(
-                    "Only pending payments can be cancelled. Current status: " + payment.getStatus());
+                    "Chỉ có thể hủy các thanh toán đang chờ xử lý. Trạng thái hiện tại: " + payment.getStatus());
         }
 
         payment.setStatus(TransactionStatus.VOIDED);
@@ -360,7 +369,7 @@ public class PaymentService {
         User currentUser = getCurrentUser();
 
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán với ID: " + paymentId));
 
         if (!payment.getStudentUser().getId().equals(currentUser.getId())) {
             throw new AccessDeniedException("You can only view QR codes for your own payments");
@@ -369,7 +378,7 @@ public class PaymentService {
         if (payment.getStatus() != TransactionStatus.PENDING
                 && payment.getStatus() != TransactionStatus.ACTIVE) {
             throw new BusinessRuleException(
-                    "QR is only available for pending or confirmed bank transfer payments");
+                    "Mã QR chỉ có sẵn cho các thanh toán chuyển khoản đang chờ hoặc đã xác nhận");
         }
 
         return bankTransferQrService.buildQrResponse(payment);
@@ -398,21 +407,21 @@ public class PaymentService {
         // ── END TEMPORARY DEBUG ──
 
         if (payment.getStatus() == TransactionStatus.ACTIVE) {
-            throw new BusinessRuleException("Payment " + paymentId + " is already confirmed");
+            throw new BusinessRuleException("Giao dịch thanh toán " + paymentId + " đã được xác nhận trước đó");
         }
         if (payment.getStatus() == TransactionStatus.VOIDED) {
-            throw new BusinessRuleException("Cannot confirm a voided payment");
+            throw new BusinessRuleException("Không thể xác nhận giao dịch đã bị hủy");
         }
         if (payment.getStatus() == TransactionStatus.EXPIRED) {
-            throw new BusinessRuleException("Cannot confirm an expired payment");
+            throw new BusinessRuleException("Không thể xác nhận giao dịch đã hết hạn");
         }
         if (payment.getStatus() != TransactionStatus.PENDING) {
-            throw new BusinessRuleException("Payment " + paymentId + " is not in PENDING status");
+            throw new BusinessRuleException("Giao dịch thanh toán " + paymentId + " không ở trạng thái CHỜ XỬ LÝ");
         }
 
         // Guard against confirming payments past their expiration time
         if (payment.getExpiresAt() != null && Instant.now().isAfter(payment.getExpiresAt())) {
-            throw new BusinessRuleException("Payment " + paymentId + " has expired at " + payment.getExpiresAt());
+            throw new BusinessRuleException("Giao dịch thanh toán " + paymentId + " đã hết hạn lúc " + payment.getExpiresAt());
         }
 
         // Update payment status — preserve original sepayRef (payment code)
@@ -491,7 +500,7 @@ public class PaymentService {
         BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
 
         if(request.getAmount().compareTo(remainingAmount) > 0) {
-            throw new BusinessRuleException("Payment amount exceeds remaining balance");
+            throw new BusinessRuleException("Số tiền thanh toán vượt quá dư nợ còn lại");
         }
 
         PaymentMethod method = request.getMethod() != null ? request.getMethod() : PaymentMethod.CASH;
@@ -618,16 +627,16 @@ public class PaymentService {
         }
 
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán với ID: " + paymentId));
 
         if (!payment.getCenter().getId().equals(centerId)) {
             throw new TenancyViolationException("Payment belongs to another center");
         }
         if (payment.getStatus() == TransactionStatus.VOIDED) {
-            throw new BusinessRuleException("Payment is already voided");
+            throw new BusinessRuleException("Giao dịch thanh toán đã bị hủy trước đó");
         }
         if (payment.getStatus() == TransactionStatus.EXPIRED) {
-            throw new BusinessRuleException("Cannot void an expired payment");
+            throw new BusinessRuleException("Không thể hủy giao dịch đã hết hạn");
         }
 
         boolean wasActive = payment.getStatus() == TransactionStatus.ACTIVE;
@@ -670,23 +679,23 @@ public class PaymentService {
         }
 
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán với ID: " + paymentId));
 
         if (!payment.getCenter().getId().equals(centerId)) {
             throw new TenancyViolationException("Payment belongs to another center");
         }
         if (payment.getStatus() != TransactionStatus.ACTIVE) {
-            throw new BusinessRuleException("Only active payments can be refunded");
+            throw new BusinessRuleException("Chỉ các giao dịch thanh toán đang hoạt động mới có thể hoàn tiền");
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BadRequestException("Refund amount must be greater than 0");
+            throw new BadRequestException("Số tiền hoàn trả phải lớn hơn 0");
         }
 
         BigDecimal alreadyRefunded = refundRepository.findAllByPaymentOrderByCreatedAtDesc(payment)
                 .stream().map(Refund::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal maxRefundable = payment.getAmount().subtract(alreadyRefunded);
         if (amount.compareTo(maxRefundable) > 0) {
-            throw new BusinessRuleException("Refund amount exceeds available balance");
+            throw new BusinessRuleException("Số tiền hoàn trả vượt quá số dư khả dụng");
         }
 
         Refund refund = Refund.builder()
@@ -761,6 +770,17 @@ public class PaymentService {
 
         return paymentRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(currentUser.getId())
                 .stream()
+                .filter(payment -> {
+                    if (payment.getFeeRecord() == null || payment.getFeeRecord().getClazz() == null) {
+                        return true;
+                    }
+                    return classEnrollmentRepository
+                            .findByClazz_IdAndStudentUser_Id(
+                                    payment.getFeeRecord().getClazz().getId(),
+                                    currentUser.getId())
+                            .map(e -> e.getStatus() != EnrollmentStatus.DROPPED)
+                            .orElse(false);
+                })
                 .map(payment -> toResponse(payment, payment.getFeeRecord()))
                 .toList();
     }

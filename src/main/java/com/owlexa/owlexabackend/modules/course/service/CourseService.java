@@ -116,10 +116,10 @@ public class CourseService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Course course = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khóa học với ID: " + id));
 
         if (classRepository.existsByCourse_Id(id)) {
-            throw new BusinessRuleException("COURSE_IN_USE", "This course cannot be deleted because there are classes associated with it.");
+            throw new BusinessRuleException("COURSE_IN_USE", "Không thể xóa khóa học này vì đang có các lớp học liên kết với nó.");
         }
 
         courseRepository.delete(course);
