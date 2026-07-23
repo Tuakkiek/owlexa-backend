@@ -11,10 +11,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CenterRequest {
-    @NotBlank(message = "name is required")
+    @NotBlank(message = "Tên trung tâm không được để trống")
     private String name;
 
-    @NotBlank(message = "subdomain is required")
-    @Pattern(regexp = "^[a-z0-9-]+$", message = "subdomain only allows lowercase letters, numbers and hyphen")
+    @NotBlank(message = "Tên miền phụ không được để trống")
+    @Pattern(regexp = "^[a-z0-9-]+$", message = "Tên miền phụ chỉ cho phép chữ cái thường, số và dấu gạch ngang")
     private String subdomain;
 }

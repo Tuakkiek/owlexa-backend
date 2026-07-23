@@ -26,6 +26,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.List;
 import java.util.Optional;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
+import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +50,7 @@ class RoomServiceTest {
     @Mock private CenterRepository centerRepository;
     @Mock private UserRepository userRepository;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private ScheduleRepository scheduleRepository;
 
     private RoomService service;
 
@@ -50,7 +61,7 @@ class RoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RoomService(roomRepository, centerRepository, userRepository, membershipRepository);
+        service = new RoomService(roomRepository, centerRepository, userRepository, membershipRepository, scheduleRepository);
         TenantContext.setCurrentTenantId(CENTER_ID);
 
         SecurityContextHolder.getContext().setAuthentication(
@@ -201,5 +212,73 @@ class RoomServiceTest {
 
         assertThatThrownBy(() -> service.delete(999L))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("getScheduleSummary: returns scheduled details")
+    void getScheduleSummary_shouldReturnSchedules() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+
+        Class clazz = Class.builder().name("IELTS 6.5").build();
+        User teacher = new User();
+        teacher.setFullName("David Nguyen");
+        Schedule schedule = Schedule.builder()
+                .id(500L)
+                .clazz(clazz)
+                .teacherUser(teacher)
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(10, 0))
+                .type(ScheduleType.THEORY_CLASS)
+                .build();
+
+        when(scheduleRepository.findAllByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(List.of(schedule));
+
+        List<RoomScheduleSummaryResponse> summary = service.getScheduleSummary(ROOM_ID);
+
+        assertThat(summary).hasSize(1);
+        assertThat(summary.get(0).getClassName()).isEqualTo("IELTS 6.5");
+        assertThat(summary.get(0).getTeacherName()).isEqualTo("David Nguyen");
+    }
+
+    @Test
+    @DisplayName("validateDelete: when room has schedules → returns cannot delete with details")
+    void validateDelete_whenHasSchedules_shouldReturnCannotDelete() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+
+        Class clazz = Class.builder().name("IELTS 6.5").build();
+        User teacher = new User();
+        teacher.setFullName("David Nguyen");
+        Schedule schedule = Schedule.builder()
+                .id(500L)
+                .clazz(clazz)
+                .teacherUser(teacher)
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(10, 0))
+                .type(ScheduleType.THEORY_CLASS)
+                .build();
+
+        when(scheduleRepository.findAllByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(List.of(schedule));
+
+        RoomDeleteValidationResponse validation = service.validateDelete(ROOM_ID);
+
+        assertThat(validation.isCanDelete()).isFalse();
+        assertThat(validation.getDependencies()).hasSize(1);
+        assertThat(validation.getDependencies().get(0).getClassName()).isEqualTo("IELTS 6.5");
+    }
+
+    @Test
+    @DisplayName("delete: when room has schedules → throws BusinessRuleException ROOM_IN_USE")
+    void delete_whenHasSchedules_shouldThrowBusinessRuleException() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+        when(scheduleRepository.existsByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(ROOM_ID))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("cannot be deleted because it is already used by existing schedules");
     }
 }

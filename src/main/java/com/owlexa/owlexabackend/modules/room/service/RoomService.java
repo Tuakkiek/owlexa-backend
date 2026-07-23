@@ -20,7 +20,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDependencyDto;
+
 import java.util.List;
+
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +38,8 @@ public class RoomService {
     private final CenterRepository centerRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
+    private final ScheduleRepository scheduleRepository;
+
 
     @Transactional
     public RoomResponse create(RoomRequest request) {
@@ -118,8 +128,67 @@ public class RoomService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phòng học với ID: " + roomId + " tại trung tâm này"));
+
+        if (scheduleRepository.existsByRoom_IdAndCenter_Id(roomId, centerId)) {
+            throw new BusinessRuleException("ROOM_IN_USE", "Phòng học " + room.getName() + " đang được sử dụng trong lịch học, không thể xóa.");
+        }
+
         roomRepository.delete(room);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomScheduleSummaryResponse> getScheduleSummary(Long roomId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+
+        Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
+
+        List<Schedule> schedules = scheduleRepository.findAllByRoom_IdAndCenter_Id(roomId, centerId);
+
+        return schedules.stream()
+                .map(s -> RoomScheduleSummaryResponse.builder()
+                        .id(s.getId())
+                        .dayOfWeek(s.getDayOfWeek().name())
+                        .startTime(s.getStartTime().toString())
+                        .endTime(s.getEndTime().toString())
+                        .className(s.getClazz().getName())
+                        .teacherName(s.getTeacherUser() != null ? s.getTeacherUser().getFullName() : "No teacher assigned")
+                        .type(s.getType().name())
+                        .build())
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public RoomDeleteValidationResponse validateDelete(Long roomId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+
+        Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
+
+        List<Schedule> schedules = scheduleRepository.findAllByRoom_IdAndCenter_Id(roomId, centerId);
+        boolean canDelete = schedules.isEmpty();
+
+        List<RoomDependencyDto> dependencies = schedules.stream()
+                .map(s -> RoomDependencyDto.builder()
+                        .className(s.getClazz().getName())
+                        .teacherName(s.getTeacherUser() != null ? s.getTeacherUser().getFullName() : "No teacher assigned")
+                        .dayOfWeek(s.getDayOfWeek().name())
+                        .timeRange(s.getStartTime().toString() + "–" + s.getEndTime().toString())
+                        .build())
+                .toList();
+
+        String message = canDelete ? "Room can be deleted." : "Room " + room.getName() + " cannot be deleted because it is already used by existing schedules.";
+
+        return RoomDeleteValidationResponse.builder()
+                .canDelete(canDelete)
+                .message(message)
+                .dependencies(dependencies)
+                .build();
     }
 
     private RoomResponse toResponse(Room room) {

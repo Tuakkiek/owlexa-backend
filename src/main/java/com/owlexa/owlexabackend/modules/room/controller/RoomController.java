@@ -2,6 +2,8 @@ package com.owlexa.owlexabackend.modules.room.controller;
 
 import com.owlexa.owlexabackend.modules.room.dto.request.RoomRequest;
 import com.owlexa.owlexabackend.modules.room.dto.response.RoomResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
 import com.owlexa.owlexabackend.modules.room.service.RoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,16 @@ public class RoomController {
     @GetMapping("/{roomId}")
     public RoomResponse findById(@PathVariable Long roomId) {
         return roomService.findById(roomId);
+    }
+
+    @GetMapping("/{roomId}/schedule-summary")
+    public List<RoomScheduleSummaryResponse> getScheduleSummary(@PathVariable Long roomId) {
+        return roomService.getScheduleSummary(roomId);
+    }
+
+    @GetMapping("/{roomId}/delete-validation")
+    public RoomDeleteValidationResponse validateDelete(@PathVariable Long roomId) {
+        return roomService.validateDelete(roomId);
     }
 
     @PutMapping("/{roomId}")

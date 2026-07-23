@@ -8,7 +8,11 @@ CREATE TABLE IF NOT EXISTS permissions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Rename old table (nếu tồn tại)
-RENAME TABLE user_permissions TO user_permissions_legacy;
+CREATE TABLE IF NOT EXISTS user_permissions (
+    user_id BIGINT,
+    permission_id BIGINT
+);
+ALTER TABLE user_permissions RENAME TO user_permissions_legacy;
 
 -- Create new user_permissions table
 CREATE TABLE user_permissions (

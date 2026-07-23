@@ -13,13 +13,13 @@ import lombok.NoArgsConstructor;
 @Builder
 public class RoomRequest {
 
-    @NotBlank(message = "code is required")
+    @NotBlank(message = "Mã phòng học không được để trống")
     private String code;
 
-    @NotBlank(message = "name is required")
+    @NotBlank(message = "Tên phòng học không được để trống")
     private String name;
 
-    @Min(value = 1, message = "capacity must be at least 1")
+    @Min(value = 1, message = "Sức chứa của phòng phải ít nhất là 1")
     private Integer capacity;
 
     private String description;

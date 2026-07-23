@@ -11,6 +11,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class EnrollmentRequest {
 
-    @NotNull(message = "studentId is required")
+    @NotNull(message = "Mã học sinh không được để trống")
     private Long studentId;
 }

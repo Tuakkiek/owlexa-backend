@@ -21,19 +21,58 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseStatisticsResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseClassResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseDeleteValidationResponse;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
+import org.junit.jupiter.api.AfterEach;
+
 @ExtendWith(MockitoExtension.class)
 class CourseServiceTest {
 
     @Mock private CourseRepository courseRepository;
+    @Mock private ClassRepository classRepository;
+    @Mock private ClassEnrollmentRepository classEnrollmentRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private MembershipRepository membershipRepository;
 
     private CourseService service;
 
+
+    private static final String OWNER_PHONE = "0900000001";
+    private static final Long OWNER_ID = 1L;
+    private static final Long CENTER_ID = 10L;
     private static final Long COURSE_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        service = new CourseService(courseRepository);
+        service = new CourseService(courseRepository, classRepository, classEnrollmentRepository, userRepository, membershipRepository);
+        com.owlexa.owlexabackend.common.context.TenantContext.setCurrentTenantId(CENTER_ID);
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(OWNER_PHONE, null, List.of())
+        );
+
+        com.owlexa.owlexabackend.modules.user.entity.User owner = new com.owlexa.owlexabackend.modules.user.entity.User();
+        owner.setId(OWNER_ID);
+        owner.setPhoneNumber(OWNER_PHONE);
+        owner.setRole(com.owlexa.owlexabackend.modules.user.entity.Role.OWNER);
+        org.mockito.Mockito.lenient().when(userRepository.findByPhoneNumber(OWNER_PHONE)).thenReturn(Optional.of(owner));
+        org.mockito.Mockito.lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(OWNER_ID, CENTER_ID)).thenReturn(true);
     }
+
+    @AfterEach
+    void tearDown() {
+        com.owlexa.owlexabackend.common.context.TenantContext.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
 
     private Course buildCourse(Long id, String code, String name) {
         Course course = new Course();
@@ -150,6 +189,7 @@ class CourseServiceTest {
     @DisplayName("delete: course exists → deletes")
     void delete_whenExists_shouldDelete() {
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID, "VSTEP-B1", "VSTEP B1")));
+        when(classRepository.existsByCourse_Id(COURSE_ID)).thenReturn(false);
 
         service.delete(COURSE_ID);
     }
@@ -162,4 +202,50 @@ class CourseServiceTest {
         assertThatThrownBy(() -> service.delete(999L))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("delete: course referenced by classes → throws BusinessRuleException COURSE_IN_USE")
+    void delete_whenReferenced_shouldThrowBusinessRuleException() {
+        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID, "VSTEP-B1", "VSTEP B1")));
+        when(classRepository.existsByCourse_Id(COURSE_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(COURSE_ID))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("cannot be deleted because there are classes associated with it");
+    }
+
+    @Test
+    @DisplayName("getStatistics: returns correct statistics")
+    void getStatistics_shouldReturnCorrectStats() {
+        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID, "VSTEP-B1", "VSTEP B1")));
+
+        Class activeClass = Class.builder().id(100L).status(ClassStatus.ACTIVE).build();
+        Class plannedClass = Class.builder().id(101L).status(ClassStatus.PLANNED).build();
+        when(classRepository.findAllByCourse_IdAndCenter_Id(COURSE_ID, CENTER_ID)).thenReturn(List.of(activeClass, plannedClass));
+        when(classEnrollmentRepository.countByClazz_IdAndStatus(100L, com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE)).thenReturn(5L);
+        when(classEnrollmentRepository.countByClazz_IdAndStatus(101L, com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE)).thenReturn(0L);
+
+        CourseStatisticsResponse stats = service.getStatistics(COURSE_ID);
+
+        assertThat(stats.getTotalClasses()).isEqualTo(2);
+        assertThat(stats.getActiveClasses()).isEqualTo(1);
+        assertThat(stats.getPlannedClasses()).isEqualTo(1);
+        assertThat(stats.getTotalEnrolledStudents()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("validateDelete: returns false if classes exist")
+    void validateDelete_whenReferenced_shouldReturnFalse() {
+        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID, "VSTEP-B1", "VSTEP B1")));
+
+        Class activeClass = Class.builder().id(100L).name("Class B1.1").status(ClassStatus.ACTIVE).build();
+        when(classRepository.findAllByCourse_IdAndCenter_Id(COURSE_ID, CENTER_ID)).thenReturn(List.of(activeClass));
+
+        CourseDeleteValidationResponse validation = service.validateDelete(COURSE_ID);
+
+        assertThat(validation.isCanDelete()).isFalse();
+        assertThat(validation.getDependencies()).hasSize(1);
+        assertThat(validation.getDependencies().get(0).getClassName()).isEqualTo("Class B1.1");
+    }
 }
+

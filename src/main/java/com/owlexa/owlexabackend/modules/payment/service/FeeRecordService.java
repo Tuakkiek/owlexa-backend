@@ -35,7 +35,7 @@ public class FeeRecordService {
     @Transactional(readOnly = true)
     public List<FeeRecordResponse> findMyFees() {
         User currentUser = getCurrentUser();
-        return feeRecordRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(currentUser.getId())
+        return feeRecordRepository.findAllActiveEnrollmentFeesByStudentUserId(currentUser.getId())
                 .stream()
                 .map(this::toResponse)
                 .toList();

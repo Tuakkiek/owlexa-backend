@@ -35,6 +35,11 @@ public class ClassController {
         return classService.findAll();
     }
 
+    @GetMapping("/owner/classes/{classId}")
+    public ClassResponse findById(@PathVariable Long classId) {
+        return classService.findById(classId);
+    }
+
     @PutMapping("/owner/classes/{classId}")
     public ClassResponse update(@PathVariable Long classId, @RequestBody ClassRequest request) {
         return classService.update(classId, request);

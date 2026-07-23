@@ -212,13 +212,18 @@ public class ScheduleService {
             throw new AccessDeniedException("Only STUDENT can access their own schedules");
         }
 
-        List<Long> enrolledClassIds = classEnrollmentRepository
-                .findAllByStudentUser_IdAndCenter_Id(currentUser.getId(), centerId)
+        // Only return schedules for classes the student is ACTIVELY enrolled in.
+        // DROPPED/SUSPENDED/PENDING enrollments are intentionally excluded so that
+        // a removed student immediately loses access to all class schedules.
+        List<Long> activeEnrolledClassIds = classEnrollmentRepository
+                .findAllByStudentUser_IdAndCenter_IdAndStatusIn(
+                        currentUser.getId(), centerId,
+                        List.of(com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE))
                 .stream()
                 .map(e -> e.getClazz().getId())
                 .toList();
 
-        return enrolledClassIds.stream()
+        return activeEnrolledClassIds.stream()
                 .flatMap(classId -> scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId).stream())
                 .map(this::toResponse)
                 .toList();

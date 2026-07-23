@@ -15,8 +15,8 @@ import java.math.BigDecimal;
 @Builder
 public class CashPaymentRequest {
 
-    @NotNull(message = "amount is required")
-    @Positive(message = "amount must be greater than 0")
+    @NotNull(message = "Số tiền thanh toán không được để trống")
+    @Positive(message = "Số tiền thanh toán phải lớn hơn 0")
     private BigDecimal amount;
 
     @Builder.Default

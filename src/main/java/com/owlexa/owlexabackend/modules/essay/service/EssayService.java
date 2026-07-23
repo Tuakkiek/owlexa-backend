@@ -120,11 +120,11 @@ public class EssayService {
         assertCenterMembership(currentUser, centerId);
 
         if (request.getRubricId() == null || request.getContent() == null || request.getContent().isBlank()) {
-            throw new BadRequestException("Rubric and essay content are required");
+            throw new BadRequestException("Tiêu chí chấm điểm và nội dung bài viết không được để trống");
         }
 
         EssayRubric rubric = essayRubricRepository.findById(request.getRubricId())
-                .orElseThrow(() -> new ResourceNotFoundException("Rubric not found with id: " + request.getRubricId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tiêu chí chấm điểm với ID: " + request.getRubricId()));
         if (!rubric.getCenter().getId().equals(centerId)) {
             throw new TenancyViolationException("Rubric " + request.getRubricId() + " belongs to another center");
         }
@@ -133,7 +133,7 @@ public class EssayService {
                 currentUser.getId(),
                 EnrollmentStatus.ACTIVE
         )) {
-            throw new BusinessRuleException("You are not enrolled in this class");
+            throw new BusinessRuleException("Bạn không tham gia lớp học này");
         }
 
         EssaySubmission submission = EssaySubmission.builder()

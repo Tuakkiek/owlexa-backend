@@ -13,6 +13,8 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     List<Schedule> findAllByTeacherUser_IdAndCenter_Id(Long teacherUserId, Long centerId);
 
+    boolean existsByClazz_IdAndTeacherUser_IdAndCenter_Id(Long clazzId, Long teacherUserId, Long centerId);
+
     List<Schedule> findAllByCenter_Id(Long centerId);
 
     boolean existsByClazz_IdAndDayOfWeekAndStartTimeAndCenter_Id(
@@ -94,5 +96,10 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
             @Param("endTime") LocalTime endTime,
             @Param("centerId") Long centerId);
 
+    List<Schedule> findAllByRoom_IdAndCenter_Id(Long roomId, Long centerId);
+
+    boolean existsByRoom_IdAndCenter_Id(Long roomId, Long centerId);
+
     void deleteByCenter_Id(Long centerId);
 }
+

@@ -17,14 +17,14 @@ import java.util.List;
 @Builder
 public class CashierRequest {
 
-    @NotBlank(message = "fullName is required")
+    @NotBlank(message = "Họ tên không được để trống")
     private String fullName;
 
-    @Email(message = "email must be valid")
+    @Email(message = "Email không hợp lệ")
     private String email;
 
-    @NotBlank(message = "phoneNumber is required")
-    @Pattern(regexp = "^0\\d{9}$", message = "phoneNumber must be a valid VN number (10 digits)")
+    @NotBlank(message = "Số điện thoại không được để trống")
+    @Pattern(regexp = "^0\\d{9}$", message = "Số điện thoại phải gồm 10 chữ số, bắt đầu bằng 0 (VD: 0912345678)")
     private String phoneNumber;
 
     /**
