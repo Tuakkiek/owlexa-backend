@@ -11,9 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UpdateAccountRequest {
 
-    @NotBlank(message = "fullName is required")
+    @NotBlank(message = "Họ tên không được để trống")
     private String fullName;
 
-    @Email(message = "email must be valid")
+    @Email(message = "Email không hợp lệ")
     private String email;
 }

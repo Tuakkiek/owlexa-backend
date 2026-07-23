@@ -40,10 +40,10 @@ public class DiscountService {
         assertOwner(currentUser);
 
         FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
-                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi học phí"));
 
         if (feeRecord.getStatus() == FeeStatus.PAID) {
-            throw new BusinessRuleException("Cannot apply discount to a fully paid tuition");
+            throw new BusinessRuleException("Không thể áp dụng chiết khấu cho học phí đã thanh toán hoàn tất");
         }
 
         validateDiscount(request, feeRecord);
@@ -66,7 +66,7 @@ public class DiscountService {
                 ? feeRecord.getDiscountAmount().add(discountAmount) : discountAmount;
         BigDecimal effectiveAmount = feeRecord.getAmount().subtract(totalDiscount);
         if (effectiveAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessRuleException("Total discount cannot exceed tuition amount");
+            throw new BusinessRuleException("Tổng chiết khấu không thể vượt quá số tiền học phí");
         }
         feeRecord.setDiscountAmount(totalDiscount);
         feeRecord.setStatus(resolveStatus(effectiveAmount, feeRecord.getPaidAmount()));
@@ -89,11 +89,11 @@ public class DiscountService {
         assertOwner(currentUser);
 
         Discount discount = discountRepository.findById(discountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Discount not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chiết khấu"));
 
         FeeRecord feeRecord = discount.getFeeRecord();
         if (feeRecord.getStatus() == FeeStatus.PAID) {
-            throw new BusinessRuleException("Cannot modify discount on a fully paid tuition");
+            throw new BusinessRuleException("Không thể sửa đổi chiết khấu của học phí đã thanh toán hoàn tất");
         }
 
         validateDiscount(request, feeRecord);
@@ -106,7 +106,7 @@ public class DiscountService {
 
         BigDecimal effectiveAmount = feeRecord.getAmount().subtract(updatedTotal);
         if (effectiveAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessRuleException("Total discount cannot exceed tuition amount");
+            throw new BusinessRuleException("Tổng chiết khấu không thể vượt quá số tiền học phí");
         }
 
         discount.setName(request.getName());
@@ -128,11 +128,11 @@ public class DiscountService {
         assertOwner(currentUser);
 
         Discount discount = discountRepository.findById(discountId)
-                .orElseThrow(() -> new ResourceNotFoundException("Discount not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chiết khấu"));
 
         FeeRecord feeRecord = discount.getFeeRecord();
         if (feeRecord.getStatus() == FeeStatus.PAID) {
-            throw new BusinessRuleException("Cannot remove discount from a fully paid tuition");
+            throw new BusinessRuleException("Không thể xóa chiết khấu từ học phí đã thanh toán hoàn tất");
         }
 
         BigDecimal discountAmount = computeDiscountAmount(discount.getType(), discount.getValue(), feeRecord.getAmount());

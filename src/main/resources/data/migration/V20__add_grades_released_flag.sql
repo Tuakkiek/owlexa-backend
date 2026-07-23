@@ -1,0 +1,2 @@
+ALTER TABLE homeworks 
+ADD COLUMN is_grades_released BOOLEAN NOT NULL DEFAULT FALSE;

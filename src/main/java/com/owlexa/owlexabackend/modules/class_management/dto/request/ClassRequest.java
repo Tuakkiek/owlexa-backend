@@ -13,15 +13,16 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ClassRequest {
 
-    @NotBlank(message = "Class name is required")
+    @NotBlank(message = "Tên lớp học không được để trống")
     private String name;
 
-    @NotNull(message = "courseId is required")
     private Long courseId;
 
-    @Min(value = 1, message = "Max student must be at least 1")
+    @Min(value = 1, message = "Sĩ số tối đa phải ít nhất là 1")
     private Integer maxStudent;
 
-    @Min(value = 0, message = "Month fee cannot be negative")
+    @Min(value = 0, message = "Học phí hàng tháng không được âm")
     private Double monthlyFee;
+
+    private com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus status;
 }

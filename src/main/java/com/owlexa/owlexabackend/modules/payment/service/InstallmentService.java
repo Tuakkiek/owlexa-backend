@@ -37,7 +37,7 @@ public class InstallmentService {
         assertOwner(currentUser);
 
         FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
-                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi học phí"));
 
         BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
         BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
@@ -45,8 +45,8 @@ public class InstallmentService {
         BigDecimal totalExpected = request.getInstallments().stream()
                 .map(i -> i.getExpectedAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (totalExpected.compareTo(effectiveAmount) != 0) {
-            throw new BusinessRuleException("Total installments (" + totalExpected
-                    + ") must equal tuition after discount (" + effectiveAmount + ")");
+            throw new BusinessRuleException("Tổng số tiền các kỳ hạn (" + totalExpected
+                    + ") phải bằng số tiền học phí sau chiết khấu (" + effectiveAmount + ")");
         }
 
         // Delete existing installments
@@ -79,10 +79,10 @@ public class InstallmentService {
         assertOwner(currentUser);
 
         Installment installment = installmentRepository.findById(installmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Installment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kỳ hạn đóng phí"));
 
         if (installment.getStatus() == InstallmentStatus.PAID || installment.getStatus() == InstallmentStatus.PARTIALLY_PAID) {
-            throw new BusinessRuleException("Cannot modify an already paid or partially paid installment");
+            throw new BusinessRuleException("Không thể sửa đổi kỳ hạn đã thanh toán hoặc đã thanh toán một phần");
         }
 
         installment.setDueDate(request.getDueDate());
@@ -102,10 +102,10 @@ public class InstallmentService {
         assertOwner(currentUser);
 
         Installment installment = installmentRepository.findById(installmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Installment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kỳ hạn đóng phí"));
 
         if (installment.getStatus() != InstallmentStatus.PENDING) {
-            throw new BusinessRuleException("Cannot delete a paid or partially paid installment");
+            throw new BusinessRuleException("Không thể xóa kỳ hạn đã thanh toán hoặc đã thanh toán một phần");
         }
 
         FeeRecord feeRecord = installment.getFeeRecord();
@@ -122,8 +122,8 @@ public class InstallmentService {
         BigDecimal totalExpected = current.stream()
                 .map(Installment::getExpectedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (totalExpected.compareTo(effectiveAmount) != 0) {
-            throw new BusinessRuleException("Installment total (" + totalExpected
-                    + ") must equal tuition after discount (" + effectiveAmount + ")");
+            throw new BusinessRuleException("Tổng số tiền các kỳ hạn (" + totalExpected
+                    + ") phải bằng số tiền học phí sau chiết khấu (" + effectiveAmount + ")");
         }
     }
 

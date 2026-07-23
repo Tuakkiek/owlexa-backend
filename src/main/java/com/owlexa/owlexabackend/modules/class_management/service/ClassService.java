@@ -60,11 +60,14 @@ public class ClassService {
             throw new DuplicateResourceException("Class name is already exists in this center");
         }
 
-        Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
+        Course course = null;
+        if (request.getCourseId() != null) {
+            course = courseRepository.findById(request.getCourseId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
+        }
 
-        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : course.getDefaultMaxStudents();
-        Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : course.getDefaultMonthlyFee();
+        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : (course != null ? course.getDefaultMaxStudents() : 30);
+        Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : (course != null ? course.getDefaultMonthlyFee() : 0.0);
 
         Class newClass = Class.builder()
                 .name(request.getName().trim())
@@ -78,6 +81,24 @@ public class ClassService {
         newClass = classRepository.save(newClass);
         return toResponse(newClass);
     }
+
+    // Find by ID
+    @Transactional(readOnly = true)
+    public ClassResponse findById(Long classId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertCenterMembership(currentUser, centerId);
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        }
+
+        return toResponse(clazz);
+    }
+
     // Find all
     @Transactional(readOnly = true)
     public List<ClassResponse> findAll() {
@@ -221,15 +242,21 @@ public class ClassService {
             throw new DuplicateResourceException("Class name is already exists in this center");
         }
 
-        Course course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
+        Course course = null;
+        if (request.getCourseId() != null) {
+            course = courseRepository.findById(request.getCourseId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
+        }
         existingClass.setCourse(course);
 
         existingClass.setName(newName);
-        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : course.getDefaultMaxStudents();
-        Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : course.getDefaultMonthlyFee();
+        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : (course != null ? course.getDefaultMaxStudents() : 30);
+        Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : (course != null ? course.getDefaultMonthlyFee() : 0.0);
         existingClass.setMaxStudents(maxStudents);
         existingClass.setMonthlyFee(monthlyFee);
+        if (request.getStatus() != null) {
+            existingClass.setStatus(request.getStatus());
+        }
 
         existingClass = classRepository.save(existingClass);
 
@@ -258,6 +285,14 @@ public class ClassService {
 
     // To response
     private ClassResponse toResponse(Class clazz) {
+        Long studentCount = classEnrollmentRepository.countByClazz_IdAndStatus(clazz.getId(), EnrollmentStatus.ACTIVE);
+        List<String> teachers = clazz.getSchedules() != null ?
+                clazz.getSchedules().stream()
+                        .map(s -> s.getTeacherUser() != null ? s.getTeacherUser().getFullName() : null)
+                        .filter(java.util.Objects::nonNull)
+                        .distinct()
+                        .toList() : List.of();
+
         return ClassResponse.builder()
                 .id(clazz.getId())
                 .name(clazz.getName())
@@ -269,6 +304,10 @@ public class ClassService {
                 .courseId(clazz.getCourse() != null ? clazz.getCourse().getId() : null)
                 .courseName(clazz.getCourse() != null ? clazz.getCourse().getName() : null)
                 .courseCode(clazz.getCourse() != null ? clazz.getCourse().getCode() : null)
+                .studentCount(studentCount)
+                .scheduleCount(clazz.getSchedules() != null ? (long) clazz.getSchedules().size() : 0L)
+                .teachers(teachers)
+                .createdAt(clazz.getCreateAt())
                 .build();
     }
 

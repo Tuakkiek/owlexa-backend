@@ -54,23 +54,23 @@ public class EnrollmentService {
         assertOwnerAndCenterMembership(currentUser,centerId);
 
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
             throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
         if (clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE) {
-            throw new BusinessRuleException("Class is not open for enrollment. Current status: " + clazz.getStatus());
+            throw new BusinessRuleException("Lớp học không mở đăng ký. Trạng thái hiện tại: " + clazz.getStatus());
         }
 
         User student = userRepository.findById(request.getStudentId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "User not found with id: " + request.getStudentId()
+                        "Không tìm thấy người dùng với ID: " + request.getStudentId()
                 ));
 
         if (student.getRole() != Role.STUDENT) {
-            throw new BadRequestException("User is not a student");
+            throw new BadRequestException("Người dùng không phải là học sinh");
         }
 
         // Check for existing enrollment record
@@ -85,7 +85,7 @@ public class EnrollmentService {
                 case PENDING:
                 case SUSPENDED:
                     throw new DuplicateResourceException(
-                            "Student is already enrolled in this class. Current status: " + enrollment.getStatus()
+                            "Học sinh đã đăng ký lớp học này trước đó. Trạng thái hiện tại: " + enrollment.getStatus()
                     );
                 case DROPPED:
                     // Restore the dropped enrollment - check capacity first
@@ -93,7 +93,7 @@ public class EnrollmentService {
                             classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
                     );
                     if (activeCount >= clazz.getMaxStudents()) {
-                        throw new BusinessRuleException("Class is full");
+                        throw new BusinessRuleException("Lớp học đã đầy sĩ số");
                     }
 
                     // Restore: set status to ACTIVE, update enrolled-by user
@@ -114,7 +114,7 @@ public class EnrollmentService {
         );
 
         if (pendingOrActiveCount >= clazz.getMaxStudents()) {
-            throw new BusinessRuleException("Class is full");
+            throw new BusinessRuleException("Lớp học đã đầy sĩ số");
         }
 
         // Check student schedule conflicts
@@ -128,7 +128,7 @@ public class EnrollmentService {
             if (!overlaps.isEmpty()) {
                 throw new BusinessRuleException(
                         "STUDENT_CONFLICT",
-                        String.format("Student %s already has another class during this time.",
+                        String.format("Học sinh %s đã có lịch học lớp khác vào thời gian này.",
                                 student.getFullName())
                 );
             }
@@ -167,11 +167,11 @@ public class EnrollmentService {
         ClassEnrollment enrollment = classEnrollmentRepository
                 .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Enrollment not found for studentId: " + studentUserId
+                        "Không tìm thấy thông tin đăng ký cho học sinh có ID: " + studentUserId
                 ));
 
         if (enrollment.getStatus() != EnrollmentStatus.PENDING) {
-            throw new BusinessRuleException("Only PENDING enrollments can be approved. Current status: " + enrollment.getStatus());
+            throw new BusinessRuleException("Chỉ có thể duyệt các yêu cầu đăng ký đang chờ xử lý. Trạng thái hiện tại: " + enrollment.getStatus());
         }
 
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
@@ -191,7 +191,7 @@ public class EnrollmentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
             throw new TenancyViolationException("Class " + classId + " belongs to another center");
@@ -200,11 +200,11 @@ public class EnrollmentService {
         ClassEnrollment enrollment = classEnrollmentRepository
                 .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Enrollment not found for studentId: " + studentUserId
+                        "Không tìm thấy thông tin đăng ký cho học sinh có ID: " + studentUserId
                 ));
 
         if (enrollment.getStatus() != EnrollmentStatus.PENDING) {
-            throw new BusinessRuleException("Only PENDING enrollments can be rejected. Current status: " + enrollment.getStatus());
+            throw new BusinessRuleException("Chỉ có thể từ chối các yêu cầu đăng ký đang chờ xử lý. Trạng thái hiện tại: " + enrollment.getStatus());
         }
 
         enrollment.setStatus(EnrollmentStatus.DROPPED);
@@ -227,6 +227,32 @@ public class EnrollmentService {
 
         return classEnrollmentRepository.findAllByClazz_IdAndStatusIn(
                         classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED))
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * Returns all DROPPED (withdrawn) enrollments for a class.
+     * Used by the owner to view and optionally restore accidentally removed students.
+     * Historical data (fees, attendance) is fully preserved for all DROPPED records.
+     */
+    @Transactional(readOnly = true)
+    public List<EnrollmentResponse> findDroppedByClass(Long classId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertOwnerAndCenterMembership(currentUser, centerId);
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        }
+
+        return classEnrollmentRepository.findAllByClazz_IdAndStatusIn(
+                        classId, List.of(EnrollmentStatus.DROPPED))
                 .stream()
                 .map(this::toResponse)
                 .toList();

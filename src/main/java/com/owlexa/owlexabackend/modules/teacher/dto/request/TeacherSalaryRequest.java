@@ -23,9 +23,9 @@ public class TeacherSalaryRequest {
      *
      * Để xóa salary thì gọi API riêng, không truyền 0.
      */
-    @NotNull(message = "salary is required")
-    @DecimalMin(value = "0.0", inclusive = true, message = "salary must be >= 0")
-    @Digits(integer = 10, fraction = 2, message = "salary must have at most 2 decimal places")
+    @NotNull(message = "Lương không được để trống")
+    @DecimalMin(value = "0.0", inclusive = true, message = "Lương phải lớn hơn hoặc bằng 0")
+    @Digits(integer = 10, fraction = 2, message = "Lương chỉ được chứa tối đa 2 chữ số thập phân")
     private BigDecimal salary;
 
     /**
@@ -34,7 +34,7 @@ public class TeacherSalaryRequest {
      *
      * Validate 3 ký tự chữ hoa theo chuẩn ISO 4217 (VND, USD, EUR, ...).
      */
-    @Size(min = 3, max = 3, message = "currency must be exactly 3 characters")
-    @Pattern(regexp = "^[A-Z]{3}$", message = "currency must be a valid ISO 4217 code (3 uppercase letters)")
+    @Size(min = 3, max = 3, message = "Đơn vị tiền tệ phải đúng 3 ký tự")
+    @Pattern(regexp = "^[A-Z]{3}$", message = "Đơn vị tiền tệ phải là mã ISO 4217 hợp lệ (3 chữ cái viết hoa)")
     private String currency;
 }

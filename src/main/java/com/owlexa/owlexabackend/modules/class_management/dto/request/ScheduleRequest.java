@@ -16,21 +16,21 @@ import java.time.LocalTime;
 @Builder
 public class ScheduleRequest {
 
-    @NotNull(message = "teacherUserId is required")
+    @NotNull(message = "Vui lòng chọn giáo viên")
     private Long teacherUserId;
 
-    @NotNull(message = "roomId is required")
+    @NotNull(message = "Vui lòng chọn phòng học")
     private Long roomId;
 
-    @NotNull(message = "dayOfWeek is required")
-    @Min(value = 0, message = "dayOfWeek must be between 0 and 6")
-    @Max(value = 6, message = "dayOfWeek must be between 0 and 6")
+    @NotNull(message = "Thứ trong tuần không được để trống")
+    @Min(value = 0, message = "Thứ trong tuần phải từ 0 đến 6 (0 là Chủ Nhật)")
+    @Max(value = 6, message = "Thứ trong tuần phải từ 0 đến 6 (0 là Chủ Nhật)")
     private Integer dayOfWeek;
 
-    @NotNull(message = "startTime is required")
+    @NotNull(message = "Giờ bắt đầu không được để trống")
     private LocalTime startTime;
 
-    @NotNull(message = "endTime is required")
+    @NotNull(message = "Giờ kết thúc không được để trống")
     private LocalTime endTime;
 
     private ScheduleType type;

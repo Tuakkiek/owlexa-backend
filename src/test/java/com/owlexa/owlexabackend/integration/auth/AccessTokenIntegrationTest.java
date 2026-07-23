@@ -207,14 +207,17 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
     // ───────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Role OWNER accessing /owner/centers returns 200")
-    void ownerRole_shouldAccessOwnerEndpoint() throws Exception {
+    @DisplayName("Role OWNER accessing authenticated-only endpoint returns 200")
+    void ownerRole_shouldAccessAuthenticatedEndpoint() throws Exception {
         User owner = seedUser("0900000020", Role.OWNER);
         // Seed an active session FIRST so JwtFilter does not drop the auth
         String sessionId = seedActiveSession(owner);
         String token = issueAccessToken(owner, OWNER_ROLE, sessionId);
 
-        mockMvc.perform(get(OWNER_CENTERS_URL)
+        // /auth/sessions only requires authenticated() — no specific role or permission.
+        // CenterController uses permission-based guards (hasAuthority('CENTER_VIEW')),
+        // not simple role checks, so testing role access via /auth/sessions is correct.
+        mockMvc.perform(get(SESSIONS_URL)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk());
     }
@@ -279,10 +282,11 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
         assertThat(authentication.getName()).isEqualTo(owner.getPhoneNumber());
         assertThat(authentication.getPrincipal()).isNotNull();
 
-        // Authorities = [OWNER] (CustomUserDetailsService maps user.role to authority)
+        // Authorities = [ROLE_OWNER, ...permissions] (CustomUserDetailsService adds ROLE_ prefix
+        // to the role name, following Spring Security conventions for hasRole() checks)
         assertThat(authentication.getAuthorities())
                 .extracting(Object::toString)
-                .containsExactly(OWNER_ROLE);
+                .contains("ROLE_" + OWNER_ROLE);
 
         SecurityContextCaptureInterceptor.lastAuthentication = null;
     }

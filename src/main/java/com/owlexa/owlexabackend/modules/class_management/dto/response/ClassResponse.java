@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
+import java.time.Instant;
 
 @Data
 @NoArgsConstructor
@@ -23,4 +25,8 @@ public class ClassResponse {
     private String courseName;
     private String courseCode;
 
+    private Long studentCount;
+    private Long scheduleCount;
+    private List<String> teachers;
+    private Instant createdAt;
 }
