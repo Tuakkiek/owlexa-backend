@@ -1,7 +1,6 @@
 package com.owlexa.owlexabackend.modules.homework.dto.response.student;
 
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkAssignmentStatus;
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkType;
 import lombok.Data;
 
@@ -17,7 +16,6 @@ public class StudentHomeworkDetailResponse {
     
     private HomeworkType homeworkType;
     private Integer estimatedTime;
-    private HomeworkDifficulty difficulty;
 
     private HomeworkAssignmentStatus status;
     private Instant availableFrom;

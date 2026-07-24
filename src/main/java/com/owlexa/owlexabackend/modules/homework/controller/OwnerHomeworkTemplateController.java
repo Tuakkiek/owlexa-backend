@@ -21,9 +21,8 @@ public class OwnerHomeworkTemplateController {
     public org.springframework.data.domain.Page<HomeworkTemplate> getAllTemplates(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) com.owlexa.owlexabackend.modules.homework.enums.HomeworkType type,
-            @RequestParam(required = false) com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty difficulty,
             org.springframework.data.domain.Pageable pageable) {
-        return ownerHomeworkService.getAllTemplates(keyword, type, difficulty, pageable);
+        return ownerHomeworkService.getAllTemplates(keyword, type, pageable);
     }
 
     @GetMapping("/{id}")

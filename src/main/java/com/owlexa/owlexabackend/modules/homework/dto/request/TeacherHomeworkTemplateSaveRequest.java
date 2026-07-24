@@ -2,7 +2,6 @@ package com.owlexa.owlexabackend.modules.homework.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkType;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -24,7 +23,6 @@ public class TeacherHomeworkTemplateSaveRequest {
 
     private Integer estimatedTime;
 
-    private HomeworkDifficulty difficulty;
 
     private Long parentTemplateId;
 
@@ -33,4 +31,8 @@ public class TeacherHomeworkTemplateSaveRequest {
 
     @Valid
     private List<TeacherHomeworkQuestionRequest> questions;
+    
+    private Long gradingCriteriaId;
+    
+    private String questionsJson;
 }

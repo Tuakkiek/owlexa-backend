@@ -24,4 +24,6 @@ public interface HomeworkTemplateRepository extends JpaRepository<HomeworkTempla
     List<HomeworkTemplate> findAllByCenter_IdAndTeacher_Id(Long centerId, Long teacherId);
     
     List<HomeworkTemplate> findAllByCenter_Id(Long centerId);
+    
+    boolean existsByGradingCriteriaId(Long gradingCriteriaId);
 }

@@ -326,7 +326,7 @@ class EssayServiceTest {
         EssaySubmission s1 = buildSubmission(ESSAY_ID);
         EssaySubmission s2 = buildSubmission(ESSAY_ID + 1);
         EssaySubmission s3 = buildSubmission(ESSAY_ID + 2);
-        when(essaySubmissionRepository.findAllByStudentUser_IdAndCenter_IdOrderByCreatedAtDesc(
+        when(essaySubmissionRepository.findAllByStudentUser_IdAndCenter_IdOrderBySubmittedAtDesc(
                 STUDENT_ID, CENTER_ID)).thenReturn(List.of(s1, s2, s3));
 
         List<EssaySubmissionResponse> response = service.findMyEssays();

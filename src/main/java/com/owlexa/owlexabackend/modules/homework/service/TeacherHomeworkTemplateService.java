@@ -61,10 +61,13 @@ public class TeacherHomeworkTemplateService {
         template.setInstructions(request.getInstructions());
         template.setHomeworkType(request.getHomeworkType());
         template.setEstimatedTime(request.getEstimatedTime());
-        template.setDifficulty(request.getDifficulty());
         template.setMaxScore(request.getMaxScore());
 
-        if (request.getQuestions() != null) {
+        template.setGradingCriteriaId(request.getGradingCriteriaId());
+
+        if (request.getHomeworkType() == com.owlexa.owlexabackend.modules.homework.enums.HomeworkType.QUIZ && request.getQuestionsJson() != null && !request.getQuestionsJson().isBlank()) {
+            parseAndAddQuestionsFromJson(request.getQuestionsJson(), template);
+        } else if (request.getQuestions() != null) {
             for (TeacherHomeworkQuestionRequest qRequest : request.getQuestions()) {
                 HomeworkQuestion question = new HomeworkQuestion();
                 question.setHomeworkTemplate(template);
@@ -118,6 +121,47 @@ public class TeacherHomeworkTemplateService {
         templateRepository.save(template);
     }
 
+    private void parseAndAddQuestionsFromJson(String json, HomeworkTemplate template) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(json);
+            com.fasterxml.jackson.databind.JsonNode questionsNode = root.get("questions");
+            if (questionsNode != null && questionsNode.isArray()) {
+                int sortOrder = 0;
+                for (com.fasterxml.jackson.databind.JsonNode qNode : questionsNode) {
+                    HomeworkQuestion question = new HomeworkQuestion();
+                    question.setHomeworkTemplate(template);
+                    question.setType(HomeworkQuestionType.QUIZ);
+                    question.setQuestionText(qNode.get("question").asText());
+                    question.setSortOrder(sortOrder++);
+                    question.setMaxScore(10.0); // Default score
+
+                    com.fasterxml.jackson.databind.JsonNode optionsNode = qNode.get("options");
+                    int correctAnswer = qNode.has("correctAnswer") ? qNode.get("correctAnswer").asInt() : 0;
+                    
+                    if (optionsNode != null && optionsNode.isArray()) {
+                        int optOrder = 0;
+                        for (com.fasterxml.jackson.databind.JsonNode optNode : optionsNode) {
+                            HomeworkQuestionOption option = new HomeworkQuestionOption();
+                            option.setQuestion(question);
+                            option.setContent(optNode.asText());
+                            option.setSortOrder(optOrder);
+                            option.setIsCorrect(optOrder == (correctAnswer - 1) || optOrder == correctAnswer); // handle both 0-based and 1-based slightly loosely, assuming MVP sample might be 1-based, let's strictly use the index as 1-based if it matches, actually sample JSON shows "correctAnswer": 1 for "Paris" in ["London", "Paris", "Berlin", "Madrid"]. So it's 1-based index (1 means 2nd option? No, Wait. London=0, Paris=1. 1 means 0-based or 1-based? "correctAnswer": 1 means Paris, which is index 1. So it's 0-based!)
+                            
+                            // Let's assume correctAnswer is 1-based in general, but since sample has 1 for Paris, 1 is index 1 -> Paris. Wait, if London=0, Paris=1, it is 0-based. But wait, sample 2: "2+2=?" options: ["3","4","5","6"], correctAnswer: 1 -> "4". So it's definitely 0-based or 1-based. Let's just use exact match with integer from JSON.
+                            option.setIsCorrect(optOrder == correctAnswer);
+                            question.getOptions().add(option);
+                            optOrder++;
+                        }
+                    }
+                    template.getQuestions().add(question);
+                }
+            }
+        } catch (Exception e) {
+            throw new BusinessRuleException("Failed to parse questions JSON: " + e.getMessage());
+        }
+    }
+
     @Transactional
     public void deleteHomeworkTemplate(Long templateId, Long teacherId) {
         Long centerId = TenantContext.getCurrentTenantId();
@@ -147,7 +191,6 @@ public class TeacherHomeworkTemplateService {
         newTemplate.setInstructions(existingTemplate.getInstructions());
         newTemplate.setHomeworkType(existingTemplate.getHomeworkType());
         newTemplate.setEstimatedTime(existingTemplate.getEstimatedTime());
-        newTemplate.setDifficulty(existingTemplate.getDifficulty());
         newTemplate.setMaxScore(existingTemplate.getMaxScore());
         
         for (HomeworkQuestion eq : existingTemplate.getQuestions()) {
@@ -201,7 +244,7 @@ public class TeacherHomeworkTemplateService {
     }
     
     @Transactional(readOnly = true)
-    public java.util.List<com.owlexa.owlexabackend.modules.homework.dto.response.HomeworkTemplateResponse> searchTemplates(Long teacherId, String keyword, com.owlexa.owlexabackend.modules.homework.enums.HomeworkType type, com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty difficulty, Boolean archived) {
+    public java.util.List<com.owlexa.owlexabackend.modules.homework.dto.response.HomeworkTemplateResponse> searchTemplates(Long teacherId, String keyword, com.owlexa.owlexabackend.modules.homework.enums.HomeworkType type, Boolean archived) {
         Long centerId = TenantContext.getCurrentTenantId();
         
         return templateRepository.findAll().stream()
@@ -209,7 +252,6 @@ public class TeacherHomeworkTemplateService {
                 .filter(t -> t.getTeacher().getId().equals(teacherId))
                 .filter(t -> archived == null || t.getArchived().equals(archived))
                 .filter(t -> type == null || t.getHomeworkType() == type)
-                .filter(t -> difficulty == null || t.getDifficulty() == difficulty)
                 .filter(t -> keyword == null || keyword.isEmpty() || t.getTitle().toLowerCase().contains(keyword.toLowerCase()))
                 .map(this::mapToResponse)
                 .collect(java.util.stream.Collectors.toList());
@@ -233,14 +275,13 @@ public class TeacherHomeworkTemplateService {
                 .instructions(template.getInstructions())
                 .homeworkType(template.getHomeworkType())
                 .estimatedTime(template.getEstimatedTime())
-                .difficulty(template.getDifficulty())
                 .archived(template.getArchived())
                 .version(template.getVersion())
                 .parentTemplateId(template.getParentTemplateId())
                 .maxScore(template.getMaxScore())
                 .teacherId(template.getTeacher().getId())
                 .teacherFullName(template.getTeacher().getFullName())
-                .questions(template.getQuestions())
+                .questions(new java.util.ArrayList<>(template.getQuestions()))
                 .createdAt(template.getCreatedAt())
                 .updatedAt(template.getUpdatedAt())
                 .assignmentCount(assignmentCount)

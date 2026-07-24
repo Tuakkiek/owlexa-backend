@@ -71,7 +71,7 @@ public class HomeworkValidationService {
     }
 
     private void validateQuizQuestion(HomeworkQuestion question) {
-        List<HomeworkQuestionOption> options = question.getOptions();
+        Set<HomeworkQuestionOption> options = question.getOptions();
         if (options == null || options.size() < 2) {
             throw new BusinessRuleException("Quiz question must have at least 2 options.");
         }
@@ -93,7 +93,7 @@ public class HomeworkValidationService {
         if (question.getRubric() == null) {
             throw new BusinessRuleException("Essay question must have a rubric.");
         }
-        List<HomeworkRubricCriterion> criteria = question.getRubric().getCriteria();
+        Set<HomeworkRubricCriterion> criteria = question.getRubric().getCriteria();
         if (criteria == null || criteria.isEmpty()) {
             throw new BusinessRuleException("Essay rubric must have at least one criterion.");
         }
