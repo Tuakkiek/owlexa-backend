@@ -10,7 +10,7 @@ import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestionSubmissi
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkRubricCriterionScore;
 import com.owlexa.owlexabackend.modules.homework.enums.GraderType;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkQuestionSubmissionRepository;
-import com.owlexa.owlexabackend.modules.homework.repository.HomeworkRepository;
+import com.owlexa.owlexabackend.modules.homework.repository.HomeworkAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -28,7 +28,7 @@ public class AnalyticsEventProcessor {
 
     private final AnalyticsClassPerformanceRepository performanceRepository;
     private final AnalyticsRubricWeaknessRepository weaknessRepository;
-    private final HomeworkRepository homeworkRepository;
+    private final HomeworkAssignmentRepository homeworkAssignmentRepository;
     private final ClassRepository classRepository;
     private final HomeworkQuestionSubmissionRepository questionSubmissionRepository;
 
@@ -36,11 +36,11 @@ public class AnalyticsEventProcessor {
     @EventListener
     @Transactional
     public void handleHomeworkPublished(HomeworkPublishedEvent event) {
-        log.info("Initializing analytics for Homework ID: {}", event.getHomeworkId());
+        log.info("Initializing analytics for Homework Assignment ID: {}", event.getHomeworkId());
         
         AnalyticsClassPerformance performance = new AnalyticsClassPerformance();
         performance.setClazz(classRepository.findById(event.getClassId()).orElseThrow());
-        performance.setHomework(homeworkRepository.findById(event.getHomeworkId()).orElseThrow());
+        performance.setHomeworkAssignment(homeworkAssignmentRepository.findById(event.getHomeworkId()).orElseThrow());
         performance.setCenter(performance.getClazz().getCenter());
         performance.setMissingSubmissionCount(event.getClassSize());
         performance.setUpdatedAt(Instant.now());
@@ -52,10 +52,10 @@ public class AnalyticsEventProcessor {
     @EventListener
     @Transactional
     public void handleHomeworkSubmitted(HomeworkSubmittedEvent event) {
-        log.info("Processing submission analytics for Homework ID: {}", event.getHomeworkId());
+        log.info("Processing submission analytics for Homework Assignment ID: {}", event.getHomeworkId());
 
         AnalyticsClassPerformance performance = performanceRepository
-                .findByClazz_IdAndHomework_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
+                .findByClazz_IdAndHomeworkAssignment_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
                 .orElse(null);
 
         if (performance == null) return; // Should not happen if published properly
@@ -80,10 +80,10 @@ public class AnalyticsEventProcessor {
     @EventListener
     @Transactional
     public void handleHomeworkGraded(HomeworkGradedEvent event) {
-        log.info("Processing grading analytics for Homework ID: {}", event.getHomeworkId());
+        log.info("Processing grading analytics for Homework Assignment ID: {}", event.getHomeworkId());
 
         AnalyticsClassPerformance performance = performanceRepository
-                .findByClazz_IdAndHomework_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
+                .findByClazz_IdAndHomeworkAssignment_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
                 .orElse(null);
 
         if (performance == null) return;
@@ -126,10 +126,10 @@ public class AnalyticsEventProcessor {
     @EventListener
     @Transactional
     public void handleHomeworkReturned(HomeworkReturnedEvent event) {
-        log.info("Processing returned analytics for Homework ID: {}", event.getHomeworkId());
+        log.info("Processing returned analytics for Homework Assignment ID: {}", event.getHomeworkId());
 
         AnalyticsClassPerformance performance = performanceRepository
-                .findByClazz_IdAndHomework_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
+                .findByClazz_IdAndHomeworkAssignment_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
                 .orElse(null);
 
         if (performance == null) return;
@@ -154,7 +154,7 @@ public class AnalyticsEventProcessor {
     @EventListener
     @Transactional
     public void handleHomeworkDeleted(HomeworkDeletedEvent event) {
-        performanceRepository.findByClazz_IdAndHomework_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
+        performanceRepository.findByClazz_IdAndHomeworkAssignment_IdAndCenter_Id(event.getClassId(), event.getHomeworkId(), event.getCenterId())
                 .ifPresent(performanceRepository::delete);
     }
 

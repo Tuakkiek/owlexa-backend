@@ -10,6 +10,6 @@ import java.util.Optional;
 @Repository
 public interface AnalyticsRubricWeaknessRepository extends JpaRepository<AnalyticsRubricWeakness, Long> {
     Optional<AnalyticsRubricWeakness> findByClazz_IdAndRubricCriterion_IdAndCenter_Id(Long classId, Long criterionId, Long centerId);
-    List<AnalyticsRubricWeakness> findAllByHomework_IdAndCenter_Id(Long homeworkId, Long centerId);
+    List<AnalyticsRubricWeakness> findAllByHomeworkAssignment_IdAndCenter_Id(Long assignmentId, Long centerId);
     List<AnalyticsRubricWeakness> findAllByClazz_IdAndCenter_Id(Long classId, Long centerId);
 }

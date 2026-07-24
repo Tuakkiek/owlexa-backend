@@ -26,8 +26,8 @@ public class HomeworkQuestion {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "homework_id", nullable = false)
-    private Homework homework;
+    @JoinColumn(name = "homework_template_id", nullable = false)
+    private HomeworkTemplate homeworkTemplate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)
@@ -53,7 +53,7 @@ public class HomeworkQuestion {
 
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<HomeworkQuestionOption> options = new ArrayList<>();
+    private java.util.Set<HomeworkQuestionOption> options = new java.util.LinkedHashSet<>();
 
     @OneToOne(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private HomeworkRubric rubric;

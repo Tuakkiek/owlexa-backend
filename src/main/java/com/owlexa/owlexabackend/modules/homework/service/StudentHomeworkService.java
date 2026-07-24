@@ -7,8 +7,8 @@ import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.homework.dto.response.student.*;
 import com.owlexa.owlexabackend.modules.homework.entity.*;
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkStatus;
-import com.owlexa.owlexabackend.modules.homework.repository.HomeworkRepository;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkAssignmentStatus;
+import com.owlexa.owlexabackend.modules.homework.repository.HomeworkAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StudentHomeworkService {
 
-    private final HomeworkRepository homeworkRepository;
+    private final HomeworkAssignmentRepository homeworkAssignmentRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
 
     @Transactional(readOnly = true)
@@ -39,19 +39,21 @@ public class StudentHomeworkService {
             return List.of();
         }
 
-        List<Homework> homeworks = homeworkRepository.findAllByClazz_IdInAndStatusInAndCenter_Id(
+        List<HomeworkAssignment> assignments = homeworkAssignmentRepository.findAllByClazz_IdInAndStatusInAndCenter_Id(
                 classIds,
-                List.of(HomeworkStatus.PUBLISHED, HomeworkStatus.CLOSED),
+                List.of(HomeworkAssignmentStatus.SCHEDULED, HomeworkAssignmentStatus.OPEN, HomeworkAssignmentStatus.CLOSED),
                 centerId
         );
 
-        return homeworks.stream().map(hw -> {
+        return assignments.stream().map(hw -> {
             StudentHomeworkListResponse response = new StudentHomeworkListResponse();
             response.setId(hw.getId());
-            response.setTitle(hw.getTitle());
+            response.setTitle(hw.getHomeworkTemplate().getTitle());
             response.setStatus(hw.getStatus());
+            response.setAvailableFrom(hw.getAvailableFrom());
             response.setDueDate(hw.getDueDate());
-            response.setMaxScore(hw.getMaxScore());
+            response.setCloseAt(hw.getCloseAt());
+            response.setMaxScore(hw.getHomeworkTemplate().getMaxScore());
             response.setAllowLateSubmission(hw.getAllowLateSubmission());
             response.setClazzId(hw.getClazz().getId());
             return response;
@@ -59,45 +61,48 @@ public class StudentHomeworkService {
     }
 
     @Transactional(readOnly = true)
-    public StudentHomeworkDetailResponse getHomeworkDetails(Long studentId, Long homeworkId) {
+    public StudentHomeworkDetailResponse getHomeworkDetails(Long studentId, Long assignmentId) {
         Long centerId = TenantContext.getCurrentTenantId();
 
-        Homework homework = homeworkRepository.findWithDetailsByIdAndCenter_Id(homeworkId, centerId)
+        HomeworkAssignment assignment = homeworkAssignmentRepository.findWithTemplateByIdAndCenter_Id(assignmentId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Homework not found."));
                 
-        if (homework.getStatus() == HomeworkStatus.DRAFT) {
+        if (assignment.getStatus() == HomeworkAssignmentStatus.DRAFT) {
             throw new ResourceNotFoundException("Homework not found.");
         }
 
         boolean isEnrolled = classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
-                homework.getClazz().getId(), studentId, EnrollmentStatus.ACTIVE);
+                assignment.getClazz().getId(), studentId, EnrollmentStatus.ACTIVE);
         
         if (!isEnrolled) {
             throw new ResourceNotFoundException("Homework not found or access denied.");
         }
 
-        return mapToDetailResponse(homework);
+        return mapToDetailResponse(assignment);
     }
     
-    private StudentHomeworkDetailResponse mapToDetailResponse(Homework homework) {
+    private StudentHomeworkDetailResponse mapToDetailResponse(HomeworkAssignment assignment) {
         StudentHomeworkDetailResponse response = new StudentHomeworkDetailResponse();
-        response.setId(homework.getId());
-        response.setTitle(homework.getTitle());
-        response.setDescription(homework.getDescription());
-        response.setInstructions(homework.getInstructions());
-        response.setStatus(homework.getStatus());
-        response.setDueDate(homework.getDueDate());
-        response.setPublishedAt(homework.getPublishedAt());
-        response.setClosedAt(homework.getClosedAt());
-        response.setMaxScore(homework.getMaxScore());
-        response.setAllowLateSubmission(homework.getAllowLateSubmission());
-        response.setAllowResubmit(homework.getAllowResubmit());
-        response.setPublishScoreImmediately(homework.getPublishScoreImmediately());
-        response.setShowAnswerAfterGrading(homework.getShowAnswerAfterGrading());
-        response.setClazzId(homework.getClazz().getId());
+        response.setId(assignment.getId());
+        response.setTitle(assignment.getHomeworkTemplate().getTitle());
+        response.setDescription(assignment.getHomeworkTemplate().getDescription());
+        response.setInstructions(assignment.getHomeworkTemplate().getInstructions());
+        response.setStatus(assignment.getStatus());
+        response.setHomeworkType(assignment.getHomeworkTemplate().getHomeworkType());
+        response.setEstimatedTime(assignment.getHomeworkTemplate().getEstimatedTime());
+
+        response.setAvailableFrom(assignment.getAvailableFrom());
+        response.setDueDate(assignment.getDueDate());
+        response.setCloseAt(assignment.getCloseAt());
+        response.setMaxScore(assignment.getHomeworkTemplate().getMaxScore());
+        response.setAllowLateSubmission(assignment.getAllowLateSubmission());
+        response.setAllowResubmit(assignment.getAllowResubmit());
+        response.setPublishScoreImmediately(assignment.getPublishScoreImmediately());
+        response.setShowAnswerAfterGrading(assignment.getShowAnswerAfterGrading());
+        response.setClazzId(assignment.getClazz().getId());
         
-        if (homework.getQuestions() != null) {
-            List<StudentHomeworkQuestionResponse> questionResponses = homework.getQuestions().stream().map(q -> {
+        if (assignment.getHomeworkTemplate().getQuestions() != null) {
+            List<StudentHomeworkQuestionResponse> questionResponses = assignment.getHomeworkTemplate().getQuestions().stream().map(q -> {
                 StudentHomeworkQuestionResponse qRes = new StudentHomeworkQuestionResponse();
                 qRes.setId(q.getId());
                 qRes.setType(q.getType());

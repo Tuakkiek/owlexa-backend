@@ -36,8 +36,8 @@ public class HomeworkSubmission implements TenantAware {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "homework_id", nullable = false)
-    private Homework homework;
+    @JoinColumn(name = "homework_assignment_id", nullable = false)
+    private HomeworkAssignment homeworkAssignment;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_user_id", nullable = false)

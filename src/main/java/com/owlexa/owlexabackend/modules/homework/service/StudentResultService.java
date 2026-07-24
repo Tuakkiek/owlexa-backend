@@ -4,13 +4,13 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.modules.homework.dto.response.student.*;
-import com.owlexa.owlexabackend.modules.homework.entity.Homework;
+import com.owlexa.owlexabackend.modules.homework.entity.HomeworkAssignment;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestionOption;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestionSubmission;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkSubmission;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkQuestionType;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkSubmissionStatus;
-import com.owlexa.owlexabackend.modules.homework.repository.HomeworkRepository;
+import com.owlexa.owlexabackend.modules.homework.repository.HomeworkAssignmentRepository;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkSubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,17 +25,17 @@ import java.util.stream.Collectors;
 public class StudentResultService {
 
     private final HomeworkSubmissionRepository submissionRepository;
-    private final HomeworkRepository homeworkRepository;
+    private final HomeworkAssignmentRepository homeworkAssignmentRepository;
 
     @Transactional(readOnly = true)
-    public List<StudentResultSummaryResponse> getAttemptResults(Long homeworkId, Long studentId) {
+    public List<StudentResultSummaryResponse> getAttemptResults(Long assignmentId, Long studentId) {
         Long centerId = TenantContext.getCurrentTenantId();
         
         // Validate access and existence
-        homeworkRepository.findByIdAndCenter_Id(homeworkId, centerId)
+        homeworkAssignmentRepository.findByIdAndCenter_Id(assignmentId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Homework not found."));
                 
-        List<HomeworkSubmission> submissions = submissionRepository.findAllByHomework_IdAndCenter_IdAndStudent_IdOrderByAttemptNumberDesc(homeworkId, centerId, studentId);
+        List<HomeworkSubmission> submissions = submissionRepository.findAllByHomeworkAssignment_IdAndCenter_IdAndStudent_IdOrderByAttemptNumberDesc(assignmentId, centerId, studentId);
         
         return submissions.stream().map(this::mapToSummary).collect(Collectors.toList());
     }
@@ -47,14 +47,14 @@ public class StudentResultService {
         HomeworkSubmission submission = submissionRepository.findWithDetailsByIdAndCenter_IdAndStudent_Id(submissionId, centerId, studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found."));
 
-        Homework homework = submission.getHomework();
+        HomeworkAssignment assignment = submission.getHomeworkAssignment();
         
         // Visibility Check
         boolean isResultVisible = false;
         if (submission.getStatus() == HomeworkSubmissionStatus.GRADED || submission.getStatus() == HomeworkSubmissionStatus.RETURNED) {
-            if (Boolean.TRUE.equals(homework.getPublishScoreImmediately())) {
+            if (Boolean.TRUE.equals(assignment.getPublishScoreImmediately())) {
                 isResultVisible = true;
-            } else if (Boolean.TRUE.equals(homework.getIsGradesReleased())) {
+            } else if (Boolean.TRUE.equals(assignment.getIsGradesReleased())) {
                 isResultVisible = true;
             }
         }
@@ -63,13 +63,13 @@ public class StudentResultService {
             throw new BusinessRuleException("Grades are not yet released for this submission.");
         }
 
-        return mapToDetailResponse(submission, homework.getShowAnswerAfterGrading());
+        return mapToDetailResponse(submission, assignment.getShowAnswerAfterGrading());
     }
 
     private StudentResultSummaryResponse mapToSummary(HomeworkSubmission s) {
         StudentResultSummaryResponse r = new StudentResultSummaryResponse();
         r.setId(s.getId());
-        r.setHomeworkId(s.getHomework().getId());
+        r.setHomeworkId(s.getHomeworkAssignment().getId());
         r.setAttemptNumber(s.getAttemptNumber());
         r.setStatus(s.getStatus());
         r.setSubmittedAt(s.getSubmittedAt());
@@ -89,7 +89,7 @@ public class StudentResultService {
     private StudentResultDetailResponse mapToDetailResponse(HomeworkSubmission s, boolean showAnswers) {
         StudentResultDetailResponse r = new StudentResultDetailResponse();
         r.setId(s.getId());
-        r.setHomeworkId(s.getHomework().getId());
+        r.setHomeworkId(s.getHomeworkAssignment().getId());
         r.setAttemptNumber(s.getAttemptNumber());
         r.setStatus(s.getStatus());
         r.setSubmittedAt(s.getSubmittedAt());

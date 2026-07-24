@@ -54,6 +54,12 @@ public class AiScoringJob {
     @Column(name = "response_tokens")
     private Integer responseTokens;
 
+    @Column(name = "total_tokens")
+    private Integer totalTokens;
+
+    @Column(name = "latency_ms")
+    private Long latencyMs;
+
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 

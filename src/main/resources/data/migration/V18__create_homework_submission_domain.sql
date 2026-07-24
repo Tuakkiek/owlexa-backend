@@ -14,7 +14,7 @@ CREATE TABLE homework_submissions (
     center_id BIGINT NOT NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_hw_sub_homework FOREIGN KEY (homework_id) REFERENCES homework(id) ON DELETE CASCADE,
+    CONSTRAINT fk_hw_sub_homework FOREIGN KEY (homework_id) REFERENCES homeworks(id) ON DELETE CASCADE,
     CONSTRAINT fk_hw_sub_student FOREIGN KEY (student_user_id) REFERENCES users(id),
     CONSTRAINT fk_hw_sub_grader FOREIGN KEY (graded_by_user_id) REFERENCES users(id)
 );

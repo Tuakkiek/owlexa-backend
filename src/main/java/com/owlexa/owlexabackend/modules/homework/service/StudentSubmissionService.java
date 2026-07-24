@@ -10,10 +10,10 @@ import com.owlexa.owlexabackend.modules.homework.dto.request.student.AutosaveSub
 import com.owlexa.owlexabackend.modules.homework.dto.response.student.*;
 import com.owlexa.owlexabackend.modules.homework.entity.*;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkQuestionType;
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkStatus;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkAssignmentStatus;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkSubmissionStatus;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkQuestionRepository;
-import com.owlexa.owlexabackend.modules.homework.repository.HomeworkRepository;
+import com.owlexa.owlexabackend.modules.homework.repository.HomeworkAssignmentRepository;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkSubmissionRepository;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -36,43 +36,43 @@ import java.util.stream.Collectors;
 public class StudentSubmissionService {
 
     private final HomeworkSubmissionRepository submissionRepository;
-    private final HomeworkRepository homeworkRepository;
+    private final HomeworkAssignmentRepository homeworkAssignmentRepository;
     private final UserRepository userRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final HomeworkQuestionRepository questionRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public StudentHomeworkSubmissionResponse getOrCreateAttempt(Long homeworkId, Long studentId) {
+    public StudentHomeworkSubmissionResponse getOrCreateAttempt(Long assignmentId, Long studentId) {
         Long centerId = TenantContext.getCurrentTenantId();
 
-        Homework homework = homeworkRepository.findWithDetailsByIdAndCenter_Id(homeworkId, centerId)
+        HomeworkAssignment assignment = homeworkAssignmentRepository.findWithTemplateByIdAndCenter_Id(assignmentId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Homework not found."));
 
-        if (homework.getStatus() == HomeworkStatus.DRAFT) {
+        if (assignment.getStatus() == HomeworkAssignmentStatus.DRAFT) {
             throw new ResourceNotFoundException("Homework not found.");
         }
 
         boolean isEnrolled = classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
-                homework.getClazz().getId(), studentId, EnrollmentStatus.ACTIVE);
+                assignment.getClazz().getId(), studentId, EnrollmentStatus.ACTIVE);
         if (!isEnrolled) {
             throw new ResourceNotFoundException("Access denied.");
         }
 
-        Optional<HomeworkSubmission> activeAttemptOpt = submissionRepository.findFirstByHomework_IdAndCenter_IdAndStudent_IdAndStatusOrderByAttemptNumberDesc(
-                homeworkId, centerId, studentId, HomeworkSubmissionStatus.IN_PROGRESS);
+        Optional<HomeworkSubmission> activeAttemptOpt = submissionRepository.findFirstByHomeworkAssignment_IdAndCenter_IdAndStudent_IdAndStatusOrderByAttemptNumberDesc(
+                assignmentId, centerId, studentId, HomeworkSubmissionStatus.IN_PROGRESS);
 
         if (activeAttemptOpt.isPresent()) {
             return mapToResponse(activeAttemptOpt.get());
         }
 
         // If no active, check if latest exists to handle clone
-        Optional<HomeworkSubmission> latestAttemptOpt = submissionRepository.findFirstByHomework_IdAndCenter_IdAndStudent_IdOrderByAttemptNumberDesc(
-                homeworkId, centerId, studentId);
+        Optional<HomeworkSubmission> latestAttemptOpt = submissionRepository.findFirstByHomeworkAssignment_IdAndCenter_IdAndStudent_IdOrderByAttemptNumberDesc(
+                assignmentId, centerId, studentId);
 
         if (latestAttemptOpt.isPresent()) {
             HomeworkSubmission latest = latestAttemptOpt.get();
-            if (Boolean.FALSE.equals(homework.getAllowResubmit())) {
+            if (Boolean.FALSE.equals(assignment.getAllowResubmit())) {
                 throw new BusinessRuleException("Resubmission is not allowed for this homework.");
             }
             // Clone attempt
@@ -85,9 +85,9 @@ public class StudentSubmissionService {
         // Create new Attempt 1
         User student = userRepository.findById(studentId).orElseThrow();
         HomeworkSubmission newAttempt = HomeworkSubmission.builder()
-                .homework(homework)
+                .homeworkAssignment(assignment)
                 .student(student)
-                .center(homework.getCenter())
+                .center(assignment.getCenter())
                 .attemptNumber(1)
                 .status(HomeworkSubmissionStatus.IN_PROGRESS)
                 .startedAt(Instant.now())
@@ -100,7 +100,7 @@ public class StudentSubmissionService {
 
     private HomeworkSubmission cloneSubmission(HomeworkSubmission source) {
         HomeworkSubmission clone = HomeworkSubmission.builder()
-                .homework(source.getHomework())
+                .homeworkAssignment(source.getHomeworkAssignment())
                 .student(source.getStudent())
                 .center(source.getCenter())
                 .status(HomeworkSubmissionStatus.IN_PROGRESS)
@@ -211,10 +211,10 @@ public class StudentSubmissionService {
         }
 
         Instant now = Instant.now();
-        Homework homework = submission.getHomework();
+        HomeworkAssignment assignment = submission.getHomeworkAssignment();
         
-        if (homework.getDueDate() != null && now.isAfter(homework.getDueDate())) {
-            if (Boolean.FALSE.equals(homework.getAllowLateSubmission())) {
+        if (assignment.getDueDate() != null && now.isAfter(assignment.getDueDate())) {
+            if (Boolean.FALSE.equals(assignment.getAllowLateSubmission())) {
                 throw new BusinessRuleException("Late submissions are not allowed.");
             }
             submission.setStatus(HomeworkSubmissionStatus.LATE_SUBMITTED);
@@ -248,8 +248,8 @@ public class StudentSubmissionService {
         submission = submissionRepository.save(submission);
         
         eventPublisher.publishEvent(new HomeworkSubmittedEvent(
-            homework.getId(),
-            homework.getClazz().getId(),
+            assignment.getId(),
+            assignment.getClazz().getId(),
             submission.getCenterId(),
             studentId,
             submission.getStatus() == HomeworkSubmissionStatus.LATE_SUBMITTED,
@@ -260,9 +260,9 @@ public class StudentSubmissionService {
     }
     
     @Transactional(readOnly = true)
-    public StudentHomeworkSubmissionResponse getActiveAttempt(Long homeworkId, Long studentId) {
+    public StudentHomeworkSubmissionResponse getActiveAttempt(Long assignmentId, Long studentId) {
         Long centerId = TenantContext.getCurrentTenantId();
-        HomeworkSubmission submission = submissionRepository.findFirstByHomework_IdAndCenter_IdAndStudent_IdOrderByAttemptNumberDesc(homeworkId, centerId, studentId)
+        HomeworkSubmission submission = submissionRepository.findFirstByHomeworkAssignment_IdAndCenter_IdAndStudent_IdOrderByAttemptNumberDesc(assignmentId, centerId, studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("No submission found."));
         return mapToResponse(submission);
     }
@@ -270,7 +270,7 @@ public class StudentSubmissionService {
     private StudentHomeworkSubmissionResponse mapToResponse(HomeworkSubmission submission) {
         StudentHomeworkSubmissionResponse response = new StudentHomeworkSubmissionResponse();
         response.setId(submission.getId());
-        response.setHomeworkId(submission.getHomework().getId());
+        response.setHomeworkId(submission.getHomeworkAssignment().getId());
         response.setAttemptNumber(submission.getAttemptNumber());
         response.setStatus(submission.getStatus());
         response.setStartedAt(submission.getStartedAt());

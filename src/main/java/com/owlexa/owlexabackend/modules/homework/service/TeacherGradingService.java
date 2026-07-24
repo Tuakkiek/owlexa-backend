@@ -17,7 +17,7 @@ import com.owlexa.owlexabackend.modules.homework.entity.*;
 import com.owlexa.owlexabackend.modules.homework.enums.GraderType;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkSubmissionStatus;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkQuestionSubmissionRepository;
-import com.owlexa.owlexabackend.modules.homework.repository.HomeworkRepository;
+import com.owlexa.owlexabackend.modules.homework.repository.HomeworkAssignmentRepository;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkRubricCriterionRepository;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkSubmissionRepository;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -42,40 +42,42 @@ import java.util.stream.Collectors;
 public class TeacherGradingService {
 
     private final HomeworkSubmissionRepository submissionRepository;
-    private final HomeworkRepository homeworkRepository;
+    private final HomeworkAssignmentRepository homeworkAssignmentRepository;
     private final UserRepository userRepository;
     private final HomeworkRubricCriterionRepository criterionRepository;
     private final HomeworkQuestionSubmissionRepository questionSubmissionRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
-    public Page<TeacherSubmissionListResponse> getSubmissions(Long homeworkId, Long teacherId, HomeworkSubmissionStatus status, Pageable pageable) {
+    public Page<TeacherSubmissionListResponse> getSubmissions(Long assignmentId, Long teacherId, HomeworkSubmissionStatus status, Pageable pageable) {
         Long centerId = TenantContext.getCurrentTenantId();
 
-        homeworkRepository.findByIdAndCenter_IdAndTeacher_Id(homeworkId, centerId, teacherId)
+        homeworkAssignmentRepository.findWithTemplateByIdAndCenter_Id(assignmentId, centerId)
+                .filter(a -> a.getHomeworkTemplate().getTeacher().getId().equals(teacherId))
                 .orElseThrow(() -> new ResourceNotFoundException("Homework not found or not owned by teacher."));
 
         Page<HomeworkSubmission> submissionsPage;
         if (status != null) {
-            submissionsPage = submissionRepository.findAllByHomework_IdAndCenter_IdAndStatus(homeworkId, centerId, status, pageable);
+            submissionsPage = submissionRepository.findAllByHomeworkAssignment_IdAndCenter_IdAndStatus(assignmentId, centerId, status, pageable);
         } else {
-            submissionsPage = submissionRepository.findAllByHomework_IdAndCenter_Id(homeworkId, centerId, pageable);
+            submissionsPage = submissionRepository.findAllByHomeworkAssignment_IdAndCenter_Id(assignmentId, centerId, pageable);
         }
 
         return submissionsPage.map(this::mapToListResponse);
     }
 
     @Transactional(readOnly = true)
-    public TeacherSubmissionStatsResponse getSubmissionStats(Long homeworkId, Long teacherId) {
+    public TeacherSubmissionStatsResponse getSubmissionStats(Long assignmentId, Long teacherId) {
         Long centerId = TenantContext.getCurrentTenantId();
 
-        homeworkRepository.findByIdAndCenter_IdAndTeacher_Id(homeworkId, centerId, teacherId)
+        homeworkAssignmentRepository.findWithTemplateByIdAndCenter_Id(assignmentId, centerId)
+                .filter(a -> a.getHomeworkTemplate().getTeacher().getId().equals(teacherId))
                 .orElseThrow(() -> new ResourceNotFoundException("Homework not found or not owned by teacher."));
 
-        long total = submissionRepository.countByHomework_IdAndCenter_Id(homeworkId, centerId);
-        long graded = submissionRepository.countByHomework_IdAndCenter_IdAndStatusIn(homeworkId, centerId, List.of(HomeworkSubmissionStatus.GRADED));
-        long pending = submissionRepository.countByHomework_IdAndCenter_IdAndStatusIn(homeworkId, centerId, List.of(HomeworkSubmissionStatus.SUBMITTED, HomeworkSubmissionStatus.LATE_SUBMITTED));
-        long returned = submissionRepository.countByHomework_IdAndCenter_IdAndStatusIn(homeworkId, centerId, List.of(HomeworkSubmissionStatus.RETURNED));
+        long total = submissionRepository.countByHomeworkAssignment_IdAndCenter_Id(assignmentId, centerId);
+        long graded = submissionRepository.countByHomeworkAssignment_IdAndCenter_IdAndStatusIn(assignmentId, centerId, List.of(HomeworkSubmissionStatus.GRADED));
+        long pending = submissionRepository.countByHomeworkAssignment_IdAndCenter_IdAndStatusIn(assignmentId, centerId, List.of(HomeworkSubmissionStatus.SUBMITTED, HomeworkSubmissionStatus.LATE_SUBMITTED));
+        long returned = submissionRepository.countByHomeworkAssignment_IdAndCenter_IdAndStatusIn(assignmentId, centerId, List.of(HomeworkSubmissionStatus.RETURNED));
 
         TeacherSubmissionStatsResponse stats = new TeacherSubmissionStatsResponse();
         stats.setTotalSubmissions(total);
@@ -96,7 +98,7 @@ public class TeacherGradingService {
         HomeworkSubmission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found."));
 
-        if (!submission.getHomework().getTeacher().getId().equals(teacherId) || !submission.getCenterId().equals(centerId)) {
+        if (!submission.getHomeworkAssignment().getHomeworkTemplate().getTeacher().getId().equals(teacherId) || !submission.getCenterId().equals(centerId)) {
             throw new ResourceNotFoundException("Submission not found.");
         }
 
@@ -110,7 +112,7 @@ public class TeacherGradingService {
         HomeworkSubmission submission = submissionRepository.findWithDetailsByIdAndCenter_IdAndStudent_Id(submissionId, centerId, null) // Generic fetch for teacher
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found."));
 
-        if (!submission.getHomework().getTeacher().getId().equals(teacherId)) {
+        if (!submission.getHomeworkAssignment().getHomeworkTemplate().getTeacher().getId().equals(teacherId)) {
             throw new ResourceNotFoundException("Submission not found.");
         }
 
@@ -209,8 +211,8 @@ public class TeacherGradingService {
             
             // Fire Analytics Event
             eventPublisher.publishEvent(new HomeworkGradedEvent(
-                submission.getHomework().getId(),
-                submission.getHomework().getClazz().getId(),
+                submission.getHomeworkAssignment().getId(),
+                submission.getHomeworkAssignment().getClazz().getId(),
                 submission.getCenterId(),
                 submission.getStudent().getId(),
                 oldScore,
@@ -229,7 +231,7 @@ public class TeacherGradingService {
         HomeworkSubmission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found."));
 
-        if (!submission.getHomework().getTeacher().getId().equals(teacherId) || !submission.getCenterId().equals(centerId)) {
+        if (!submission.getHomeworkAssignment().getHomeworkTemplate().getTeacher().getId().equals(teacherId) || !submission.getCenterId().equals(centerId)) {
             throw new ResourceNotFoundException("Submission not found.");
         }
         
@@ -240,8 +242,8 @@ public class TeacherGradingService {
                  else if (qs.getScore() != null) oldScore += qs.getScore();
              }
              eventPublisher.publishEvent(new HomeworkReturnedEvent(
-                 submission.getHomework().getId(),
-                 submission.getHomework().getClazz().getId(),
+                 submission.getHomeworkAssignment().getId(),
+                 submission.getHomeworkAssignment().getClazz().getId(),
                  submission.getCenterId(),
                  submission.getStudent().getId(),
                  oldScore
@@ -263,7 +265,7 @@ public class TeacherGradingService {
         HomeworkSubmission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found."));
 
-        if (!submission.getHomework().getTeacher().getId().equals(teacherId)
+        if (!submission.getHomeworkAssignment().getHomeworkTemplate().getTeacher().getId().equals(teacherId)
                 || !submission.getCenterId().equals(centerId)) {
             throw new ResourceNotFoundException("Submission not found.");
         }
@@ -301,7 +303,7 @@ public class TeacherGradingService {
     private TeacherSubmissionDetailResponse mapToDetailResponse(HomeworkSubmission s) {
         TeacherSubmissionDetailResponse r = new TeacherSubmissionDetailResponse();
         r.setId(s.getId());
-        r.setHomeworkId(s.getHomework().getId());
+        r.setHomeworkId(s.getHomeworkAssignment().getId());
         r.setStudentId(s.getStudent().getId());
         r.setStudentName(s.getStudent().getFullName());
         r.setAttemptNumber(s.getAttemptNumber());
