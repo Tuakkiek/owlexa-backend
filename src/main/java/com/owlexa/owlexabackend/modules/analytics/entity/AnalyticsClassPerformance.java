@@ -3,7 +3,7 @@ package com.owlexa.owlexabackend.modules.analytics.entity;
 import com.owlexa.owlexabackend.common.context.TenantAware;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import com.owlexa.owlexabackend.modules.homework.entity.Homework;
+import com.owlexa.owlexabackend.modules.homework.entity.HomeworkAssignment;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import jakarta.persistence.*;
 import lombok.*;
@@ -34,8 +34,8 @@ public class AnalyticsClassPerformance implements TenantAware {
     private Class clazz;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "homework_id", nullable = false)
-    private Homework homework;
+    @JoinColumn(name = "homework_assignment_id", nullable = false)
+    private HomeworkAssignment homeworkAssignment;
 
     @Column(name = "submitted_count", nullable = false)
     @Builder.Default

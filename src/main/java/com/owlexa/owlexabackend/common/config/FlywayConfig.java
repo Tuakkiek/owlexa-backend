@@ -29,6 +29,7 @@ public class FlywayConfig {
                 .load();
 
         if (flywayEnabled) {
+            flyway.repair(); // Remove any failed migration records from schema history
             flyway.migrate();
         }
 

@@ -43,7 +43,7 @@ public class TeacherAnalyticsService {
         AnalyticsClassPerformanceResponse r = new AnalyticsClassPerformanceResponse();
         r.setId(entity.getId());
         r.setClassId(entity.getClazz().getId());
-        r.setHomeworkId(entity.getHomework().getId());
+        r.setHomeworkId(entity.getHomeworkAssignment().getId());
         r.setSubmittedCount(entity.getSubmittedCount());
         r.setGradedCount(entity.getGradedCount());
         r.setLateSubmissionCount(entity.getLateSubmissionCount());

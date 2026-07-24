@@ -1,4 +1,4 @@
-CREATE TABLE homework (
+CREATE TABLE homeworks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -31,7 +31,7 @@ CREATE TABLE homework_questions (
     sort_order INT NOT NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_hq_homework FOREIGN KEY (homework_id) REFERENCES homework(id) ON DELETE CASCADE
+    CONSTRAINT fk_hq_homework FOREIGN KEY (homework_id) REFERENCES homeworks(id) ON DELETE CASCADE
 );
 
 CREATE TABLE homework_question_options (

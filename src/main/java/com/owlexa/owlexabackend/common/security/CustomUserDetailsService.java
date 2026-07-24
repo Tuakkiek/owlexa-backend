@@ -32,10 +32,11 @@ public class CustomUserDetailsService implements UserDetailsService {
             }
         }
 
-        return org.springframework.security.core.userdetails.User
-                .withUsername(user.getPhoneNumber())
-                .password(user.getPassword())
-                .authorities(authorities)
-                .build();
+        return new CustomUserDetails(
+                user.getId(),
+                user.getPhoneNumber(),
+                user.getPassword(),
+                authorities
+        );
     }
 }
