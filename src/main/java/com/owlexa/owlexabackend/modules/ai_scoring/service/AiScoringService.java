@@ -1,10 +1,11 @@
 package com.owlexa.owlexabackend.modules.ai_scoring.service;
 
 import com.owlexa.owlexabackend.common.config.AiProperties;
-import com.owlexa.owlexabackend.modules.ai_scoring.dto.AiCriterionResult;
+import com.owlexa.owlexabackend.modules.ai_scoring.dto.AiBulkScoringResult;
+import com.owlexa.owlexabackend.modules.ai_scoring.dto.AiScoringResponseDto;
 import com.owlexa.owlexabackend.modules.ai_scoring.entity.AiScoringJob;
-import com.owlexa.owlexabackend.modules.ai_scoring.gateway.AiScoringException;
 import com.owlexa.owlexabackend.modules.ai_scoring.gateway.AiScoringGateway;
+import com.owlexa.owlexabackend.modules.ai_scoring.gateway.DeepSeekAiScoringGateway;
 import com.owlexa.owlexabackend.modules.ai_scoring.repository.AiScoringJobRepository;
 import com.owlexa.owlexabackend.modules.analytics.event.AiScoringCompletedEvent;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestion;
@@ -27,21 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.StringJoiner;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Core AI scoring service.
- * <p>
- * For each ESSAY question submission:
- * <ol>
- *   <li>Validates that the question has a rubric with criteria.</li>
- *   <li>Marks status as IN_PROGRESS.</li>
- *   <li>Calls {@link AiScoringGateway} once per criterion with a structured prompt.</li>
- *   <li>Persists {@link HomeworkRubricCriterionScore} entries with {@code graderType = AI}.</li>
- *   <li>Sums scores → sets {@code questionSubmission.score} and concatenates feedback → {@code aiFeedback}.</li>
- *   <li>Logs an {@link AiScoringJob} record for auditability.</li>
- *   <li>Publishes {@link AiScoringCompletedEvent} for drift analytics.</li>
- * </ol>
  */
 @Slf4j
 @Service
@@ -50,23 +41,15 @@ public class AiScoringService {
 
     private final HomeworkQuestionSubmissionRepository questionSubmissionRepository;
     private final AiScoringJobRepository aiScoringJobRepository;
-    private final AiScoringGateway aiScoringGateway;
+    private final DeepSeekAiScoringGateway aiScoringGateway;
     private final AiProperties aiProperties;
     private final ApplicationEventPublisher eventPublisher;
 
-    /**
-     * Async re-score entry point for teacher-triggered re-scoring.
-     * Runs on the shared async executor so the HTTP response is returned immediately (202).
-     */
     @Async("asyncTaskExecutor")
     public void rescoreEssaySubmissionAsync(Long questionSubmissionId) {
         scoreEssaySubmission(questionSubmissionId);
     }
 
-    /**
-     * Scores a single essay question submission using AI.
-     * Runs in its own transaction so failures don't roll back the parent submission transaction.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void scoreEssaySubmission(Long questionSubmissionId) {
         log.info("[AiScoring] Starting AI scoring for questionSubmissionId={}", questionSubmissionId);
@@ -78,7 +61,6 @@ public class AiScoringService {
                     return new IllegalArgumentException("QuestionSubmission not found: " + questionSubmissionId);
                 });
 
-        // ── Guard: only ESSAY questions are AI-scored ──
         if (qs.getQuestion().getType() != HomeworkQuestionType.ESSAY) {
             log.debug("[AiScoring] Skipping non-ESSAY question {}", questionSubmissionId);
             qs.setAiScoringStatus(AiScoringStatus.SKIPPED);
@@ -86,7 +68,6 @@ public class AiScoringService {
             return;
         }
 
-        // ── Guard: AI disabled in config ──
         if (!aiProperties.isEnabled()) {
             log.info("[AiScoring] AI disabled in config. Skipping questionSubmissionId={}", questionSubmissionId);
             qs.setAiScoringStatus(AiScoringStatus.SKIPPED);
@@ -94,7 +75,6 @@ public class AiScoringService {
             return;
         }
 
-        // ── Guard: rubric must exist ──
         HomeworkQuestion question = qs.getQuestion();
         HomeworkRubric rubric = question.getRubric();
         if (rubric == null || rubric.getCriteria() == null || rubric.getCriteria().isEmpty()) {
@@ -104,7 +84,6 @@ public class AiScoringService {
             return;
         }
 
-        // ── Create/update job record ──
         AiScoringJob job = AiScoringJob.builder()
                 .submissionId(qs.getSubmission().getId())
                 .questionSubId(questionSubmissionId)
@@ -115,67 +94,69 @@ public class AiScoringService {
                 .build();
         job = aiScoringJobRepository.save(job);
 
-        // ── Mark IN_PROGRESS ──
         qs.setAiScoringStatus(AiScoringStatus.IN_PROGRESS);
         questionSubmissionRepository.save(qs);
 
         try {
             String studentAnswer = qs.getTextAnswer() != null ? qs.getTextAnswer() : "(No answer provided)";
+            String prompt = buildBulkPrompt(question.getQuestionText(), rubric, studentAnswer);
+            
+            AiScoringResponseDto responseDto = aiScoringGateway.scoreEssay(prompt);
+            AiBulkScoringResult result = responseDto.getResult();
+            
+            job.setPromptTokens(responseDto.getPromptTokens());
+            job.setResponseTokens(responseDto.getResponseTokens());
+            job.setTotalTokens(responseDto.getTotalTokens());
+            job.setLatencyMs(responseDto.getLatencyMs());
+            job.setModelUsed(responseDto.getModelUsed());
+            
             double totalScore = 0.0;
-            StringJoiner feedbackJoiner = new StringJoiner(" | ");
             List<HomeworkRubricCriterionScore> aiScores = new ArrayList<>();
+            
+            Map<String, HomeworkRubricCriterion> criteriaMap = rubric.getCriteria().stream()
+                    .collect(Collectors.toMap(c -> c.getName().toLowerCase(), c -> c));
 
-            for (HomeworkRubricCriterion criterion : rubric.getCriteria()) {
-                String prompt = buildPrompt(question.getQuestionText(), criterion, studentAnswer);
-                log.debug("[AiScoring] Scoring criterion '{}' for questionSubId={}", criterion.getName(), questionSubmissionId);
-
-                AiCriterionResult result = aiScoringGateway.scoreCriterion(prompt);
-
-                // Cap score at criterion maximum
-                double clampedScore = Math.min(
-                        result.score() != null ? result.score() : 0.0,
-                        criterion.getMaxScore() != null ? criterion.getMaxScore() : 0.0
-                );
-
-                totalScore += clampedScore;
-
-                HomeworkRubricCriterionScore criterionScore = HomeworkRubricCriterionScore.builder()
-                        .questionSubmission(qs)
-                        .criterion(criterion)
-                        .score(clampedScore)
-                        .comment(result.feedback())
-                        .graderType(GraderType.AI)
-                        .build();
-                aiScores.add(criterionScore);
-
-                if (result.feedback() != null && !result.feedback().isBlank()) {
-                    feedbackJoiner.add("[" + criterion.getName() + "]: " + result.feedback());
+            if (result != null && result.getCriteria() != null) {
+                for (AiBulkScoringResult.CriterionResult cr : result.getCriteria()) {
+                    if (cr.getCriterion() == null) continue;
+                    HomeworkRubricCriterion criterion = criteriaMap.get(cr.getCriterion().toLowerCase());
+                    if (criterion != null) {
+                        double clampedScore = Math.min(
+                                cr.getScore() != null ? cr.getScore() : 0.0,
+                                criterion.getMaxScore() != null ? criterion.getMaxScore() : 0.0
+                        );
+                        totalScore += clampedScore;
+                        
+                        HomeworkRubricCriterionScore criterionScore = HomeworkRubricCriterionScore.builder()
+                                .questionSubmission(qs)
+                                .criterion(criterion)
+                                .score(clampedScore)
+                                .comment(cr.getFeedback())
+                                .graderType(GraderType.AI)
+                                .build();
+                        aiScores.add(criterionScore);
+                    }
                 }
             }
 
-            // ── Persist AI criterion scores ──
-            // Remove any existing AI scores (e.g. from a previous failed attempt/rescore) before adding new ones
             qs.getCriterionScores().removeIf(cs -> cs.getGraderType() == GraderType.AI);
             qs.getCriterionScores().addAll(aiScores);
 
-            // ── Update question submission ──
             qs.setScore(totalScore);
-            qs.setAiFeedback(feedbackJoiner.toString());
+            qs.setAiFeedback(result != null ? result.getOverallFeedback() : null);
             qs.setAiScoringStatus(AiScoringStatus.COMPLETED);
             qs.setAiScoredAt(Instant.now());
             questionSubmissionRepository.save(qs);
 
-            // ── Update job ──
             job.setStatus(AiScoringStatus.COMPLETED);
             aiScoringJobRepository.save(job);
 
             log.info("[AiScoring] Completed scoring for questionSubId={}. totalScore={}", questionSubmissionId, totalScore);
 
-            // ── Publish analytics event ──
             eventPublisher.publishEvent(new AiScoringCompletedEvent(
                     questionSubmissionId,
-                    question.getHomework().getId(),
-                    question.getHomework().getClazz().getId(),
+                    question.getHomeworkTemplate().getId(),
+                    qs.getSubmission().getHomeworkAssignment().getClazz().getId(),
                     qs.getSubmission().getCenterId()
             ));
 
@@ -193,37 +174,40 @@ public class AiScoringService {
         }
     }
 
-    /**
-     * Constructs the structured scoring prompt for a single rubric criterion.
-     * The prompt instructs the AI to respond with JSON only, and to use the same
-     * language as the student's answer.
-     */
-    private String buildPrompt(String questionText, HomeworkRubricCriterion criterion, String studentAnswer) {
+    private String buildBulkPrompt(String questionText, HomeworkRubric rubric, String studentAnswer) {
+        StringBuilder rubricBuilder = new StringBuilder();
+        for (HomeworkRubricCriterion criterion : rubric.getCriteria()) {
+            rubricBuilder.append("Criterion:\n")
+                    .append(criterion.getName()).append("\n")
+                    .append("Description: ").append(criterion.getDescription() != null ? criterion.getDescription() : "").append("\n")
+                    .append("Max Score: ").append(criterion.getMaxScore() != null ? criterion.getMaxScore() : 0).append("\n\n");
+        }
+        
         return """
-                You are an educational grading assistant.
+                Question:
+                %s
 
-                Question: %s
-
-                Rubric Criterion: %s
-                Description: %s
-                Maximum Score: %s
-
+                Rubric:
+                %s
                 Student Answer:
                 %s
 
-                Evaluate the student's answer based ONLY on this criterion.
-                Respond with valid JSON only, with no markdown or extra text:
+                Return JSON:
                 {
-                  "score": <number between 0 and %s>,
-                  "feedback": "<one sentence in the same language as the student's answer>"
+                  "criteria":[
+                      {
+                          "criterion":"<exact criterion name>",
+                          "score":<number>,
+                          "feedback":"<short feedback>"
+                      }
+                  ],
+                  "overallFeedback":"<overall feedback on the answer>",
+                  "improvementSuggestions":"<suggestions>"
                 }
                 """.formatted(
-                questionText,
-                criterion.getName(),
-                criterion.getDescription() != null ? criterion.getDescription() : "",
-                criterion.getMaxScore() != null ? criterion.getMaxScore() : 0,
-                studentAnswer,
-                criterion.getMaxScore() != null ? criterion.getMaxScore() : 0
+                questionText != null ? questionText : "",
+                rubricBuilder.toString(),
+                studentAnswer
         );
     }
 }

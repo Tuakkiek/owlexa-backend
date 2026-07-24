@@ -8,5 +8,5 @@ import java.util.Optional;
 
 @Repository
 public interface AnalyticsQuestionPerformanceRepository extends JpaRepository<AnalyticsQuestionPerformance, Long> {
-    Optional<AnalyticsQuestionPerformance> findByQuestion_IdAndHomework_IdAndCenter_Id(Long questionId, Long homeworkId, Long centerId);
+    Optional<AnalyticsQuestionPerformance> findByQuestion_IdAndHomeworkAssignment_IdAndCenter_Id(Long questionId, Long assignmentId, Long centerId);
 }

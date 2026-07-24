@@ -2,8 +2,8 @@ package com.owlexa.owlexabackend.modules.homework.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkStatus;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkType;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "homework")
+@Table(name = "homework_templates")
+@org.hibernate.annotations.SQLDelete(sql = "UPDATE homework_templates SET archived = true, deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+@org.hibernate.annotations.SQLRestriction("archived = false")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
 @Filter(name = "tenantFilter", condition = "center_id = :tenantId")
 @EntityListeners(TenantEntityListener.class)
@@ -30,7 +32,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Homework implements TenantAware {
+public class HomeworkTemplate implements TenantAware {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -46,44 +48,29 @@ public class Homework implements TenantAware {
     private String instructions;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private HomeworkStatus status;
+    @Column(name = "homework_type")
+    private HomeworkType homeworkType;
 
-    @Column(name = "due_date")
-    private Instant dueDate;
+    @Column(name = "estimated_time")
+    private Integer estimatedTime;
 
-    @Column(name = "published_at")
-    private Instant publishedAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "difficulty")
+    private HomeworkDifficulty difficulty;
 
-    @Column(name = "closed_at")
-    private Instant closedAt;
+    @Column(name = "archived", nullable = false)
+    @Builder.Default
+    private Boolean archived = false;
+
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Integer version = 1;
+
+    @Column(name = "parent_template_id")
+    private Long parentTemplateId;
 
     @Column(name = "max_score")
     private Double maxScore;
-
-    @Column(name = "allow_late_submission", nullable = false)
-    @Builder.Default
-    private Boolean allowLateSubmission = false;
-
-    @Column(name = "allow_resubmit", nullable = false)
-    @Builder.Default
-    private Boolean allowResubmit = false;
-
-    @Column(name = "publish_score_immediately", nullable = false)
-    @Builder.Default
-    private Boolean publishScoreImmediately = false;
-
-    @Column(name = "is_grades_released", nullable = false)
-    @Builder.Default
-    private Boolean isGradesReleased = false;
-
-    @Column(name = "show_answer_after_grading", nullable = false)
-    @Builder.Default
-    private Boolean showAnswerAfterGrading = false;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "clazz_id", nullable = false)
-    private Class clazz;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teacher_id", nullable = false)
@@ -93,7 +80,7 @@ public class Homework implements TenantAware {
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
 
-    @OneToMany(mappedBy = "homework", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "homeworkTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<HomeworkQuestion> questions = new ArrayList<>();
 
@@ -104,6 +91,9 @@ public class Homework implements TenantAware {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     @Override
     public Long getCenterId() {

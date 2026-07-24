@@ -1,6 +1,8 @@
 package com.owlexa.owlexabackend.modules.homework.dto.response.student;
 
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkStatus;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkAssignmentStatus;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty;
+import com.owlexa.owlexabackend.modules.homework.enums.HomeworkType;
 import lombok.Data;
 
 import java.time.Instant;
@@ -12,10 +14,15 @@ public class StudentHomeworkDetailResponse {
     private String title;
     private String description;
     private String instructions;
-    private HomeworkStatus status;
+    
+    private HomeworkType homeworkType;
+    private Integer estimatedTime;
+    private HomeworkDifficulty difficulty;
+
+    private HomeworkAssignmentStatus status;
+    private Instant availableFrom;
     private Instant dueDate;
-    private Instant publishedAt;
-    private Instant closedAt;
+    private Instant closeAt;
     private Double maxScore;
     private Boolean allowLateSubmission;
     private Boolean allowResubmit;

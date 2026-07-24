@@ -26,8 +26,8 @@ public class HomeworkQuestion {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "homework_id", nullable = false)
-    private Homework homework;
+    @JoinColumn(name = "homework_template_id", nullable = false)
+    private HomeworkTemplate homeworkTemplate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false)

@@ -2,7 +2,7 @@ package com.owlexa.owlexabackend.modules.homework.service;
 
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
-import com.owlexa.owlexabackend.modules.homework.entity.Homework;
+import com.owlexa.owlexabackend.modules.homework.entity.HomeworkAssignment;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestion;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestionOption;
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkRubricCriterion;
@@ -29,23 +29,23 @@ public class HomeworkValidationService {
         }
     }
 
-    public void validateForPublish(Homework homework) {
-        if (!StringUtils.hasText(homework.getTitle())) {
+    public void validateForPublish(HomeworkAssignment assignment) {
+        if (!StringUtils.hasText(assignment.getHomeworkTemplate().getTitle())) {
             throw new BusinessRuleException("Homework title must not be blank to publish.");
         }
-        if (homework.getDueDate() == null) {
+        if (assignment.getDueDate() == null) {
             throw new BusinessRuleException("Homework due date is required to publish.");
         }
-        if (homework.getDueDate().isBefore(Instant.now())) {
+        if (assignment.getDueDate().isBefore(Instant.now())) {
             throw new BusinessRuleException("Homework due date must be in the future.");
         }
-        if (homework.getQuestions() == null || homework.getQuestions().isEmpty()) {
+        if (assignment.getHomeworkTemplate().getQuestions() == null || assignment.getHomeworkTemplate().getQuestions().isEmpty()) {
             throw new BusinessRuleException("Homework must have at least one question to publish.");
         }
 
         double totalMaxScore = 0.0;
 
-        for (HomeworkQuestion question : homework.getQuestions()) {
+        for (HomeworkQuestion question : assignment.getHomeworkTemplate().getQuestions()) {
             if (!StringUtils.hasText(question.getQuestionText())) {
                 throw new BusinessRuleException("Question text must not be blank.");
             }
@@ -62,10 +62,10 @@ public class HomeworkValidationService {
             }
         }
 
-        if (homework.getMaxScore() == null || homework.getMaxScore() <= 0) {
+        if (assignment.getHomeworkTemplate().getMaxScore() == null || assignment.getHomeworkTemplate().getMaxScore() <= 0) {
             throw new BusinessRuleException("Homework max score must be greater than 0.");
         }
-        if (Math.abs(homework.getMaxScore() - totalMaxScore) > 0.01) {
+        if (Math.abs(assignment.getHomeworkTemplate().getMaxScore() - totalMaxScore) > 0.01) {
             throw new BusinessRuleException("Sum of questions' max scores does not equal homework max score.");
         }
     }

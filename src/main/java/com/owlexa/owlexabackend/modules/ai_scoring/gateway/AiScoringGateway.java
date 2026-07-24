@@ -1,19 +1,17 @@
 package com.owlexa.owlexabackend.modules.ai_scoring.gateway;
 
-import com.owlexa.owlexabackend.modules.ai_scoring.dto.AiCriterionResult;
+import com.owlexa.owlexabackend.modules.ai_scoring.dto.AiScoringResponseDto;
 
 /**
- * Port for external AI provider communication.
- * Implementations: {@link GeminiAiScoringGateway}, {@link MockAiScoringGateway}.
+ * Gateway interface for AI scoring providers.
  */
 public interface AiScoringGateway {
 
     /**
-     * Sends the scoring prompt to the AI provider and returns a structured result.
+     * Sends the scoring prompt to the configured AI provider and returns the structured evaluation response.
      *
-     * @param prompt The fully-constructed scoring prompt for a single rubric criterion.
-     * @return Parsed {@link AiCriterionResult} with score and feedback.
-     * @throws AiScoringException on provider errors that exhaust all retries.
+     * @param prompt formatted text containing essay and rubric criteria
+     * @return provider-agnostic response dto containing scores and token metrics
      */
-    AiCriterionResult scoreCriterion(String prompt);
+    AiScoringResponseDto scoreEssay(String prompt);
 }
