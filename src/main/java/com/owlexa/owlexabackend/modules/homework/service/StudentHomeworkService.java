@@ -90,7 +90,6 @@ public class StudentHomeworkService {
         response.setStatus(assignment.getStatus());
         response.setHomeworkType(assignment.getHomeworkTemplate().getHomeworkType());
         response.setEstimatedTime(assignment.getHomeworkTemplate().getEstimatedTime());
-        response.setDifficulty(assignment.getHomeworkTemplate().getDifficulty());
 
         response.setAvailableFrom(assignment.getAvailableFrom());
         response.setDueDate(assignment.getDueDate());

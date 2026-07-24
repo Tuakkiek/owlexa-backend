@@ -1,7 +1,6 @@
 package com.owlexa.owlexabackend.modules.homework.dto.response;
 
 import com.owlexa.owlexabackend.modules.homework.entity.HomeworkQuestion;
-import com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkType;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +17,6 @@ public class HomeworkTemplateResponse {
     private String instructions;
     private HomeworkType homeworkType;
     private Integer estimatedTime;
-    private HomeworkDifficulty difficulty;
     private Boolean archived;
     private Integer version;
     private Long parentTemplateId;

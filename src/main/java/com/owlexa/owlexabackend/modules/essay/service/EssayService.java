@@ -159,7 +159,7 @@ public class EssayService {
         assertCenterMembership(currentUser, centerId);
 
         return essaySubmissionRepository
-                .findAllByStudentUser_IdAndCenter_IdOrderByCreatedAtDesc(currentUser.getId(), centerId)
+                .findAllByStudentUser_IdAndCenter_IdOrderBySubmittedAtDesc(currentUser.getId(), centerId)
                 .stream()
                 .map(this::toSubmissionResponse)
                 .toList();
@@ -193,7 +193,7 @@ public class EssayService {
             throw new AccessDeniedException("You do not have permission to view essays for this class");
         }
 
-        return essaySubmissionRepository.findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(classId, centerId)
+        return essaySubmissionRepository.findAllByClazz_IdAndCenter_IdOrderBySubmittedAtDesc(classId, centerId)
                 .stream()
                 .map(this::toSubmissionResponse)
                 .toList();

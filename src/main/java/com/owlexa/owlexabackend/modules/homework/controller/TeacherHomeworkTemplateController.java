@@ -52,8 +52,7 @@ public class TeacherHomeworkTemplateController {
             @AuthenticationPrincipal(expression = "id") Long teacherId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) com.owlexa.owlexabackend.modules.homework.enums.HomeworkType type,
-            @RequestParam(required = false) com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty difficulty,
             @RequestParam(required = false, defaultValue = "false") Boolean archived) {
-        return templateService.searchTemplates(teacherId, keyword, type, difficulty, archived);
+        return templateService.searchTemplates(teacherId, keyword, type, archived);
     }
 }

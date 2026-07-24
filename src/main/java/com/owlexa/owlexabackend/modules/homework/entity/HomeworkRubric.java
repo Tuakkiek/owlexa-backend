@@ -36,5 +36,5 @@ public class HomeworkRubric {
 
     @OneToMany(mappedBy = "rubric", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<HomeworkRubricCriterion> criteria = new ArrayList<>();
+    private java.util.Set<HomeworkRubricCriterion> criteria = new java.util.LinkedHashSet<>();
 }

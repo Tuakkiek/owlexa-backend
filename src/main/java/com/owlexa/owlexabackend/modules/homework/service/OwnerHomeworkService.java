@@ -23,14 +23,13 @@ public class OwnerHomeworkService {
     private final HomeworkSubmissionRepository submissionRepository;
 
     @Transactional(readOnly = true)
-    public Page<HomeworkTemplate> getAllTemplates(String keyword, com.owlexa.owlexabackend.modules.homework.enums.HomeworkType type, com.owlexa.owlexabackend.modules.homework.enums.HomeworkDifficulty difficulty, Pageable pageable) {
+    public Page<HomeworkTemplate> getAllTemplates(String keyword, com.owlexa.owlexabackend.modules.homework.enums.HomeworkType type, Pageable pageable) {
         Long centerId = TenantContext.getCurrentTenantId();
         // Fallback to in-memory filtering for simplicity, ideally should use Specification
         List<HomeworkTemplate> all = templateRepository.findAllByCenter_Id(centerId);
         List<HomeworkTemplate> filtered = all.stream()
                 .filter(t -> keyword == null || keyword.isEmpty() || t.getTitle().toLowerCase().contains(keyword.toLowerCase()))
                 .filter(t -> type == null || t.getHomeworkType() == type)
-                .filter(t -> difficulty == null || t.getDifficulty() == difficulty)
                 .collect(java.util.stream.Collectors.toList());
                 
         int start = (int) pageable.getOffset();
