@@ -15,6 +15,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+
 @Service
 @RequiredArgsConstructor
 public class GradingCriteriaService {
@@ -22,6 +24,7 @@ public class GradingCriteriaService {
     private final GradingCriteriaRepository gradingCriteriaRepository;
     private final HomeworkTemplateRepository homeworkTemplateRepository;
     private final AuthorizationService authService;
+    private final EntityManager entityManager;
 
     public Page<TeacherGradingCriteriaResponse> getCriteriaList(String keyword, Pageable pageable) {
         Long centerId = com.owlexa.owlexabackend.common.context.TenantContext.getCurrentTenantId();
@@ -44,14 +47,12 @@ public class GradingCriteriaService {
     public TeacherGradingCriteriaResponse createCriteria(TeacherGradingCriteriaSaveRequest request) {
         User currentUser = authService.getCurrentUser();
         Long centerId = com.owlexa.owlexabackend.common.context.TenantContext.getCurrentTenantId();
-        com.owlexa.owlexabackend.modules.user.entity.Center center = new com.owlexa.owlexabackend.modules.user.entity.Center();
-        center.setId(centerId);
         
         GradingCriteria criteria = GradingCriteria.builder()
                 .title(request.getTitle())
                 .content(request.getContent())
                 .teacher(currentUser)
-                .center(center)
+                .center(entityManager.getReference(com.owlexa.owlexabackend.modules.user.entity.Center.class, centerId))
                 .build();
                 
         GradingCriteria saved = gradingCriteriaRepository.save(criteria);

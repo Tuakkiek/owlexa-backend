@@ -16,6 +16,9 @@ import com.owlexa.owlexabackend.modules.homework.entity.HomeworkRubricCriterionS
 import com.owlexa.owlexabackend.modules.homework.enums.AiScoringStatus;
 import com.owlexa.owlexabackend.modules.homework.enums.GraderType;
 import com.owlexa.owlexabackend.modules.homework.enums.HomeworkQuestionType;
+import com.owlexa.owlexabackend.modules.homework.entity.HomeworkTemplate;
+import com.owlexa.owlexabackend.modules.homework.entity.GradingCriteria;
+import com.owlexa.owlexabackend.modules.homework.repository.GradingCriteriaRepository;
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkQuestionSubmissionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +47,7 @@ public class AiScoringService {
     private final DeepSeekAiScoringGateway aiScoringGateway;
     private final AiProperties aiProperties;
     private final ApplicationEventPublisher eventPublisher;
+    private final GradingCriteriaRepository gradingCriteriaRepository;
 
     @Async("asyncTaskExecutor")
     public void rescoreEssaySubmissionAsync(Long questionSubmissionId) {
@@ -84,6 +88,14 @@ public class AiScoringService {
             return;
         }
 
+        String criteriaContent = null;
+        HomeworkTemplate template = question.getHomeworkTemplate();
+        if (template != null && template.getGradingCriteriaId() != null) {
+            criteriaContent = gradingCriteriaRepository.findById(template.getGradingCriteriaId())
+                    .map(GradingCriteria::getContent)
+                    .orElse(null);
+        }
+
         AiScoringJob job = AiScoringJob.builder()
                 .submissionId(qs.getSubmission().getId())
                 .questionSubId(questionSubmissionId)
@@ -99,7 +111,7 @@ public class AiScoringService {
 
         try {
             String studentAnswer = qs.getTextAnswer() != null ? qs.getTextAnswer() : "(No answer provided)";
-            String prompt = buildBulkPrompt(question.getQuestionText(), rubric, studentAnswer);
+            String prompt = buildBulkPrompt(question.getQuestionText(), rubric, studentAnswer, criteriaContent);
             
             AiScoringResponseDto responseDto = aiScoringGateway.scoreEssay(prompt);
             AiBulkScoringResult result = responseDto.getResult();
@@ -174,7 +186,7 @@ public class AiScoringService {
         }
     }
 
-    private String buildBulkPrompt(String questionText, HomeworkRubric rubric, String studentAnswer) {
+    private String buildBulkPrompt(String questionText, HomeworkRubric rubric, String studentAnswer, String criteriaContent) {
         StringBuilder rubricBuilder = new StringBuilder();
         for (HomeworkRubricCriterion criterion : rubric.getCriteria()) {
             rubricBuilder.append("Criterion:\n")
@@ -183,10 +195,15 @@ public class AiScoringService {
                     .append("Max Score: ").append(criterion.getMaxScore() != null ? criterion.getMaxScore() : 0).append("\n\n");
         }
         
+        String optionalCriteriaContext = "";
+        if (criteriaContent != null && !criteriaContent.isBlank()) {
+            optionalCriteriaContext = "\nAdditional Grading Context:\n" + criteriaContent + "\n";
+        }
+
         return """
                 Question:
                 %s
-
+                %s
                 Rubric:
                 %s
                 Student Answer:
@@ -206,6 +223,7 @@ public class AiScoringService {
                 }
                 """.formatted(
                 questionText != null ? questionText : "",
+                optionalCriteriaContext,
                 rubricBuilder.toString(),
                 studentAnswer
         );
