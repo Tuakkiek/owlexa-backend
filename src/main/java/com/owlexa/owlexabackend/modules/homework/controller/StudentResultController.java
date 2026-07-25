@@ -5,12 +5,14 @@ import com.owlexa.owlexabackend.modules.homework.dto.response.student.StudentRes
 import com.owlexa.owlexabackend.modules.homework.service.StudentResultService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/student/homeworks")
+@PreAuthorize("hasRole('STUDENT')")
 @RequiredArgsConstructor
 public class StudentResultController {
 

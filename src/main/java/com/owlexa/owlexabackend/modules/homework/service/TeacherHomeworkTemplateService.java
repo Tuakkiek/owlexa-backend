@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.owlexa.owlexabackend.modules.homework.repository.HomeworkAssignmentRepository;
+import com.owlexa.owlexabackend.modules.homework.repository.GradingCriteriaRepository;
+import jakarta.persistence.EntityManager;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,8 @@ public class TeacherHomeworkTemplateService {
     private final HomeworkTemplateRepository templateRepository;
     private final UserRepository userRepository;
     private final HomeworkAssignmentRepository assignmentRepository;
+    private final GradingCriteriaRepository gradingCriteriaRepository;
+    private final EntityManager entityManager;
 
     @Transactional
     public void saveHomeworkTemplate(Long teacherId, Long templateId, TeacherHomeworkTemplateSaveRequest request) {
@@ -29,9 +33,7 @@ public class TeacherHomeworkTemplateService {
         HomeworkTemplate template;
         if (templateId == null) {
             template = new HomeworkTemplate();
-            com.owlexa.owlexabackend.modules.user.entity.Center center = new com.owlexa.owlexabackend.modules.user.entity.Center();
-            center.setId(centerId);
-            template.setCenter(center);
+            template.setCenter(entityManager.getReference(com.owlexa.owlexabackend.modules.user.entity.Center.class, centerId));
             template.setTeacher(userRepository.findById(teacherId).orElseThrow());
             template.setVersion(1);
         } else {
@@ -63,6 +65,12 @@ public class TeacherHomeworkTemplateService {
         template.setEstimatedTime(request.getEstimatedTime());
         template.setMaxScore(request.getMaxScore());
 
+        if (request.getGradingCriteriaId() != null) {
+            boolean exists = gradingCriteriaRepository.existsByIdAndCenter_Id(request.getGradingCriteriaId(), centerId);
+            if (!exists) {
+                throw new BusinessRuleException("Grading criteria không tồn tại hoặc không thuộc trung tâm này.");
+            }
+        }
         template.setGradingCriteriaId(request.getGradingCriteriaId());
 
         if (request.getHomeworkType() == com.owlexa.owlexabackend.modules.homework.enums.HomeworkType.QUIZ && request.getQuestionsJson() != null && !request.getQuestionsJson().isBlank()) {
@@ -146,16 +154,14 @@ public class TeacherHomeworkTemplateService {
                             option.setQuestion(question);
                             option.setContent(optNode.asText());
                             option.setSortOrder(optOrder);
-                            option.setIsCorrect(optOrder == (correctAnswer - 1) || optOrder == correctAnswer); // handle both 0-based and 1-based slightly loosely, assuming MVP sample might be 1-based, let's strictly use the index as 1-based if it matches, actually sample JSON shows "correctAnswer": 1 for "Paris" in ["London", "Paris", "Berlin", "Madrid"]. So it's 1-based index (1 means 2nd option? No, Wait. London=0, Paris=1. 1 means 0-based or 1-based? "correctAnswer": 1 means Paris, which is index 1. So it's 0-based!)
-                            
-                            // Let's assume correctAnswer is 1-based in general, but since sample has 1 for Paris, 1 is index 1 -> Paris. Wait, if London=0, Paris=1, it is 0-based. But wait, sample 2: "2+2=?" options: ["3","4","5","6"], correctAnswer: 1 -> "4". So it's definitely 0-based or 1-based. Let's just use exact match with integer from JSON.
-                            option.setIsCorrect(optOrder == correctAnswer);
+                            option.setIsCorrect(optOrder == correctAnswer); // correctAnswer is index 0-based, matches MVP sample JSON
                             question.getOptions().add(option);
                             optOrder++;
                         }
                     }
                     template.getQuestions().add(question);
                 }
+                template.setMaxScore(template.getQuestions().size() * 10.0);
             }
         } catch (Exception e) {
             throw new BusinessRuleException("Failed to parse questions JSON: " + e.getMessage());
@@ -192,6 +198,7 @@ public class TeacherHomeworkTemplateService {
         newTemplate.setHomeworkType(existingTemplate.getHomeworkType());
         newTemplate.setEstimatedTime(existingTemplate.getEstimatedTime());
         newTemplate.setMaxScore(existingTemplate.getMaxScore());
+        newTemplate.setGradingCriteriaId(existingTemplate.getGradingCriteriaId());
         
         for (HomeworkQuestion eq : existingTemplate.getQuestions()) {
             HomeworkQuestion nq = new HomeworkQuestion();
