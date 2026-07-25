@@ -1,0 +1,161 @@
+package com.owlexa.owlexabackend.modules.grading_criteria.service;
+
+import com.owlexa.owlexabackend.common.context.TenantContext;
+import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.grading_criteria.dto.request.GradingCriteriaRequest;
+import com.owlexa.owlexabackend.modules.grading_criteria.dto.response.GradingCriteriaResponse;
+import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
+import com.owlexa.owlexabackend.modules.grading_criteria.repository.GradingCriteriaRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
+import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.regex.Pattern;
+
+@Service
+@RequiredArgsConstructor
+public class GradingCriteriaService {
+
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
+    private static final Pattern HTML_ENTITY_PATTERN = Pattern.compile("&(?:nbsp|#160);", Pattern.CASE_INSENSITIVE);
+
+    private final GradingCriteriaRepository gradingCriteriaRepository;
+    private final CenterRepository centerRepository;
+    private final MembershipRepository membershipRepository;
+    private final AuthorizationService authorizationService;
+
+    @Transactional(readOnly = true)
+    public List<GradingCriteriaResponse> findAll(String search) {
+        requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+
+        List<GradingCriteria> criteria = search == null || search.isBlank()
+                ? gradingCriteriaRepository.findAllByCenter_IdAndDeletedAtIsNullOrderByUpdatedAtDesc(centerId)
+                : gradingCriteriaRepository.findAllByCenter_IdAndDeletedAtIsNullAndNameContainingIgnoreCaseOrderByUpdatedAtDesc(
+                        centerId,
+                        search.trim()
+                );
+
+        return criteria.stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public GradingCriteriaResponse findById(Long criteriaId) {
+        requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+
+        return toResponse(findActiveCriteria(criteriaId, centerId));
+    }
+
+    @Transactional
+    public GradingCriteriaResponse create(GradingCriteriaRequest request) {
+        User currentUser = requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+        validateContentHasText(request.getContent());
+
+        Center center = centerRepository.findById(centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
+
+        GradingCriteria criteria = GradingCriteria.builder()
+                .center(center)
+                .name(request.getName().trim())
+                .content(request.getContent().trim())
+                .createdBy(currentUser)
+                .updatedBy(currentUser)
+                .build();
+
+        return toResponse(gradingCriteriaRepository.save(criteria));
+    }
+
+    @Transactional
+    public GradingCriteriaResponse update(Long criteriaId, GradingCriteriaRequest request) {
+        User currentUser = requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+        validateContentHasText(request.getContent());
+
+        GradingCriteria criteria = findActiveCriteria(criteriaId, centerId);
+        criteria.setName(request.getName().trim());
+        criteria.setContent(request.getContent().trim());
+        criteria.setUpdatedBy(currentUser);
+
+        return toResponse(gradingCriteriaRepository.save(criteria));
+    }
+
+    @Transactional
+    public void delete(Long criteriaId) {
+        User currentUser = requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+
+        GradingCriteria criteria = findActiveCriteria(criteriaId, centerId);
+        validateDelete(criteria);
+        criteria.setDeletedAt(Instant.now());
+        criteria.setUpdatedBy(currentUser);
+        gradingCriteriaRepository.save(criteria);
+    }
+
+    private void validateDelete(GradingCriteria criteria) {
+        // Future Question Bank dependency checks belong here.
+    }
+
+    private void validateContentHasText(String content) {
+        if (content == null) {
+            throw new BadRequestException("Nội dung tiêu chí chấm không được để trống");
+        }
+        String normalized = HTML_ENTITY_PATTERN.matcher(content).replaceAll(" ");
+        String textOnly = HTML_TAG_PATTERN.matcher(normalized).replaceAll(" ");
+        if (textOnly.trim().isBlank()) {
+            throw new BadRequestException("Nội dung tiêu chí chấm không được để trống");
+        }
+    }
+
+    private GradingCriteria findActiveCriteria(Long criteriaId, Long centerId) {
+        return gradingCriteriaRepository.findByIdAndCenter_IdAndDeletedAtIsNull(criteriaId, centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Grading criteria not found with id: " + criteriaId));
+    }
+
+    private User requireTeacherInCurrentCenter() {
+        User currentUser = authorizationService.getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        if (currentUser.getRole() != Role.TEACHER) {
+            throw new AccessDeniedException("Only TEACHER can manage grading criteria");
+        }
+
+        boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
+        if (!hasMembership) {
+            throw new AccessDeniedException("User is not a member of this center");
+        }
+
+        return currentUser;
+    }
+
+    private Long requiredCurrentCenterId() {
+        Long centerId = TenantContext.getCurrentTenantId();
+        if (centerId == null) {
+            throw new BadRequestException("Tenant context not resolved");
+        }
+        return centerId;
+    }
+
+    private GradingCriteriaResponse toResponse(GradingCriteria criteria) {
+        return GradingCriteriaResponse.builder()
+                .id(criteria.getId())
+                .name(criteria.getName())
+                .content(criteria.getContent())
+                .createdAt(criteria.getCreatedAt())
+                .updatedAt(criteria.getUpdatedAt())
+                .build();
+    }
+}

@@ -150,7 +150,7 @@ class PaymentServiceTest {
 
         assertThatThrownBy(() -> paymentService.collectCash(50L, buildRequest(new BigDecimal("500"))))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("exceeds remaining balance");
+                .hasMessageContaining("Số tiền thanh toán vượt quá dư nợ còn lại");
     }
 
     @Test
