@@ -21,4 +21,6 @@ public interface GradingCriteriaRepository extends JpaRepository<GradingCriteria
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    boolean existsByIdAndCenter_Id(Long id, Long centerId);
 }

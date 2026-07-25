@@ -22,4 +22,6 @@ public class TeacherHomeworkAssignmentSaveRequest {
     private Boolean allowResubmit;
     private Boolean publishScoreImmediately;
     private Boolean showAnswerAfterGrading;
+    
+    private com.owlexa.owlexabackend.modules.homework.enums.HomeworkAssignmentStatus status;
 }

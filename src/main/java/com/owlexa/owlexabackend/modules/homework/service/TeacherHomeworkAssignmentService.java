@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -50,7 +51,12 @@ public class TeacherHomeworkAssignmentService {
         assignment.setClazz(classRepository.findById(request.getClazzId()).orElseThrow());
         assignment.setTeacher(userRepository.findById(teacherId).orElseThrow());
         assignment.setCenter(template.getCenter());
-        assignment.setStatus(HomeworkAssignmentStatus.DRAFT);
+        
+        if (request.getAvailableFrom() != null && request.getAvailableFrom().isAfter(Instant.now(clock))) {
+            assignment.setStatus(HomeworkAssignmentStatus.SCHEDULED);
+        } else {
+            assignment.setStatus(HomeworkAssignmentStatus.OPEN);
+        }
         
         assignment.setAvailableFrom(request.getAvailableFrom());
         assignment.setDueDate(request.getDueDate());
@@ -77,9 +83,18 @@ public class TeacherHomeworkAssignmentService {
                 
         if (hasSubmissions || assignment.getStatus() == HomeworkAssignmentStatus.OPEN || assignment.getStatus() == HomeworkAssignmentStatus.CLOSED) {
             // Limited updates
-            assignment.setDueDate(request.getDueDate()); // Allow extending due date
-            assignment.setCloseAt(request.getCloseAt());
-            assignment.setPublishScoreImmediately(request.getPublishScoreImmediately() != null ? request.getPublishScoreImmediately() : false);
+            if (request.getAvailableFrom() != null) {
+                assignment.setAvailableFrom(request.getAvailableFrom());
+            }
+            if (request.getDueDate() != null) {
+                assignment.setDueDate(request.getDueDate()); // Allow extending due date
+            }
+            if (request.getCloseAt() != null) {
+                assignment.setCloseAt(request.getCloseAt());
+            }
+            if (request.getPublishScoreImmediately() != null) {
+                assignment.setPublishScoreImmediately(request.getPublishScoreImmediately());
+            }
         } else if (assignment.getStatus() == HomeworkAssignmentStatus.DRAFT || assignment.getStatus() == HomeworkAssignmentStatus.SCHEDULED) {
             validationService.validateTeacherAssignedToClass(request.getClazzId(), teacherId, centerId);
             stateService.validateTimeline(request.getAvailableFrom(), request.getDueDate(), request.getCloseAt(), clock);
@@ -96,6 +111,10 @@ public class TeacherHomeworkAssignmentService {
             throw new BusinessRuleException("Cannot update assignment in current status.");
         }
         
+        if (request.getStatus() != null && request.getStatus() != assignment.getStatus()) {
+            stateService.transitionTo(assignment, request.getStatus(), clock);
+        }
+        
         assignmentRepository.save(assignment);
     }
     
@@ -110,11 +129,8 @@ public class TeacherHomeworkAssignmentService {
             throw new ResourceNotFoundException("Access denied.");
         }
 
-        if (assignment.getStatus() != HomeworkAssignmentStatus.DRAFT) {
-            throw new BusinessRuleException("Can only delete DRAFT assignment.");
-        }
-
-        assignmentRepository.delete(assignment);
+        stateService.transitionTo(assignment, HomeworkAssignmentStatus.ARCHIVED, clock);
+        assignmentRepository.save(assignment);
         
         // Use existing event if it takes assignment ID instead of homework ID now
         eventPublisher.publishEvent(new HomeworkDeletedEvent(assignmentId, assignment.getClazz().getId(), centerId));

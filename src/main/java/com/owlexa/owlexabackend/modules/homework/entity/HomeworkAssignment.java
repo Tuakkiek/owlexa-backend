@@ -144,9 +144,6 @@ public class HomeworkAssignment implements TenantAware {
     }
 
     public void archive(java.time.Clock clock) {
-        if (this.status == HomeworkAssignmentStatus.DRAFT || this.status == HomeworkAssignmentStatus.CANCELLED) {
-            throw new com.owlexa.owlexabackend.common.exception.BusinessRuleException("Invalid transition to ARCHIVED.");
-        }
         this.status = HomeworkAssignmentStatus.ARCHIVED;
         this.archivedAt = Instant.now(clock);
     }
