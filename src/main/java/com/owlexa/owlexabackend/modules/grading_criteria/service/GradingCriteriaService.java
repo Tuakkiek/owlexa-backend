@@ -2,11 +2,14 @@ package com.owlexa.owlexabackend.modules.grading_criteria.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.modules.grading_criteria.dto.request.GradingCriteriaRequest;
 import com.owlexa.owlexabackend.modules.grading_criteria.dto.response.GradingCriteriaResponse;
 import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
 import com.owlexa.owlexabackend.modules.grading_criteria.repository.GradingCriteriaRepository;
+import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
+import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -33,6 +36,7 @@ public class GradingCriteriaService {
     private final CenterRepository centerRepository;
     private final MembershipRepository membershipRepository;
     private final AuthorizationService authorizationService;
+    private final QuestionRepository questionRepository;
 
     @Transactional(readOnly = true)
     public List<GradingCriteriaResponse> findAll(String search) {
@@ -106,7 +110,19 @@ public class GradingCriteriaService {
     }
 
     private void validateDelete(GradingCriteria criteria) {
-        // Future Question Bank dependency checks belong here.
+        boolean isUsedByActiveEssayQuestion = questionRepository
+                .existsByGradingCriteria_IdAndCenter_IdAndTypeAndDeletedAtIsNull(
+                        criteria.getId(),
+                        criteria.getCenterId(),
+                        QuestionType.ESSAY
+                );
+
+        if (isUsedByActiveEssayQuestion) {
+            throw new BusinessRuleException(
+                    "GRADING_CRITERIA_IN_USE",
+                    "Không thể xóa tiêu chí chấm vì đang được sử dụng bởi câu hỏi tự luận"
+            );
+        }
     }
 
     private void validateContentHasText(String content) {
