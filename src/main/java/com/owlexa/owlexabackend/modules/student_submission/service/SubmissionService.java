@@ -204,13 +204,13 @@ public class SubmissionService {
 
         long attemptsCount = submissionAttemptRepository.countByAssignmentRecipient_Id(recipient.getId());
         if (attemptsCount >= attemptLimit) {
-            throw new BadRequestException("Attempt limit has been reached");
+            throw new BadRequestException("Đã đạt số lần làm bài tối đa");
         }
     }
 
     private void replaceAnswers(SubmissionAttempt attempt, SaveSubmissionAnswersRequest request) {
         if (request == null || request.getAnswers() == null) {
-            throw new BadRequestException("Answers are required");
+            throw new BadRequestException("Danh sách câu trả lời không được để trống");
         }
 
         Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
@@ -233,15 +233,15 @@ public class SubmissionService {
             Set<Long> answerItemIds
     ) {
         if (request == null || request.getAssignmentItemId() == null) {
-            throw new BadRequestException("Assignment item id is required");
+            throw new BadRequestException("Mã câu hỏi không được để trống");
         }
         if (!answerItemIds.add(request.getAssignmentItemId())) {
-            throw new BadRequestException("Duplicate answer for assignment item is not allowed");
+            throw new BadRequestException("Không được phép chọn câu trả lời trùng lặp cho cùng một câu hỏi");
         }
 
         AssignmentItem item = itemsById.get(request.getAssignmentItemId());
         if (item == null) {
-            throw new BadRequestException("Answer assignment item is invalid");
+            throw new BadRequestException("Câu hỏi trả lời không hợp lệ");
         }
 
         validateAnswerShape(item, request);
@@ -264,10 +264,10 @@ public class SubmissionService {
         boolean hasSelectedOptions = request.getSelectedOptionIds() != null && !request.getSelectedOptionIds().isEmpty();
 
         if (item.getQuestionType() == QuestionType.MULTIPLE_CHOICE && hasAnswerText) {
-            throw new BadRequestException("Multiple choice answers must use selected options");
+            throw new BadRequestException("Câu hỏi trắc nghiệm phải chọn đáp án");
         }
         if (item.getQuestionType() == QuestionType.ESSAY && hasSelectedOptions) {
-            throw new BadRequestException("Essay answers must use answer text");
+            throw new BadRequestException("Câu hỏi tự luận phải nhập văn bản");
         }
     }
 
@@ -284,13 +284,13 @@ public class SubmissionService {
                 .collect(Collectors.toMap(AssignmentItemOption::getId, Function.identity()));
         Set<Long> uniqueSelectedIds = new LinkedHashSet<>(selectedOptionIds);
         if (uniqueSelectedIds.size() != selectedOptionIds.size()) {
-            throw new BadRequestException("Duplicate selected option is not allowed");
+            throw new BadRequestException("Không được phép chọn cùng một đáp án nhiều lần");
         }
 
         for (Long optionId : uniqueSelectedIds) {
             AssignmentItemOption option = optionsById.get(optionId);
             if (option == null) {
-                throw new BadRequestException("Selected option does not belong to the assignment item");
+                throw new BadRequestException("Đáp án được chọn không thuộc câu hỏi này");
             }
             answer.getSelectedOptions().add(SubmissionAnswerOption.builder()
                     .submissionAnswer(answer)
@@ -351,22 +351,22 @@ public class SubmissionService {
     private void validateCanStartAttempt(Assignment assignment, Instant now) {
         validateAssignmentStillAccessible(assignment);
         if (assignment.getStatus() != AssignmentStatus.ACTIVE && assignment.getStatus() != AssignmentStatus.SCHEDULED) {
-            throw new BadRequestException("Assignment is not open for attempts");
+            throw new BadRequestException("Bài tập chưa mở để làm bài");
         }
         if (assignment.getOpenAt() != null && assignment.getOpenAt().isAfter(now)) {
-            throw new BadRequestException("Assignment is not open yet");
+            throw new BadRequestException("Bài tập chưa đến thời gian làm bài");
         }
         if (isPastDue(assignment, now)) {
-            throw new BadRequestException("Assignment due time has passed");
+            throw new BadRequestException("Đã hết thời hạn làm bài tập");
         }
     }
 
     private void validateAssignmentStillAccessible(Assignment assignment) {
         if (assignment.getDeletedAt() != null) {
-            throw new ResourceNotFoundException("Assignment not found with id: " + assignment.getId());
+            throw new ResourceNotFoundException("Không tìm thấy bài tập với ID: " + assignment.getId());
         }
         if (assignment.getStatus() == AssignmentStatus.CLOSED || assignment.getStatus() == AssignmentStatus.ARCHIVED) {
-            throw new BadRequestException("Assignment is no longer accepting submissions");
+            throw new BadRequestException("Bài tập đã đóng hoặc được lưu trữ, không nhận bài nộp nữa");
         }
     }
 
@@ -381,7 +381,7 @@ public class SubmissionService {
                         studentUserId,
                         centerId
                 )
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + assignmentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài tập với ID: " + assignmentId));
     }
 
     private SubmissionAttempt findStudentAttempt(Long attemptId, Long studentUserId, Long centerId) {
@@ -391,7 +391,7 @@ public class SubmissionService {
                         studentUserId,
                         centerId
                 )
-                .orElseThrow(() -> new ResourceNotFoundException("Submission attempt not found with id: " + attemptId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lượt làm bài với ID: " + attemptId));
     }
 
     private void requireInProgress(SubmissionAttempt attempt, String message) {
@@ -405,12 +405,12 @@ public class SubmissionService {
         Long centerId = requiredCurrentCenterId();
 
         if (currentUser.getRole() != Role.TEACHER) {
-            throw new AccessDeniedException("Only TEACHER can view submissions");
+            throw new AccessDeniedException("Chỉ có Giáo viên mới có quyền xem bài nộp");
         }
 
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
 
         return currentUser;
@@ -421,12 +421,12 @@ public class SubmissionService {
         Long centerId = requiredCurrentCenterId();
 
         if (currentUser.getRole() != Role.STUDENT) {
-            throw new AccessDeniedException("Only STUDENT can manage submission attempts");
+            throw new AccessDeniedException("Chỉ có Học viên mới có quyền thực hiện bài nộp");
         }
 
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
 
         return currentUser;
@@ -435,7 +435,7 @@ public class SubmissionService {
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new BadRequestException("Tenant context not resolved");
+            throw new BadRequestException("Không xác định được trung tâm làm việc");
         }
         return centerId;
     }

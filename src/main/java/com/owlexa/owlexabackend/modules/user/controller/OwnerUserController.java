@@ -84,7 +84,7 @@ public class OwnerUserController {
     private void assertOwner() {
         User currentUser = getCurrentUser();
         if (currentUser.getRole() != Role.OWNER) {
-            throw new AccessDeniedException("Only OWNER can manage user permissions");
+            throw new AccessDeniedException("Chỉ có Chủ trung tâm mới có quyền quản lý phân quyền người dùng");
         }
     }
 
@@ -94,7 +94,7 @@ public class OwnerUserController {
     private void assertSameCenter(Long targetUserId) {
         User currentUser = getCurrentUser();
         if (!userRepository.existsById(targetUserId)) {
-            throw new ResourceNotFoundException("User not found with id: " + targetUserId);
+            throw new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + targetUserId);
         }
 
         boolean sharesCenter = membershipRepository.findAllByUser_Id(currentUser.getId())
@@ -103,13 +103,13 @@ public class OwnerUserController {
                         .existsByUser_IdAndCenter_Id(targetUserId, membership.getCenter().getId()));
 
         if (!sharesCenter) {
-            throw new AccessDeniedException("You can only manage permissions for users in your center");
+            throw new AccessDeniedException("Bạn chỉ có thể quản lý phân quyền cho người dùng thuộc trung tâm của bạn");
         }
     }
 
     private User getCurrentUser() {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByPhoneNumber(phone)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng hiện tại"));
     }
 }

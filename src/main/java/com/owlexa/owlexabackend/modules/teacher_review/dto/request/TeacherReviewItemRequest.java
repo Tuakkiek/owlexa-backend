@@ -16,11 +16,11 @@ import java.math.BigDecimal;
 @Builder
 public class TeacherReviewItemRequest {
 
-    @NotNull(message = "Assignment item id is required")
+    @NotNull(message = "Mã mục bài tập không được để trống")
     private Long assignmentItemId;
 
-    @DecimalMin(value = "0.00", message = "Final score must be greater than or equal to 0")
-    @Digits(integer = 6, fraction = 2, message = "Final score must have at most 6 integer and 2 decimal digits")
+    @DecimalMin(value = "0.00", message = "Điểm số phải lớn hơn hoặc bằng 0")
+    @Digits(integer = 6, fraction = 2, message = "Điểm số chỉ được chứa tối đa 6 chữ số nguyên và 2 chữ số thập phân")
     private BigDecimal finalScore;
 
     private String itemComment;

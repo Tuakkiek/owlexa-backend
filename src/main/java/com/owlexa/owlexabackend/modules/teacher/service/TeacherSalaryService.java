@@ -155,46 +155,37 @@ public class TeacherSalaryService {
      */
     private void assertOwnerAndCenterMembership(User currentUser, Long centerId) {
         if (currentUser.getRole() != Role.OWNER) {
-            throw new AccessDeniedException("Only OWNER can manage teacher salary");
+            throw new AccessDeniedException("Chỉ có Chủ trung tâm mới có quyền quản lý mức lương giáo viên");
         }
 
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
     }
 
-    /**
-     * Kiểm tra teacher có membership tại center hiện tại không.
-     * Nếu không có → 2 trường hợp:
-     * 1. teacherId sai / không tồn tại → ResourceNotFoundException.
-     * 2. teacher tồn tại nhưng không thuộc center này → TenancyViolationException.
-     *
-     * Phân biệt 2 case này để debug dễ hơn và tránh lộ thông tin
-     * qua thông báo lỗi chung chung.
-     */
     private void assertTeacherExistsInCenter(Long teacherId, Long centerId) {
         User teacher = userRepository.findById(teacherId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Teacher not found with id: " + teacherId));
+                        "Không tìm thấy giáo viên với ID: " + teacherId));
 
         if (teacher.getRole() != Role.TEACHER) {
             throw new BusinessRuleException(
-                    "User " + teacherId + " is not a TEACHER (role=" + teacher.getRole() + ")");
+                    "Người dùng " + teacherId + " không phải là Giáo viên");
         }
 
         Membership membership = membershipRepository
                 .findByUser_IdAndCenter_Id(teacherId, centerId)
                 .orElseThrow(() -> new TenancyViolationException(
-                        "Teacher " + teacherId + " is not a member of center " + centerId));
+                        "Giáo viên " + teacherId + " không thuộc trung tâm " + centerId));
     }
 
     private void validateAmount(java.math.BigDecimal amount) {
         if (amount == null) {
-            throw new BadRequestException("salary is required");
+            throw new BadRequestException("Mức lương không được để trống");
         }
         if (amount.compareTo(java.math.BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("salary must be >= 0");
+            throw new BadRequestException("Mức lương phải lớn hơn hoặc bằng 0");
         }
     }
 
@@ -230,13 +221,13 @@ public class TeacherSalaryService {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
 
         return userRepository.findByPhoneNumber(phone)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng hiện tại"));
     }
 
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new BadRequestException("Tenant context not resolved. Ensure the user has an active membership.");
+            throw new BadRequestException("Chưa xác định trung tâm hoạt động. Vui lòng đảm bảo người dùng có vai trò trong trung tâm.");
         }
         return centerId;
     }

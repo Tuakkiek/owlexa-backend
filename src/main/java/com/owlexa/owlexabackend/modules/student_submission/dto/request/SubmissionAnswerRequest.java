@@ -14,7 +14,7 @@ import java.util.List;
 @Builder
 public class SubmissionAnswerRequest {
 
-    @NotNull(message = "Assignment item id is required")
+    @NotNull(message = "Mã mục bài tập không được để trống")
     private Long assignmentItemId;
 
     private String answerText;

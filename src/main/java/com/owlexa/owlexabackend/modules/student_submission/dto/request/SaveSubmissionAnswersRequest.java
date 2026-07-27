@@ -16,6 +16,6 @@ import java.util.List;
 public class SaveSubmissionAnswersRequest {
 
     @Valid
-    @NotNull(message = "Answers are required")
+    @NotNull(message = "Danh sách câu trả lời không được để trống")
     private List<SubmissionAnswerRequest> answers;
 }

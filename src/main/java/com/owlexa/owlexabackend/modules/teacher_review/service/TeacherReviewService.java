@@ -129,11 +129,11 @@ public class TeacherReviewService {
         validateEssayCoverage(review);
         BigDecimal maxScore = review.getSubmissionAttempt().getMaxScore();
         if (maxScore == null) {
-            throw new BadRequestException("Submission attempt max score is missing");
+            throw new BadRequestException("Thiếu điểm tối đa của bài nộp");
         }
         BigDecimal finalScore = calculateFinalScore(review);
         if (finalScore.compareTo(maxScore) > 0) {
-            throw new BadRequestException("Final score cannot exceed review max score");
+            throw new BadRequestException("Điểm số cuối cùng không được vượt quá điểm tối đa");
         }
 
         Instant now = Instant.now();
@@ -154,10 +154,10 @@ public class TeacherReviewService {
         TeacherReview review = findTeacherReview(reviewId, centerId);
 
         if (review.getStatus() != TeacherReviewStatus.FINALIZED) {
-            throw new BadRequestException("Only finalized reviews can be released");
+            throw new BadRequestException("Chỉ có bài đánh giá đã hoàn tất mới có thể công bố");
         }
         if (review.getFinalScore() == null) {
-            throw new BadRequestException("Finalized review score is missing");
+            throw new BadRequestException("Thiếu điểm của bài đánh giá đã hoàn tất");
         }
 
         Instant now = Instant.now();
@@ -178,7 +178,7 @@ public class TeacherReviewService {
         requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         Assignment assignment = assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(assignmentId, centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + assignmentId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài tập với ID: " + assignmentId));
 
         Page<SubmissionAttempt> attempts = findQueueAttempts(
                 assignmentId,
@@ -230,7 +230,7 @@ public class TeacherReviewService {
                         TeacherReviewStatus.RELEASED
                 )
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Released result not found for submission attempt: " + submissionAttemptId
+                        "Không tìm thấy kết quả đánh giá đã công bố cho bài nộp: " + submissionAttemptId
                 ));
         return teacherReviewMapper.toStudentResultResponse(review);
     }
@@ -238,7 +238,7 @@ public class TeacherReviewService {
     private TeacherReview createReview(SubmissionAttempt attempt, User teacher) {
         Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
         if (attempt.getMaxScore() == null) {
-            throw new BadRequestException("Submission attempt max score is missing");
+            throw new BadRequestException("Thiếu điểm tối đa của bài nộp");
         }
 
         Map<Long, SubmissionAnswer> answersByItemId = attempt.getAnswers().stream()
@@ -276,13 +276,13 @@ public class TeacherReviewService {
 
     private void validateUpdateRequest(TeacherReview review, TeacherReviewUpdateRequest request) {
         if (request == null || request.getVersion() == null) {
-            throw new BadRequestException("Review version is required");
+            throw new BadRequestException("Phiên bản đánh giá là bắt buộc");
         }
         if (!Objects.equals(request.getVersion(), review.getVersion())) {
-            throw new BadRequestException("Teacher review has been modified; reload before saving");
+            throw new BadRequestException("Đánh giá của giáo viên đã bị thay đổi; vui lòng tải lại trước khi lưu");
         }
         if (request.getItems() == null) {
-            throw new BadRequestException("Review items are required");
+            throw new BadRequestException("Danh sách mục đánh giá không được để trống");
         }
     }
 
@@ -293,15 +293,15 @@ public class TeacherReviewService {
 
         for (TeacherReviewItemRequest request : requests) {
             if (request == null || request.getAssignmentItemId() == null) {
-                throw new BadRequestException("Assignment item id is required");
+                throw new BadRequestException("Mã mục bài tập không được để trống");
             }
             if (!requestItemIds.add(request.getAssignmentItemId())) {
-                throw new BadRequestException("Duplicate review item is not allowed");
+                throw new BadRequestException("Không cho phép mục đánh giá trùng lặp");
             }
 
             TeacherReviewItem item = itemsByAssignmentItemId.get(request.getAssignmentItemId());
             if (item == null) {
-                throw new BadRequestException("Review item does not belong to this review");
+                throw new BadRequestException("Mục đánh giá không thuộc về bài đánh giá này");
             }
             validateItemScore(request.getFinalScore(), item.getMaxScore());
             item.setFinalScore(request.getFinalScore());
@@ -309,7 +309,7 @@ public class TeacherReviewService {
         }
 
         if (!requestItemIds.equals(itemsByAssignmentItemId.keySet())) {
-            throw new BadRequestException("Update must include every review item exactly once");
+            throw new BadRequestException("Cập nhật phải bao gồm đầy đủ từng mục đánh giá đúng 1 lần");
         }
     }
 
@@ -328,7 +328,7 @@ public class TeacherReviewService {
                         AIGradingJobStatus.COMPLETED
                 )
                 .orElseThrow(() -> new BadRequestException(
-                        "Selected AI grading result is invalid for this submission attempt"
+                        "Kết quả chấm bằng AI được chọn không hợp lệ cho lượt làm bài này"
                 ));
     }
 
@@ -347,7 +347,7 @@ public class TeacherReviewService {
         BigDecimal finalScore = scoreValue(review.getSubmissionAttempt().getAutoScore());
         for (TeacherReviewItem item : review.getItems()) {
             if (item.getFinalScore() == null) {
-                throw new BadRequestException("Every essay item must have a final score before finalization");
+                throw new BadRequestException("Tất cả câu tự luận phải được cho điểm trước khi hoàn tất");
             }
             validateItemScore(item.getFinalScore(), item.getMaxScore());
             finalScore = finalScore.add(item.getFinalScore());
@@ -370,7 +370,7 @@ public class TeacherReviewService {
                 .collect(Collectors.toSet());
 
         if (!expectedEssayItemIds.equals(reviewItemIds)) {
-            throw new BadRequestException("Teacher review must contain every essay assignment item");
+            throw new BadRequestException("Đánh giá của giáo viên phải chứa đầy đủ tất cả câu hỏi tự luận");
         }
     }
 
@@ -379,10 +379,10 @@ public class TeacherReviewService {
             return;
         }
         if (finalScore.compareTo(BigDecimal.ZERO) < 0) {
-            throw new BadRequestException("Review item score cannot be negative");
+            throw new BadRequestException("Điểm số của mục đánh giá không được âm");
         }
         if (finalScore.compareTo(maxScore) > 0) {
-            throw new BadRequestException("Review item score cannot exceed its max score");
+            throw new BadRequestException("Điểm số của mục đánh giá không được vượt quá điểm tối đa");
         }
     }
 
@@ -415,7 +415,7 @@ public class TeacherReviewService {
         try {
             status = TeacherReviewStatus.valueOf(normalizedStatus);
         } catch (IllegalArgumentException exception) {
-            throw new BadRequestException("Invalid teacher review status filter: " + reviewStatus);
+            throw new BadRequestException("Bộ lọc trạng thái đánh giá không hợp lệ: " + reviewStatus);
         }
         return teacherReviewRepository.findQueueAttemptsByReviewStatus(
                 assignmentId,
@@ -428,7 +428,7 @@ public class TeacherReviewService {
 
     private TeacherReview findTeacherReview(Long reviewId, Long centerId) {
         return teacherReviewRepository.findDetailByIdAndCenterId(reviewId, centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Teacher review not found with id: " + reviewId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá của giáo viên với ID: " + reviewId));
     }
 
     private SubmissionAttempt findTeacherAttempt(Long submissionAttemptId, Long centerId) {
@@ -438,19 +438,19 @@ public class TeacherReviewService {
                         centerId
                 )
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Submission attempt not found with id: " + submissionAttemptId
+                        "Không tìm thấy lượt nộp bài với ID: " + submissionAttemptId
                 ));
     }
 
     private void requireSubmittedAttempt(SubmissionAttempt attempt) {
         if (!REVIEWABLE_SUBMISSION_STATUSES.contains(attempt.getStatus())) {
-            throw new BadRequestException("Only submitted attempts can be reviewed");
+            throw new BadRequestException("Chỉ có bài nộp ở trạng thái đã nộp mới có thể đánh giá");
         }
     }
 
     private void requireMutable(TeacherReview review) {
         if (review.getStatus() != TeacherReviewStatus.IN_PROGRESS) {
-            throw new BadRequestException("Only in-progress reviews can be updated");
+            throw new BadRequestException("Chỉ có bài đánh giá đang thực hiện mới có thể cập nhật");
         }
     }
 
@@ -458,7 +458,7 @@ public class TeacherReviewService {
         try {
             return teacherReviewMapper.toDetailResponse(teacherReviewRepository.saveAndFlush(review));
         } catch (OptimisticLockingFailureException exception) {
-            throw new BadRequestException("Teacher review has been modified; reload before continuing");
+            throw new BadRequestException("Đánh giá của giáo viên đã bị thay đổi; vui lòng tải lại trước khi tiếp tục");
         }
     }
 
@@ -476,10 +476,10 @@ public class TeacherReviewService {
         Long centerId = requiredCurrentCenterId();
 
         if (currentUser.getRole() != Role.TEACHER) {
-            throw new AccessDeniedException("Only TEACHER can manage teacher reviews");
+            throw new AccessDeniedException("Chỉ có Giáo viên mới có quyền quản lý đánh giá");
         }
         if (!membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId)) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
         return currentUser;
     }
@@ -489,10 +489,10 @@ public class TeacherReviewService {
         Long centerId = requiredCurrentCenterId();
 
         if (currentUser.getRole() != Role.STUDENT) {
-            throw new AccessDeniedException("Only STUDENT can view released review results");
+            throw new AccessDeniedException("Chỉ có Học viên mới có quyền xem kết quả đánh giá");
         }
         if (!membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId)) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
         return currentUser;
     }
@@ -500,7 +500,7 @@ public class TeacherReviewService {
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new BadRequestException("Tenant context not resolved");
+            throw new BadRequestException("Không xác định được trung tâm làm việc");
         }
         return centerId;
     }

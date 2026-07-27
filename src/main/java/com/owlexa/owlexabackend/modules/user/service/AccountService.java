@@ -105,20 +105,20 @@ public class AccountService {
         if (authentication == null
                 || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getName())) {
-            throw new AccessDeniedException("User is not authenticated");
+            throw new AccessDeniedException("Chưa đăng nhập");
         }
 
         String phoneNumber = authentication.getName();
 
         return userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng hiện tại"));
     }
 
     private void verifyPassword(String rawPassword, User user) {
         boolean bcryptMatch = passwordEncoder.matches(rawPassword, user.getPassword());
         boolean legacyMatch = rawPassword != null && rawPassword.equals(user.getPassword());
         if (!bcryptMatch && !legacyMatch) {
-            throw new BadRequestException("Invalid password");
+            throw new BadRequestException("Mật khẩu hiện tại không chính xác");
         }
     }
 }

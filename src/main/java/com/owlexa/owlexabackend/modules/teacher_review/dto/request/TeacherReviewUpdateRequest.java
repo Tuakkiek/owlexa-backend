@@ -16,15 +16,15 @@ import java.util.List;
 @Builder
 public class TeacherReviewUpdateRequest {
 
-    @NotNull(message = "Version is required")
-    @PositiveOrZero(message = "Version must be greater than or equal to 0")
+    @NotNull(message = "Phiên bản đánh giá là bắt buộc")
+    @PositiveOrZero(message = "Phiên bản đánh giá phải lớn hơn hoặc bằng 0")
     private Long version;
 
     private Long selectedAiGradingResultId;
 
     private String overallComment;
 
-    @NotNull(message = "Review items are required")
+    @NotNull(message = "Danh sách mục đánh giá không được để trống")
     @Valid
     private List<TeacherReviewItemRequest> items;
 }

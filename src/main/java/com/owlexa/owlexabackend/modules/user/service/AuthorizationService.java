@@ -66,17 +66,17 @@ public class AuthorizationService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new AccessDeniedException("User is not authenticated");
+            throw new AccessDeniedException("Chưa đăng nhập");
         }
 
         String phoneNumber = authentication.getName();
 
         if (phoneNumber == null || phoneNumber.isBlank() || "anonymousUser".equals(phoneNumber)) {
-            throw new AccessDeniedException("User is not authenticated");
+            throw new AccessDeniedException("Chưa đăng nhập");
         }
 
         return userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
     }
 
     private boolean isSameUser(Center center, User currentUser) {
