@@ -1,6 +1,6 @@
 -- ================================================================
 -- OWLEXA ENGLISH LEARNING CENTER - SEED DATA v7.0 (Flyway Migration)
--- Full schema coverage: 42 tables (V1 to V5 baseline)
+-- Full schema coverage: 43 tables (V1 to V5 baseline plus QuestionCollection)
 -- Enforces multi-tenancy, FK integrity, realistic English training data,
 -- BCrypt password hashing, and active assessment & AI grading flows.
 -- Default password for ALL users: "password123"
@@ -65,8 +65,7 @@ INSERT IGNORE INTO `membership` (`id`, `center_id`, `user_id`, `joined_by_user_i
 
 -- 4. USER_PERMISSION (Custom overrides if needed)
 INSERT IGNORE INTO `user_permission` (`id`, `user_id`, `permission_id`, `granted_at`)
-SELECT 1, 2, id, NOW() FROM permissions WHERE code = 'CENTER_SETTINGS_UPDATE'
-ON DUPLICATE KEY UPDATE granted_at=VALUES(granted_at);
+SELECT 1, 2, id, NOW() FROM permissions WHERE code = 'CENTER_SETTINGS_UPDATE';
 
 -- 5. USER_SESSIONS
 INSERT IGNORE INTO `user_sessions` (`id`, `user_id`, `center_id`, `refresh_token_hash`, `device_key`, `device_type`, `device_name`, `ip_address`, `user_agent`, `is_active`, `rotation_count`, `created_at`, `last_used_at`, `expired_at`, `absolute_expire_at`) VALUES
@@ -203,35 +202,114 @@ INSERT IGNORE INTO `audit_logs` (`id`, `center_id`, `user_id`, `action`, `entity
 (1, 1, 6, 'CREATE_PAYMENT', 'PAYMENT', 1, 'Tạo biên lai thanh toán học phí REC-202607-001 số tiền 2,300,000 VND', '14.225.22.10', '2026-07-02 10:00:02.000000'),
 (2, 1, 8, 'MARK_ATTENDANCE', 'ATTENDANCE', 1, 'Điểm danh buổi học TOEIC-750-K24 ngày 2026-07-20', '118.69.182.45', '2026-07-20 20:35:00.000000');
 
--- 16. GRADING CRITERIA & QUESTIONS & OPTIONS
+-- 16. GRADING CRITERIA & QUESTION COLLECTIONS & QUESTIONS & OPTIONS
 INSERT IGNORE INTO `grading_criteria` (`id`, `center_id`, `created_by`, `updated_by`, `name`, `content`, `created_at`, `updated_at`) VALUES
 (1, 1, 8, 8, 'Tiêu chí Chấm IELTS Essay Task 2 (TR, CC, LR, GRA)', 'Task Response (25%), Coherence & Cohesion (25%), Lexical Resource (25%), Grammatical Range & Accuracy (25%).', '2026-02-15 08:00:00.000000', '2026-02-15 08:00:00.000000'),
 (2, 1, 8, 8, 'Tiêu chí Chấm VSTEP Writing Part 2', 'Bố cục bài viết (20%), Nội dung ý tưởng (30%), Từ vựng (25%), Ngữ pháp & Cấu trúc câu (25%).', '2026-02-15 08:30:00.000000', '2026-02-15 08:30:00.000000');
 
-INSERT IGNORE INTO `questions` (`id`, `center_id`, `created_by`, `updated_by`, `grading_criteria_id`, `title`, `type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `created_at`, `updated_at`) VALUES
-(1, 1, 8, 8, NULL, 'TOEIC Incomplete Sentence - Subject Verb Agreement', 'MULTIPLE_CHOICE', 'EASY', 5.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'Chủ ngữ "committee" là danh từ số ít, hành động xảy ra trong quá khứ "yesterday" -> chọn "decided".', '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
-(2, 1, 8, 8, NULL, 'TOEIC Vocabulary - Business Vocabulary', 'MULTIPLE_CHOICE', 'MEDIUM', 5.00, 'All candidates are required to submit their updated resumes prior to the scheduled _______ next Monday.', NULL, 'Tính từ "scheduled" bổ nghĩa cho danh từ "interview".', '2026-02-20 09:15:00.000000', '2026-02-20 09:15:00.000000'),
-(3, 1, 8, 8, 1, 'IELTS Essay - Artificial Intelligence in Education', 'ESSAY', 'HARD', 10.00, 'Write an essay discussing the advantages and disadvantages of using Artificial Intelligence tools in higher education.', 'Sample Answer: In recent years, Artificial Intelligence (AI) has transformed various sectors, including higher education. While AI offers personalized learning and administrative efficiency, it also poses challenges such as academic dishonesty and reduced human interaction...', 'Candidate should present a clear introduction, 2 body paragraphs covering pros/cons, and a cohesive conclusion using formal academic vocabulary.', '2026-02-20 10:00:00.000000', '2026-02-20 10:00:00.000000');
+INSERT IGNORE INTO `question_collections` (`id`, `center_id`, `code`, `name`, `description`, `created_by`, `updated_by`, `created_at`, `updated_at`) VALUES
+(1, 1, 'TOEIC_TEST_1', 'TOEIC Test 1', 'Bộ câu hỏi TOEIC hoàn chỉnh dùng cho luyện nghe và đọc.', 8, 8, '2026-02-16 08:00:00.000000', '2026-02-16 08:00:00.000000'),
+(2, 1, 'TOEIC_TEST_2', 'TOEIC Test 2', 'Bộ câu hỏi TOEIC bổ sung cho Question Picker.', 8, 8, '2026-02-16 08:10:00.000000', '2026-02-16 08:10:00.000000'),
+(3, 1, 'GRAMMAR_PRACTICE', 'Grammar Practice', 'Bài luyện tập ngữ pháp theo chủ điểm.', 8, 8, '2026-02-16 08:20:00.000000', '2026-02-16 08:20:00.000000'),
+(4, 1, 'IELTS_SAMPLE', 'IELTS Sample', 'Câu hỏi mẫu IELTS Reading và Writing.', 10, 10, '2026-02-16 08:30:00.000000', '2026-02-16 08:30:00.000000');
+
+INSERT IGNORE INTO `questions` (`id`, `center_id`, `collection_id`, `section_code`, `display_order`, `created_by`, `updated_by`, `grading_criteria_id`, `type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, 'PART_1', 1, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, '', NULL, 'The woman is stepping onto a bus.', '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
+(2, 1, 1, 'PART_1', 2, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, '', NULL, 'Several workers are repairing the road.', '2026-02-20 09:01:00.000000', '2026-02-20 09:01:00.000000'),
+(3, 1, 1, 'PART_1', 3, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, '', NULL, 'A presenter is pointing at a chart.', '2026-02-20 09:02:00.000000', '2026-02-20 09:02:00.000000'),
+(4, 1, 1, 'PART_1', 4, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, '', NULL, 'Dishes have been placed on the counter.', '2026-02-20 09:03:00.000000', '2026-02-20 09:03:00.000000'),
+(5, 1, 1, 'PART_2', 5, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, '', NULL, 'The response directly answers where the meeting will be held.', '2026-02-20 09:04:00.000000', '2026-02-20 09:04:00.000000'),
+(6, 1, 1, 'PART_2', 6, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, '', NULL, 'The response confirms the revised delivery time.', '2026-02-20 09:05:00.000000', '2026-02-20 09:05:00.000000'),
+(7, 1, 1, 'PART_5', 7, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'The singular subject and past-time marker require "decided".', '2026-02-20 09:06:00.000000', '2026-02-20 09:06:00.000000'),
+(8, 1, 1, 'PART_5', 8, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, 'All candidates are required to submit their updated resumes prior to the scheduled _______ next Monday.', NULL, '"Scheduled" modifies the noun "interview".', '2026-02-20 09:07:00.000000', '2026-02-20 09:07:00.000000'),
+(9, 1, 2, 'PART_1', 1, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, '', NULL, 'Passengers are waiting beside a train.', '2026-02-20 09:10:00.000000', '2026-02-20 09:10:00.000000'),
+(10, 1, 2, 'PART_1', 2, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, '', NULL, 'A guest is speaking with a receptionist.', '2026-02-20 09:11:00.000000', '2026-02-20 09:11:00.000000'),
+(11, 1, 2, 'PART_2', 3, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, '', NULL, 'The response accepts the invitation.', '2026-02-20 09:12:00.000000', '2026-02-20 09:12:00.000000'),
+(12, 1, 2, 'PART_2', 4, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, '', NULL, 'The response explains when the technician will arrive.', '2026-02-20 09:13:00.000000', '2026-02-20 09:13:00.000000'),
+(13, 1, 3, 'GRAMMAR', 1, 8, 8, NULL, 'MULTIPLE_CHOICE', 'EASY', 1.00, 'She _______ at this company since 2022.', NULL, '"Since 2022" requires the present perfect.', '2026-02-20 09:20:00.000000', '2026-02-20 09:20:00.000000'),
+(14, 1, 3, 'GRAMMAR', 2, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, 'If the weather improves, we _______ the event outdoors.', NULL, 'The first conditional uses will plus the base verb.', '2026-02-20 09:21:00.000000', '2026-02-20 09:21:00.000000'),
+(15, 1, 3, 'GRAMMAR', 3, 8, 8, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, 'The final report _______ by the audit team yesterday.', NULL, 'A past passive construction is required.', '2026-02-20 09:22:00.000000', '2026-02-20 09:22:00.000000'),
+(16, 1, 3, 'GRAMMAR', 4, 8, 8, NULL, 'MULTIPLE_CHOICE', 'HARD', 1.00, 'The consultant _______ advised us specializes in data security.', NULL, '"Who" introduces a defining relative clause for a person.', '2026-02-20 09:23:00.000000', '2026-02-20 09:23:00.000000'),
+(17, 1, 4, 'WRITING', 1, 10, 10, 1, 'ESSAY', 'HARD', 10.00, 'Write an essay discussing the advantages and disadvantages of using Artificial Intelligence tools in higher education.', 'In recent years, Artificial Intelligence has transformed higher education. While it offers personalized learning and administrative efficiency, it also creates challenges involving academic integrity and reduced human interaction.', 'Present a clear introduction, balanced body paragraphs, and a cohesive conclusion using formal academic vocabulary.', '2026-02-20 10:00:00.000000', '2026-02-20 10:00:00.000000'),
+(18, 1, 4, 'READING', 2, 10, 10, NULL, 'MULTIPLE_CHOICE', 'MEDIUM', 2.00, 'City planners increasingly view parks as essential infrastructure because they reduce heat, absorb rainwater, and provide residents with places to exercise and socialize. What is the main purpose of the passage?', NULL, 'The passage summarizes several benefits of urban parks.', '2026-02-20 10:05:00.000000', '2026-02-20 10:05:00.000000'),
+(19, 1, 4, 'WRITING', 3, 10, 10, 1, 'ESSAY', 'MEDIUM', 10.00, 'Some companies allow employees to work remotely several days a week. Discuss whether the benefits outweigh the disadvantages.', NULL, 'Support the position with relevant reasons and examples.', '2026-02-20 10:10:00.000000', '2026-02-20 10:10:00.000000');
 
 INSERT IGNORE INTO `question_options` (`id`, `question_id`, `display_order`, `content`, `is_correct`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 'decide', 0, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
-(2, 1, 2, 'decides', 0, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
-(3, 1, 3, 'decided', 1, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
-(4, 1, 4, 'deciding', 0, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
-(5, 2, 1, 'interview', 1, '2026-02-20 09:15:00.000000', '2026-02-20 09:15:00.000000'),
-(6, 2, 2, 'interviewed', 0, '2026-02-20 09:15:00.000000', '2026-02-20 09:15:00.000000'),
-(7, 2, 3, 'interviewer', 0, '2026-02-20 09:15:00.000000', '2026-02-20 09:15:00.000000'),
-(8, 2, 4, 'interviewing', 0, '2026-02-20 09:15:00.000000', '2026-02-20 09:15:00.000000');
+(1, 1, 1, 'She is boarding a bus.', 1, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
+(2, 1, 2, 'She is opening a suitcase.', 0, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
+(3, 1, 3, 'She is crossing a bridge.', 0, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
+(4, 1, 4, 'She is buying a newspaper.', 0, '2026-02-20 09:00:00.000000', '2026-02-20 09:00:00.000000'),
+(5, 2, 1, 'Workers are repairing a road.', 1, '2026-02-20 09:01:00.000000', '2026-02-20 09:01:00.000000'),
+(6, 2, 2, 'Cars are parked inside a garage.', 0, '2026-02-20 09:01:00.000000', '2026-02-20 09:01:00.000000'),
+(7, 2, 3, 'A bridge is being painted.', 0, '2026-02-20 09:01:00.000000', '2026-02-20 09:01:00.000000'),
+(8, 2, 4, 'People are waiting at a crossing.', 0, '2026-02-20 09:01:00.000000', '2026-02-20 09:01:00.000000'),
+(9, 3, 1, 'A presenter is pointing at a chart.', 1, '2026-02-20 09:02:00.000000', '2026-02-20 09:02:00.000000'),
+(10, 3, 2, 'The audience is leaving the room.', 0, '2026-02-20 09:02:00.000000', '2026-02-20 09:02:00.000000'),
+(11, 3, 3, 'A screen is being removed.', 0, '2026-02-20 09:02:00.000000', '2026-02-20 09:02:00.000000'),
+(12, 3, 4, 'Some chairs are being stacked.', 0, '2026-02-20 09:02:00.000000', '2026-02-20 09:02:00.000000'),
+(13, 4, 1, 'Dishes are arranged on a counter.', 1, '2026-02-20 09:03:00.000000', '2026-02-20 09:03:00.000000'),
+(14, 4, 2, 'Customers are reading menus outside.', 0, '2026-02-20 09:03:00.000000', '2026-02-20 09:03:00.000000'),
+(15, 4, 3, 'A table is being carried upstairs.', 0, '2026-02-20 09:03:00.000000', '2026-02-20 09:03:00.000000'),
+(16, 4, 4, 'The kitchen is being cleaned.', 0, '2026-02-20 09:03:00.000000', '2026-02-20 09:03:00.000000'),
+(17, 5, 1, 'In the conference room on the second floor.', 1, '2026-02-20 09:04:00.000000', '2026-02-20 09:04:00.000000'),
+(18, 5, 2, 'Yes, I met her yesterday.', 0, '2026-02-20 09:04:00.000000', '2026-02-20 09:04:00.000000'),
+(19, 5, 3, 'About thirty minutes ago.', 0, '2026-02-20 09:04:00.000000', '2026-02-20 09:04:00.000000'),
+(20, 6, 1, 'It should arrive by three o’clock.', 1, '2026-02-20 09:05:00.000000', '2026-02-20 09:05:00.000000'),
+(21, 6, 2, 'The loading dock is behind the building.', 0, '2026-02-20 09:05:00.000000', '2026-02-20 09:05:00.000000'),
+(22, 6, 3, 'I ordered two boxes.', 0, '2026-02-20 09:05:00.000000', '2026-02-20 09:05:00.000000'),
+(23, 7, 1, 'decide', 0, '2026-02-20 09:06:00.000000', '2026-02-20 09:06:00.000000'),
+(24, 7, 2, 'decides', 0, '2026-02-20 09:06:00.000000', '2026-02-20 09:06:00.000000'),
+(25, 7, 3, 'decided', 1, '2026-02-20 09:06:00.000000', '2026-02-20 09:06:00.000000'),
+(26, 7, 4, 'deciding', 0, '2026-02-20 09:06:00.000000', '2026-02-20 09:06:00.000000'),
+(27, 8, 1, 'interview', 1, '2026-02-20 09:07:00.000000', '2026-02-20 09:07:00.000000'),
+(28, 8, 2, 'interviewed', 0, '2026-02-20 09:07:00.000000', '2026-02-20 09:07:00.000000'),
+(29, 8, 3, 'interviewer', 0, '2026-02-20 09:07:00.000000', '2026-02-20 09:07:00.000000'),
+(30, 8, 4, 'interviewing', 0, '2026-02-20 09:07:00.000000', '2026-02-20 09:07:00.000000'),
+(31, 9, 1, 'Passengers are waiting beside a train.', 1, '2026-02-20 09:10:00.000000', '2026-02-20 09:10:00.000000'),
+(32, 9, 2, 'Luggage is being loaded onto a plane.', 0, '2026-02-20 09:10:00.000000', '2026-02-20 09:10:00.000000'),
+(33, 9, 3, 'A ticket counter has closed.', 0, '2026-02-20 09:10:00.000000', '2026-02-20 09:10:00.000000'),
+(34, 9, 4, 'A bus is leaving a station.', 0, '2026-02-20 09:10:00.000000', '2026-02-20 09:10:00.000000'),
+(35, 10, 1, 'A guest is speaking with a receptionist.', 1, '2026-02-20 09:11:00.000000', '2026-02-20 09:11:00.000000'),
+(36, 10, 2, 'The lobby furniture is being delivered.', 0, '2026-02-20 09:11:00.000000', '2026-02-20 09:11:00.000000'),
+(37, 10, 3, 'A room key is lying on the floor.', 0, '2026-02-20 09:11:00.000000', '2026-02-20 09:11:00.000000'),
+(38, 10, 4, 'Guests are carrying tables outside.', 0, '2026-02-20 09:11:00.000000', '2026-02-20 09:11:00.000000'),
+(39, 11, 1, 'I’d be happy to join you.', 1, '2026-02-20 09:12:00.000000', '2026-02-20 09:12:00.000000'),
+(40, 11, 2, 'At the restaurant across the street.', 0, '2026-02-20 09:12:00.000000', '2026-02-20 09:12:00.000000'),
+(41, 11, 3, 'The menu was printed yesterday.', 0, '2026-02-20 09:12:00.000000', '2026-02-20 09:12:00.000000'),
+(42, 12, 1, 'The technician will be here this afternoon.', 1, '2026-02-20 09:13:00.000000', '2026-02-20 09:13:00.000000'),
+(43, 12, 2, 'It is next to the copy room.', 0, '2026-02-20 09:13:00.000000', '2026-02-20 09:13:00.000000'),
+(44, 12, 3, 'Please print three copies.', 0, '2026-02-20 09:13:00.000000', '2026-02-20 09:13:00.000000'),
+(45, 13, 1, 'has worked', 1, '2026-02-20 09:20:00.000000', '2026-02-20 09:20:00.000000'),
+(46, 13, 2, 'worked', 0, '2026-02-20 09:20:00.000000', '2026-02-20 09:20:00.000000'),
+(47, 13, 3, 'is working', 0, '2026-02-20 09:20:00.000000', '2026-02-20 09:20:00.000000'),
+(48, 13, 4, 'will work', 0, '2026-02-20 09:20:00.000000', '2026-02-20 09:20:00.000000'),
+(49, 14, 1, 'will hold', 1, '2026-02-20 09:21:00.000000', '2026-02-20 09:21:00.000000'),
+(50, 14, 2, 'held', 0, '2026-02-20 09:21:00.000000', '2026-02-20 09:21:00.000000'),
+(51, 14, 3, 'would hold', 0, '2026-02-20 09:21:00.000000', '2026-02-20 09:21:00.000000'),
+(52, 14, 4, 'holding', 0, '2026-02-20 09:21:00.000000', '2026-02-20 09:21:00.000000'),
+(53, 15, 1, 'was completed', 1, '2026-02-20 09:22:00.000000', '2026-02-20 09:22:00.000000'),
+(54, 15, 2, 'completed', 0, '2026-02-20 09:22:00.000000', '2026-02-20 09:22:00.000000'),
+(55, 15, 3, 'has completing', 0, '2026-02-20 09:22:00.000000', '2026-02-20 09:22:00.000000'),
+(56, 15, 4, 'is complete', 0, '2026-02-20 09:22:00.000000', '2026-02-20 09:22:00.000000'),
+(57, 16, 1, 'who', 1, '2026-02-20 09:23:00.000000', '2026-02-20 09:23:00.000000'),
+(58, 16, 2, 'which', 0, '2026-02-20 09:23:00.000000', '2026-02-20 09:23:00.000000'),
+(59, 16, 3, 'where', 0, '2026-02-20 09:23:00.000000', '2026-02-20 09:23:00.000000'),
+(60, 16, 4, 'whose', 0, '2026-02-20 09:23:00.000000', '2026-02-20 09:23:00.000000'),
+(61, 18, 1, 'To explain why urban parks are valuable infrastructure.', 1, '2026-02-20 10:05:00.000000', '2026-02-20 10:05:00.000000'),
+(62, 18, 2, 'To compare several forms of public transportation.', 0, '2026-02-20 10:05:00.000000', '2026-02-20 10:05:00.000000'),
+(63, 18, 3, 'To argue that cities should remove exercise facilities.', 0, '2026-02-20 10:05:00.000000', '2026-02-20 10:05:00.000000'),
+(64, 18, 4, 'To describe a new residential development.', 0, '2026-02-20 10:05:00.000000', '2026-02-20 10:05:00.000000');
 
 -- 17. ASSESSMENTS & ASSESSMENT ITEMS & OPTIONS
 INSERT IGNORE INTO `assessments` (`id`, `center_id`, `created_by`, `updated_by`, `title`, `description`, `type`, `status`, `created_at`, `updated_at`) VALUES
 (1, 1, 8, 8, 'TOEIC Grammar & Vocabulary Midterm Test', 'Đề thi giữa kỳ đánh giá từ vựng và ngữ pháp TOEIC.', 'QUIZ', 'PUBLISHED', '2026-03-01 08:00:00.000000', '2026-03-01 08:00:00.000000'),
-(2, 1, 10, 10, 'IELTS Academic Essay Writing Assessment', 'Đề kiểm tra kỹ năng viết Essay Task 2.', 'HOMEWORK', 'PUBLISHED', '2026-03-01 09:00:00.000000', '2026-03-01 09:00:00.000000');
+(2, 1, 10, 10, 'IELTS Academic Essay Writing Assessment', 'Đề kiểm tra kỹ năng viết Essay Task 2.', 'HOMEWORK', 'PUBLISHED', '2026-03-01 09:00:00.000000', '2026-03-01 09:00:00.000000'),
+(3, 1, 8, 8, 'TOEIC Test 1 Listening Practice', 'Bài luyện nghe sử dụng các câu Part 1 và Part 2 từ TOEIC Test 1.', 'QUIZ', 'PUBLISHED', '2026-03-01 10:00:00.000000', '2026-03-01 10:00:00.000000');
 
 INSERT IGNORE INTO `assessment_items` (`id`, `assessment_id`, `question_id`, `grading_criteria_id`, `display_order`, `title`, `question_type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `grading_criteria_name`, `grading_criteria_content`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, NULL, 1, 'Câu 1: TOEIC Grammar S-V Agreement', 'MULTIPLE_CHOICE', 'EASY', 5.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'Đáp án C đúng.', NULL, NULL, '2026-03-01 08:10:00.000000', '2026-03-01 08:10:00.000000'),
-(2, 1, 2, NULL, 2, 'Câu 2: TOEIC Business Vocab', 'MULTIPLE_CHOICE', 'MEDIUM', 5.00, 'All candidates are required to submit their updated resumes prior to the scheduled _______ next Monday.', NULL, 'Đáp án A đúng.', NULL, NULL, '2026-03-01 08:15:00.000000', '2026-03-01 08:15:00.000000'),
-(3, 2, 3, 1, 1, 'IELTS Essay Question', 'ESSAY', 'HARD', 10.00, 'Write an essay discussing the advantages and disadvantages of using Artificial Intelligence tools in higher education.', 'Sample IELTS Essay...', 'Xem tiêu chí chấm IELTS Task 2.', 'Tiêu chí Chấm IELTS Essay Task 2', 'Task Response, CC, LR, GRA', '2026-03-01 09:10:00.000000', '2026-03-01 09:10:00.000000');
+(1, 1, 7, NULL, 1, 'Budget approval', 'MULTIPLE_CHOICE', 'EASY', 1.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'The singular subject and past-time marker require "decided".', NULL, NULL, '2026-03-01 08:10:00.000000', '2026-03-01 08:10:00.000000'),
+(2, 1, 8, NULL, 2, 'Job interview', 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, 'All candidates are required to submit their updated resumes prior to the scheduled _______ next Monday.', NULL, '"Scheduled" modifies the noun "interview".', NULL, NULL, '2026-03-01 08:15:00.000000', '2026-03-01 08:15:00.000000'),
+(3, 2, 17, 1, 1, 'Artificial intelligence in education', 'ESSAY', 'HARD', 10.00, 'Write an essay discussing the advantages and disadvantages of using Artificial Intelligence tools in higher education.', 'In recent years, Artificial Intelligence has transformed higher education.', 'Present a clear introduction, balanced body paragraphs, and a cohesive conclusion.', 'Tiêu chí Chấm IELTS Essay Task 2', 'Task Response, CC, LR, GRA', '2026-03-01 09:10:00.000000', '2026-03-01 09:10:00.000000');
 
 INSERT IGNORE INTO `assessment_item_options` (`id`, `assessment_item_id`, `display_order`, `content`, `is_correct`, `created_at`, `updated_at`) VALUES
 (1, 1, 1, 'decide', 0, '2026-03-01 08:10:00.000000', '2026-03-01 08:10:00.000000'),
@@ -243,27 +321,65 @@ INSERT IGNORE INTO `assessment_item_options` (`id`, `assessment_item_id`, `displ
 (7, 2, 3, 'interviewer', 0, '2026-03-01 08:15:00.000000', '2026-03-01 08:15:00.000000'),
 (8, 2, 4, 'interviewing', 0, '2026-03-01 08:15:00.000000', '2026-03-01 08:15:00.000000');
 
+INSERT IGNORE INTO `assessment_items` (`id`, `assessment_id`, `question_id`, `grading_criteria_id`, `display_order`, `title`, `question_type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `grading_criteria_name`, `grading_criteria_content`, `created_at`, `updated_at`)
+SELECT
+    q.id + 3,
+    3,
+    q.id,
+    NULL,
+    q.display_order,
+    NULL,
+    q.type,
+    q.difficulty,
+    q.points,
+    q.content,
+    NULL,
+    q.explanation,
+    NULL,
+    NULL,
+    '2026-03-01 10:10:00.000000',
+    '2026-03-01 10:10:00.000000'
+FROM `questions` q
+WHERE q.id BETWEEN 1 AND 6;
+
+INSERT IGNORE INTO `assessment_item_options` (`id`, `assessment_item_id`, `display_order`, `content`, `is_correct`, `created_at`, `updated_at`)
+SELECT
+    qo.id + 8,
+    qo.question_id + 3,
+    qo.display_order,
+    qo.content,
+    qo.is_correct,
+    '2026-03-01 10:10:00.000000',
+    '2026-03-01 10:10:00.000000'
+FROM `question_options` qo
+WHERE qo.question_id BETWEEN 1 AND 6;
+
 -- 18. ASSIGNMENTS & TARGETS & RECIPIENTS
 INSERT IGNORE INTO `assignments` (`id`, `center_id`, `assessment_id`, `created_by`, `updated_by`, `title`, `description`, `type`, `status`, `attempt_limit`, `open_at`, `due_at`, `assessment_snapshot_at`, `created_at`, `updated_at`) VALUES
 (1, 1, 1, 8, 8, 'Bài kiểm tra giữa kỳ TOEIC K24', 'Học viên lớp TOEIC K24 hoàn thành trước hạn 31/07.', 'QUIZ', 'ACTIVE', 2, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:00:00.000000', '2026-07-20 08:00:00.000000', '2026-07-20 08:00:00.000000'),
-(2, 1, 2, 10, 10, 'Bài tập Viết IELTS Essay Task 2', 'Nộp bài essay về chủ đề AI trong giáo dục đại học.', 'HOMEWORK', 'ACTIVE', 1, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000');
+(2, 1, 2, 10, 10, 'Bài tập Viết IELTS Essay Task 2', 'Nộp bài essay về chủ đề AI trong giáo dục đại học.', 'HOMEWORK', 'ACTIVE', 1, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000'),
+(3, 1, 3, 8, 8, 'TOEIC Test 1 Listening Practice', 'Nghe audio chung và trả lời sáu câu Part 1, Part 2.', 'QUIZ', 'ACTIVE', 2, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 09:00:00.000000', '2026-07-20 09:00:00.000000', '2026-07-20 09:00:00.000000');
 
 INSERT IGNORE INTO `assignment_targets` (`id`, `assignment_id`, `target_type`, `class_id`, `student_user_id`, `created_at`, `updated_at`) VALUES
 (1, 1, 'CLASS', 1, NULL, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
-(2, 2, 'CLASS', 2, NULL, '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000');
+(2, 2, 'CLASS', 2, NULL, '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000'),
+(3, 3, 'CLASS', 1, NULL, '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000');
 
 INSERT IGNORE INTO `assignment_recipients` (`id`, `assignment_id`, `student_user_id`, `class_id`, `source_type`, `status`, `assigned_at`, `created_at`, `updated_at`) VALUES
 (1, 1, 13, 1, 'CLASS', 'ASSIGNED', '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
 (2, 1, 14, 1, 'CLASS', 'ASSIGNED', '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
 (3, 1, 15, 1, 'CLASS', 'ASSIGNED', '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
 (4, 2, 16, 2, 'CLASS', 'ASSIGNED', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000'),
-(5, 2, 17, 2, 'CLASS', 'ASSIGNED', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000');
+(5, 2, 17, 2, 'CLASS', 'ASSIGNED', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000'),
+(6, 3, 13, 1, 'CLASS', 'ASSIGNED', '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000'),
+(7, 3, 14, 1, 'CLASS', 'ASSIGNED', '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000'),
+(8, 3, 15, 1, 'CLASS', 'ASSIGNED', '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000', '2026-07-20 09:05:00.000000');
 
 -- 19. ASSIGNMENT ITEMS & OPTIONS
 INSERT IGNORE INTO `assignment_items` (`id`, `assignment_id`, `assessment_item_id`, `display_order`, `title`, `question_type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `grading_criteria_name`, `grading_criteria_content`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 1, 'Câu 1: TOEIC Grammar S-V Agreement', 'MULTIPLE_CHOICE', 'EASY', 5.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'Đáp án C đúng.', NULL, NULL, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
-(2, 1, 2, 2, 'Câu 2: TOEIC Business Vocab', 'MULTIPLE_CHOICE', 'MEDIUM', 5.00, 'All candidates are required to submit their updated resumes prior to the scheduled _______ next Monday.', NULL, 'Đáp án A đúng.', NULL, NULL, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
-(3, 2, 3, 1, 'IELTS Essay Question', 'ESSAY', 'HARD', 10.00, 'Write an essay discussing the advantages and disadvantages of using Artificial Intelligence tools in higher education.', 'Sample IELTS Essay...', 'Tiêu chí IELTS Task 2.', 'Tiêu chí Chấm IELTS Essay Task 2', 'Task Response, CC, LR, GRA', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000');
+(1, 1, 1, 1, 'Budget approval', 'MULTIPLE_CHOICE', 'EASY', 1.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'The singular subject and past-time marker require "decided".', NULL, NULL, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
+(2, 1, 2, 2, 'Job interview', 'MULTIPLE_CHOICE', 'MEDIUM', 1.00, 'All candidates are required to submit their updated resumes prior to the scheduled _______ next Monday.', NULL, '"Scheduled" modifies the noun "interview".', NULL, NULL, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
+(3, 2, 3, 1, 'Artificial intelligence in education', 'ESSAY', 'HARD', 10.00, 'Write an essay discussing the advantages and disadvantages of using Artificial Intelligence tools in higher education.', 'In recent years, Artificial Intelligence has transformed higher education.', 'Present a clear introduction, balanced body paragraphs, and a cohesive conclusion.', 'Tiêu chí Chấm IELTS Essay Task 2', 'Task Response, CC, LR, GRA', '2026-07-20 08:35:00.000000', '2026-07-20 08:35:00.000000');
 
 INSERT IGNORE INTO `assignment_item_options` (`id`, `assignment_item_id`, `display_order`, `content`, `is_correct`, `created_at`, `updated_at`) VALUES
 (1, 1, 1, 'decide', 0, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
@@ -275,14 +391,46 @@ INSERT IGNORE INTO `assignment_item_options` (`id`, `assignment_item_id`, `displ
 (7, 2, 3, 'interviewer', 0, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
 (8, 2, 4, 'interviewing', 0, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000');
 
+INSERT IGNORE INTO `assignment_items` (`id`, `assignment_id`, `assessment_item_id`, `display_order`, `title`, `question_type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `grading_criteria_name`, `grading_criteria_content`, `created_at`, `updated_at`)
+SELECT
+    ai.id,
+    3,
+    ai.id,
+    ai.display_order,
+    ai.title,
+    ai.question_type,
+    ai.difficulty,
+    ai.points,
+    ai.content,
+    ai.sample_answer,
+    ai.explanation,
+    ai.grading_criteria_name,
+    ai.grading_criteria_content,
+    '2026-07-20 09:05:00.000000',
+    '2026-07-20 09:05:00.000000'
+FROM `assessment_items` ai
+WHERE ai.assessment_id = 3;
+
+INSERT IGNORE INTO `assignment_item_options` (`id`, `assignment_item_id`, `display_order`, `content`, `is_correct`, `created_at`, `updated_at`)
+SELECT
+    aio.id,
+    aio.assessment_item_id,
+    aio.display_order,
+    aio.content,
+    aio.is_correct,
+    '2026-07-20 09:05:00.000000',
+    '2026-07-20 09:05:00.000000'
+FROM `assessment_item_options` aio
+WHERE aio.assessment_item_id BETWEEN 4 AND 9;
+
 -- 20. SUBMISSION ATTEMPTS & SUBMISSION ANSWERS & OPTIONS
 INSERT IGNORE INTO `submission_attempts` (`id`, `assignment_recipient_id`, `attempt_number`, `assignment_title_snapshot`, `assignment_type_snapshot`, `status`, `auto_score`, `max_score`, `started_at`, `submitted_at`, `last_saved_at`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 'Bài kiểm tra giữa kỳ TOEIC K24', 'QUIZ', 'SUBMITTED', 10.00, 10.00, '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000'),
+(1, 1, 1, 'Bài kiểm tra giữa kỳ TOEIC K24', 'QUIZ', 'SUBMITTED', 2.00, 2.00, '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000'),
 (2, 4, 1, 'Bài tập Viết IELTS Essay Task 2', 'HOMEWORK', 'SUBMITTED', NULL, 10.00, '2026-07-22 19:00:00.000000', '2026-07-22 20:10:00.000000', '2026-07-22 20:10:00.000000', '2026-07-22 19:00:00.000000', '2026-07-22 20:10:00.000000');
 
 INSERT IGNORE INTO `submission_answers` (`id`, `attempt_id`, `assignment_item_id`, `answer_text`, `auto_score`, `max_score`, `graded_at`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, NULL, 5.00, 5.00, '2026-07-21 14:15:00.000000', '2026-07-21 14:05:00.000000', '2026-07-21 14:15:00.000000'),
-(2, 1, 2, NULL, 5.00, 5.00, '2026-07-21 14:15:00.000000', '2026-07-21 14:10:00.000000', '2026-07-21 14:15:00.000000'),
+(1, 1, 1, NULL, 1.00, 1.00, '2026-07-21 14:15:00.000000', '2026-07-21 14:05:00.000000', '2026-07-21 14:15:00.000000'),
+(2, 1, 2, NULL, 1.00, 1.00, '2026-07-21 14:15:00.000000', '2026-07-21 14:10:00.000000', '2026-07-21 14:15:00.000000'),
 (3, 2, 3, 'Artificial Intelligence (AI) has emerged as one of the most transformative technologies in modern higher education. On the one hand, AI-powered tools such as adaptive learning platforms and intelligent tutoring systems provide students with personalized learning experiences tailored to their individual pace. Furthermore, administrative duties like grading multiple-choice exams can be automated, allowing professors to focus more on mentoring and research. On the other hand, the overreliance on AI tools raises severe concerns regarding academic integrity, such as plagiarism and unauthorized generation of essays. Moreover, excessive reliance on virtual tutors may diminish critical face-to-face interpersonal interactions between students and instructors. In conclusion, while AI brings unprecedented efficiency and customized support to higher education, educational institutions must establish ethical frameworks to prevent academic misconduct.', NULL, 10.00, NULL, '2026-07-22 20:10:00.000000', '2026-07-22 20:10:00.000000');
 
 INSERT IGNORE INTO `submission_answer_options` (`id`, `submission_answer_id`, `assignment_item_option_id`, `created_at`) VALUES
@@ -304,7 +452,7 @@ INSERT IGNORE INTO `teacher_reviews` (`id`, `submission_attempt_id`, `selected_a
 (1, 2, 1, 10, 10, 10, 10, 8.50, 10.00, 1, 'RELEASED', 'Bài viết rất xuất sắc, lập luận chặt chẽ và từ vựng thuật ngữ học thuật phong phú. Thầy đồng ý với đánh giá 8.5/10 của AI.', '2026-07-24 09:00:00.000000', '2026-07-24 09:10:00.000000', '2026-07-24 09:05:00.000000', '2026-07-24 09:10:00.000000');
 
 INSERT IGNORE INTO `teacher_review_items` (`id`, `review_id`, `assignment_item_id`, `submission_answer_id`, `display_order_snapshot`, `question_title_snapshot`, `final_score`, `max_score`, `item_comment`, `created_at`, `updated_at`) VALUES
-(1, 1, 3, 3, 1, 'IELTS Essay Question', 8.50, 10.00, 'Lập luận sắc bén. Cần chú ý ngắt đoạn cân đối hơn một chút.', '2026-07-24 09:00:00.000000', '2026-07-24 09:10:00.000000');
+(1, 1, 3, 3, 1, 'Artificial intelligence in education', 8.50, 10.00, 'Lập luận sắc bén. Cần chú ý ngắt đoạn cân đối hơn một chút.', '2026-07-24 09:00:00.000000', '2026-07-24 09:10:00.000000');
 
 -- ================================================================
 -- END OF SEED DATA v7.0

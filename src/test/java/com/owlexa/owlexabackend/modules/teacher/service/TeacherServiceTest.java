@@ -155,7 +155,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.create(buildRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not TEACHER");
+                .hasMessageContaining("không phải là Giáo viên");
     }
 
     @Test
@@ -193,7 +193,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.create(buildRequest()))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER");
+                .hasMessageContaining("Chỉ có Chủ trung tâm");
     }
 
     @Test
@@ -290,7 +290,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.create(buildRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Tenant context");
+                .hasMessageContaining("Chưa xác định trung tâm hoạt động");
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -318,7 +318,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.bulkCreate(request))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("must not be empty");
+                .hasMessageContaining("Danh sách giáo viên không được để trống");
     }
 
     @Test
@@ -328,7 +328,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.bulkCreate(request))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("must not be empty");
+                .hasMessageContaining("Danh sách giáo viên không được để trống");
     }
 
     @Test
@@ -425,7 +425,7 @@ class TeacherServiceTest {
                     assertThat(errors).hasSize(1);
                     assertThat(errors.get(0).getRow()).isEqualTo(1);
                     assertThat(errors.get(0).getStatus()).isEqualTo(BulkTeacherStatus.INVALID_INPUT);
-                    assertThat(errors.get(0).getMessage()).contains("Phone number and full name are required");
+                    assertThat(errors.get(0).getMessage()).contains("Vui lòng nhập số điện thoại và họ tên");
                 });
 
         verify(userRepository, never()).save(any(User.class));
@@ -462,7 +462,7 @@ class TeacherServiceTest {
                     List<BulkTeacherError> errors = ((BulkTeacherValidationException) ex).getErrors();
                     assertThat(errors).hasSize(1);
                     assertThat(errors.get(0).getStatus()).isEqualTo(BulkTeacherStatus.INVALID_INPUT);
-                    assertThat(errors.get(0).getMessage()).contains("Email already exists");
+                    assertThat(errors.get(0).getMessage()).contains("Email đã tồn tại");
                 });
     }
 
@@ -508,7 +508,7 @@ class TeacherServiceTest {
                     List<BulkTeacherError> errors = ((BulkTeacherValidationException) ex).getErrors();
                     assertThat(errors).hasSize(1);
                     assertThat(errors.get(0).getStatus()).isEqualTo(BulkTeacherStatus.INVALID_INPUT);
-                    assertThat(errors.get(0).getMessage()).contains("Existing User role is not TEACHER");
+                    assertThat(errors.get(0).getMessage()).contains("không phải là Giáo viên");
                 });
 
         verify(userRepository, never()).save(any(User.class));
@@ -606,7 +606,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.bulkCreate(request))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER");
+                .hasMessageContaining("Chỉ có Chủ trung tâm");
     }
 
     @Test
@@ -619,7 +619,7 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.bulkCreate(request))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Tenant context");
+                .hasMessageContaining("Chưa xác định trung tâm hoạt động");
     }
 
     @Test
@@ -635,6 +635,6 @@ class TeacherServiceTest {
 
         assertThatThrownBy(() -> service.bulkCreate(request))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("not a member");
+                .hasMessageContaining("không thuộc trung tâm này");
     }
 }

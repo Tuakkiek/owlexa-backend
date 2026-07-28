@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import tools.jackson.databind.JsonNode;
 
 @Data
 @NoArgsConstructor
@@ -15,7 +16,7 @@ public class GradingCriteriaResponse {
 
     private Long id;
     private String name;
-    private String content;
+    private JsonNode content;
     private Instant createdAt;
     private Instant updatedAt;
 }

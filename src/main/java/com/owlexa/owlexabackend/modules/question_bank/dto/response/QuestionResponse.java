@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import tools.jackson.databind.JsonNode;
 
 @Data
 @NoArgsConstructor
@@ -18,14 +19,17 @@ import java.util.List;
 public class QuestionResponse {
 
     private Long id;
+    private String questionCode;
+    private QuestionCollectionSummaryResponse collection;
+    private String sectionCode;
+    private Integer displayOrder;
     private QuestionType type;
-    private String title;
-    private String content;
+    private JsonNode content;
     private QuestionDifficulty difficulty;
     private BigDecimal points;
     private GradingCriteriaSummaryResponse gradingCriteria;
-    private String explanation;
-    private String sampleAnswer;
+    private JsonNode explanation;
+    private JsonNode sampleAnswer;
     private List<QuestionOptionResponse> options;
     private Instant createdAt;
     private Instant updatedAt;

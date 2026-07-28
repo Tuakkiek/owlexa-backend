@@ -1,6 +1,8 @@
 package com.owlexa.owlexabackend.modules.student_submission.dto.response;
 
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
+import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
+import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,6 +31,8 @@ public class StudentAttemptDetailResponse {
     private Instant submittedAt;
     private BigDecimal autoScore;
     private BigDecimal maxScore;
+    private FileResponse audioFile;
+    private PlaybackMode playbackMode;
     private List<SubmissionAttemptItemResponse> items;
     private List<SubmissionAnswerResponse> answers;
 }

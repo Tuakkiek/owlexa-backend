@@ -67,6 +67,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class TeacherReviewServiceTest {
@@ -257,7 +258,7 @@ class TeacherReviewServiceTest {
                 REVIEW_ID,
                 updateRequest(1L, null, null, validItemRequests())
         )).isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("modified");
+                .hasMessageContaining("đã bị thay đổi");
 
         verify(teacherReviewRepository, never()).saveAndFlush(any(TeacherReview.class));
     }
@@ -274,7 +275,7 @@ class TeacherReviewServiceTest {
                 REVIEW_ID,
                 updateRequest(0L, null, null, validItemRequests())
         )).isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("modified");
+                .hasMessageContaining("đã bị thay đổi");
     }
 
     @Test
@@ -369,7 +370,7 @@ class TeacherReviewServiceTest {
 
         assertThatThrownBy(() -> service.finalizeReview(REVIEW_ID))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Every essay item");
+                .hasMessageContaining("Tất cả câu tự luận");
     }
 
     @Test
@@ -381,7 +382,7 @@ class TeacherReviewServiceTest {
 
         assertThatThrownBy(() -> service.finalizeReview(REVIEW_ID))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("every essay");
+                .hasMessageContaining("đầy đủ tất cả câu hỏi tự luận");
     }
 
     @Test
@@ -679,7 +680,7 @@ class TeacherReviewServiceTest {
                 .assignment(assignment)
                 .questionType(questionType)
                 .title(title)
-                .content(title + " content")
+                .contentJson(serializedDocument(title + " content"))
                 .points(new BigDecimal(points))
                 .displayOrder(displayOrder)
                 .build();

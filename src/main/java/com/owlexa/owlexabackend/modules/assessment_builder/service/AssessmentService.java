@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.assessment_builder.service;
 
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
@@ -12,12 +13,18 @@ import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
+import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.assessment_builder.mapper.AssessmentMapper;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentSpecifications;
 import com.owlexa.owlexabackend.modules.question_bank.entity.Question;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionRepository;
+import com.owlexa.owlexabackend.modules.file.entity.FileOwnerType;
+import com.owlexa.owlexabackend.modules.file.entity.FileType;
+import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
+import com.owlexa.owlexabackend.modules.file.repository.StoredFileRepository;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -34,10 +41,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import tools.jackson.databind.JsonNode;
 
 @Service
 @RequiredArgsConstructor
@@ -48,10 +57,13 @@ public class AssessmentService {
 
     private final AssessmentRepository assessmentRepository;
     private final QuestionRepository questionRepository;
+    private final StoredFileRepository storedFileRepository;
     private final CenterRepository centerRepository;
     private final MembershipRepository membershipRepository;
     private final AuthorizationService authorizationService;
     private final AssessmentMapper assessmentMapper;
+    private final RichTextDocumentService richTextDocumentService;
+    private final FileReferenceService fileReferenceService;
 
     @Transactional(readOnly = true)
     public Page<AssessmentListResponse> findAll(
@@ -93,13 +105,27 @@ public class AssessmentService {
                 .status(AssessmentStatus.DRAFT)
                 .title(request.getTitle().trim())
                 .description(normalizeOptionalText(request.getDescription()))
+                .audioFile(resolveAudioFile(request.getAudioFileId(), centerId))
+                .playbackMode(resolvePlaybackMode(request.getPlaybackMode()))
                 .createdBy(currentUser)
                 .updatedBy(currentUser)
                 .build();
 
+        JsonNode content = richTextDocumentService.normalize(request.getContent(), request.getDescription());
+        assessment.setContentJson(richTextDocumentService.serialize(content));
+        assessment.setDescription(toDescriptionSummary(content));
+
         replaceItems(assessment, request.getItems(), centerId);
 
-        return assessmentMapper.toDetailResponse(assessmentRepository.save(assessment));
+        Assessment saved = assessmentRepository.save(assessment);
+        fileReferenceService.syncReferences(
+                FileOwnerType.ASSESSMENT,
+                saved.getId(),
+                centerId,
+                referenceDocuments(saved, content),
+                referencedFileIds(saved)
+        );
+        return assessmentMapper.toDetailResponse(saved);
     }
 
     @Transactional
@@ -111,12 +137,24 @@ public class AssessmentService {
         Assessment assessment = findActiveAssessment(assessmentId, centerId);
         assessment.setType(request.getType());
         assessment.setTitle(request.getTitle().trim());
-        assessment.setDescription(normalizeOptionalText(request.getDescription()));
+        assessment.setAudioFile(resolveAudioFile(request.getAudioFileId(), centerId));
+        assessment.setPlaybackMode(resolvePlaybackMode(request.getPlaybackMode()));
+        JsonNode content = richTextDocumentService.normalize(request.getContent(), request.getDescription());
+        assessment.setContentJson(richTextDocumentService.serialize(content));
+        assessment.setDescription(toDescriptionSummary(content));
         assessment.setUpdatedBy(currentUser);
 
         replaceItems(assessment, request.getItems(), centerId);
 
-        return assessmentMapper.toDetailResponse(assessmentRepository.save(assessment));
+        Assessment saved = assessmentRepository.save(assessment);
+        fileReferenceService.syncReferences(
+                FileOwnerType.ASSESSMENT,
+                saved.getId(),
+                centerId,
+                referenceDocuments(saved, content),
+                referencedFileIds(saved)
+        );
+        return assessmentMapper.toDetailResponse(saved);
     }
 
     @Transactional
@@ -161,6 +199,31 @@ public class AssessmentService {
         assessment.setDeletedAt(Instant.now());
         assessment.setUpdatedBy(currentUser);
         assessmentRepository.save(assessment);
+        fileReferenceService.syncReferences(
+                FileOwnerType.ASSESSMENT,
+                assessment.getId(),
+                centerId,
+                List.of()
+        );
+    }
+
+    private List<JsonNode> referenceDocuments(Assessment assessment, JsonNode assessmentContent) {
+        List<JsonNode> documents = new ArrayList<>();
+        documents.add(assessmentContent);
+        for (AssessmentItem item : assessment.getItems()) {
+            documents.add(richTextDocumentService.deserialize(item.getContentJson()));
+            addOptionalDocument(documents, item.getExplanationJson());
+            addOptionalDocument(documents, item.getSampleAnswerJson());
+            addOptionalDocument(documents, item.getGradingCriteriaContentJson());
+        }
+        return documents;
+    }
+
+    private void addOptionalDocument(List<JsonNode> documents, String serialized) {
+        JsonNode document = richTextDocumentService.deserializeOptional(serialized);
+        if (document != null) {
+            documents.add(document);
+        }
     }
 
     private void validateAssessmentRequest(AssessmentRequest request) {
@@ -225,7 +288,7 @@ public class AssessmentService {
                         "Question not found with id: " + itemRequest.getQuestionId()
                 ));
 
-        validateQuestionSnapshotSource(question);
+        validateQuestionSnapshotSource(question, assessment.getAudioFile() != null);
 
         BigDecimal points = itemRequest.getPoints() != null ? itemRequest.getPoints() : question.getPoints();
         AssessmentItem item = assessmentMapper.toItemSnapshot(question, points, itemRequest.getDisplayOrder());
@@ -233,9 +296,7 @@ public class AssessmentService {
         return item;
     }
 
-    private void validateQuestionSnapshotSource(Question question) {
-        validateContentHasText(question.getContent(), "Question content is invalid");
-
+    private void validateQuestionSnapshotSource(Question question, boolean assessmentHasAudio) {
         if (question.getType() == QuestionType.MULTIPLE_CHOICE) {
             if (question.getOptions() == null || question.getOptions().size() < 2) {
                 throw new BadRequestException("Multiple choice question must have at least 2 options");
@@ -248,6 +309,12 @@ public class AssessmentService {
                 throw new BadRequestException("Multiple choice question must have at least 1 correct option");
             }
         }
+
+        validateQuestionRenderable(
+                question.getType(),
+                richTextDocumentService.deserialize(question.getContentJson()),
+                assessmentHasAudio
+        );
     }
 
     private void validatePublishable(Assessment assessment) {
@@ -255,8 +322,13 @@ public class AssessmentService {
             throw new BadRequestException("Assessment must contain at least 1 question before publishing");
         }
 
+        boolean assessmentHasAudio = assessment.getAudioFile() != null;
         for (AssessmentItem item : assessment.getItems()) {
-            validateContentHasText(item.getContent(), "Assessment item content is invalid");
+            validateQuestionRenderable(
+                    item.getQuestionType(),
+                    richTextDocumentService.deserialize(item.getContentJson()),
+                    assessmentHasAudio
+            );
             if (item.getDisplayOrder() == null || item.getDisplayOrder() < 1) {
                 throw new BadRequestException("Assessment item display order is invalid");
             }
@@ -267,6 +339,16 @@ public class AssessmentService {
                 validateMultipleChoiceSnapshot(item);
             }
         }
+    }
+
+    private void validateQuestionRenderable(QuestionType questionType, JsonNode content, boolean assessmentHasAudio) {
+        if (richTextDocumentService.hasMeaningfulContent(content)) {
+            return;
+        }
+        if (questionType == QuestionType.MULTIPLE_CHOICE && assessmentHasAudio) {
+            return;
+        }
+        throw new BadRequestException("Assessment item content is invalid");
     }
 
     private void validateMultipleChoiceSnapshot(AssessmentItem item) {
@@ -328,5 +410,34 @@ public class AssessmentService {
             return null;
         }
         return value.trim();
+    }
+
+    private StoredFile resolveAudioFile(Long audioFileId, Long centerId) {
+        if (audioFileId == null) {
+            return null;
+        }
+        StoredFile audioFile = storedFileRepository.findByIdAndCenter_IdAndDeletedAtIsNull(audioFileId, centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Audio file not found with id: " + audioFileId));
+        if (audioFile.getFileType() != FileType.AUDIO) {
+            throw new BadRequestException("Assessment audio file must be an audio file");
+        }
+        return audioFile;
+    }
+
+    private PlaybackMode resolvePlaybackMode(PlaybackMode playbackMode) {
+        return playbackMode == null ? PlaybackMode.PRACTICE : playbackMode;
+    }
+
+    private List<Long> referencedFileIds(Assessment assessment) {
+        StoredFile audioFile = assessment.getAudioFile();
+        return audioFile == null ? List.of() : List.of(audioFile.getId());
+    }
+
+    private String toDescriptionSummary(JsonNode content) {
+        String plainText = richTextDocumentService.toPlainText(content);
+        if (plainText.isBlank()) {
+            return null;
+        }
+        return plainText.length() <= 500 ? plainText : plainText.substring(0, 497) + "...";
     }
 }

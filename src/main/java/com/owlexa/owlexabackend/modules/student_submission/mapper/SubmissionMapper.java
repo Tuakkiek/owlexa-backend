@@ -1,9 +1,13 @@
 package com.owlexa.owlexabackend.modules.student_submission.mapper;
 
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItemOption;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
+import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
+import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
+import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptSummaryResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.SubmissionAnswerResponse;
@@ -16,12 +20,17 @@ import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnsw
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
 
 import java.util.Comparator;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class SubmissionMapper {
+
+    private final RichTextDocumentService richTextDocumentService;
+    private final FileMapper fileMapper;
 
     public StudentAttemptSummaryResponse toStudentAttemptSummaryResponse(SubmissionAttempt attempt) {
         return StudentAttemptSummaryResponse.builder()
@@ -52,6 +61,8 @@ public class SubmissionMapper {
                 .submittedAt(attempt.getSubmittedAt())
                 .autoScore(attempt.getAutoScore())
                 .maxScore(attempt.getMaxScore())
+                .audioFile(toFileResponse(assignment.getAudioFile()))
+                .playbackMode(assignment.getPlaybackMode())
                 .items(toItemResponses(assignment.getItems()))
                 .answers(toAnswerResponses(attempt.getAnswers()))
                 .build();
@@ -126,13 +137,13 @@ public class SubmissionMapper {
                 .assignmentItemId(item.getId())
                 .questionType(item.getQuestionType())
                 .title(item.getTitle())
-                .content(item.getContent())
+                .content(richTextDocumentService.deserialize(item.getContentJson()))
                 .difficulty(item.getDifficulty())
                 .points(item.getPoints())
-                .explanation(item.getExplanation())
-                .sampleAnswer(item.getSampleAnswer())
+                .explanation(richTextDocumentService.deserializeOptional(item.getExplanationJson()))
+                .sampleAnswer(richTextDocumentService.deserializeOptional(item.getSampleAnswerJson()))
                 .gradingCriteriaName(item.getGradingCriteriaName())
-                .gradingCriteriaContent(item.getGradingCriteriaContent())
+                .gradingCriteriaContent(richTextDocumentService.deserializeOptional(item.getGradingCriteriaContentJson()))
                 .displayOrder(item.getDisplayOrder())
                 .options(toOptionResponses(item.getOptions()))
                 .build();
@@ -172,5 +183,9 @@ public class SubmissionMapper {
                 .sorted(Comparator.comparing(option -> option.getAssignmentItemOption().getDisplayOrder()))
                 .map(option -> option.getAssignmentItemOption().getId())
                 .toList();
+    }
+
+    private FileResponse toFileResponse(StoredFile file) {
+        return file == null ? null : fileMapper.toResponse(file);
     }
 }

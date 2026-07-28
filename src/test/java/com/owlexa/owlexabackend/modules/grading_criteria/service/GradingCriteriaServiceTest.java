@@ -2,6 +2,8 @@ package com.owlexa.owlexabackend.modules.grading_criteria.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
 import com.owlexa.owlexabackend.modules.grading_criteria.repository.GradingCriteriaRepository;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Optional;
 
@@ -27,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class GradingCriteriaServiceTest {
@@ -36,6 +40,7 @@ class GradingCriteriaServiceTest {
     @Mock private MembershipRepository membershipRepository;
     @Mock private AuthorizationService authorizationService;
     @Mock private QuestionRepository questionRepository;
+    @Mock private FileReferenceService fileReferenceService;
 
     private GradingCriteriaService service;
 
@@ -52,7 +57,9 @@ class GradingCriteriaServiceTest {
                 centerRepository,
                 membershipRepository,
                 authorizationService,
-                questionRepository
+                questionRepository,
+                new RichTextDocumentService(new ObjectMapper()),
+                fileReferenceService
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -115,7 +122,7 @@ class GradingCriteriaServiceTest {
                 .id(CRITERIA_ID)
                 .center(center)
                 .name("Writing Rubric")
-                .content("Criteria content")
+                .contentJson(serializedDocument("Criteria content"))
                 .createdBy(teacher)
                 .updatedBy(teacher)
                 .build();

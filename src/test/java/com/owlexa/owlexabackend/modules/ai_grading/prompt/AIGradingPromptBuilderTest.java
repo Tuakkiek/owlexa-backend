@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.ai_grading.prompt;
 
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
@@ -14,18 +15,20 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 class AIGradingPromptBuilderTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final AIGradingPromptBuilder promptBuilder = new AIGradingPromptBuilder(objectMapper);
+    private final AIGradingPromptBuilder promptBuilder =
+            new AIGradingPromptBuilder(objectMapper, new RichTextDocumentService(objectMapper));
 
     @Test
     @DisplayName("prompt: contains only assignment snapshot grading data")
     void build_shouldUseSnapshotAndExcludeIdentityData() throws Exception {
         AssessmentItem liveAssessmentItem = AssessmentItem.builder()
                 .id(900L)
-                .content("Changed live assessment content")
+                .contentJson(serializedDocument("Changed live assessment content"))
                 .build();
         Assignment assignment = Assignment.builder()
                 .id(800L)
@@ -36,9 +39,9 @@ class AIGradingPromptBuilderTest {
                 .assignment(assignment)
                 .assessmentItem(liveAssessmentItem)
                 .questionType(QuestionType.ESSAY)
-                .content("Snapshot question")
+                .contentJson(serializedDocument("Snapshot question"))
                 .gradingCriteriaName("Snapshot rubric")
-                .gradingCriteriaContent("Use evidence and clear reasoning")
+                .gradingCriteriaContentJson(serializedDocument("Use evidence and clear reasoning"))
                 .points(new BigDecimal("5.00"))
                 .displayOrder(1)
                 .build();
@@ -92,7 +95,7 @@ class AIGradingPromptBuilderTest {
         AssignmentItem item = AssignmentItem.builder()
                 .id(id + 100)
                 .questionType(QuestionType.ESSAY)
-                .content(content)
+                .contentJson(serializedDocument(content))
                 .points(new BigDecimal("5.00"))
                 .displayOrder(displayOrder)
                 .build();

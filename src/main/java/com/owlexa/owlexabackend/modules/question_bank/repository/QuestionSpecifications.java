@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class QuestionSpecifications {
 
@@ -21,17 +22,42 @@ public final class QuestionSpecifications {
             QuestionDifficulty difficulty,
             Long gradingCriteriaId
     ) {
+        return search(centerId, search, null, null, type, difficulty, gradingCriteriaId);
+    }
+
+    public static Specification<Question> search(
+            Long centerId,
+            String search,
+            Long collectionId,
+            String sectionCode,
+            QuestionType type,
+            QuestionDifficulty difficulty,
+            Long gradingCriteriaId
+    ) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            var collection = root.get("collection");
+
             predicates.add(cb.equal(root.get("center").get("id"), centerId));
             predicates.add(cb.isNull(root.get("deletedAt")));
+            predicates.add(cb.isNull(collection.get("deletedAt")));
 
             if (search != null && !search.isBlank()) {
-                String pattern = "%" + search.trim().toLowerCase() + "%";
+                String pattern = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
                 predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("title")), pattern),
-                        cb.like(cb.lower(root.get("content")), pattern)
+                        cb.like(cb.lower(collection.get("name")), pattern),
+                        cb.like(cb.lower(root.get("sectionCode")), pattern),
+                        cb.like(cb.lower(root.get("questionCode")), pattern),
+                        cb.like(cb.lower(root.get("contentJson")), pattern)
                 ));
+            }
+
+            if (collectionId != null) {
+                predicates.add(cb.equal(collection.get("id"), collectionId));
+            }
+
+            if (sectionCode != null && !sectionCode.isBlank()) {
+                predicates.add(cb.equal(root.get("sectionCode"), sectionCode));
             }
 
             if (type != null) {

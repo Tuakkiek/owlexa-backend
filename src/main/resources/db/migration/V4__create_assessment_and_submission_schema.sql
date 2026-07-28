@@ -20,9 +20,38 @@ CREATE TABLE `grading_criteria` (
   CONSTRAINT `fk_grading_criteria_center_id` FOREIGN KEY (`center_id`) REFERENCES `centers` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `question_collections` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `center_id` bigint NOT NULL,
+  `code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_by` bigint NOT NULL,
+  `updated_by` bigint NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `deleted_at` datetime(6) DEFAULT NULL,
+  `active_name` varchar(255) COLLATE utf8mb4_unicode_ci
+    GENERATED ALWAYS AS (
+      CASE WHEN `deleted_at` IS NULL THEN `name` ELSE NULL END
+    ) STORED,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_question_collections_id_center` (`id`, `center_id`),
+  UNIQUE KEY `uk_question_collections_center_code` (`center_id`, `code`),
+  UNIQUE KEY `uk_question_collections_center_active_name` (`center_id`, `active_name`),
+  KEY `idx_question_collections_center_deleted_name` (`center_id`, `deleted_at`, `name`),
+  KEY `idx_question_collections_created_by` (`created_by`),
+  KEY `idx_question_collections_updated_by` (`updated_by`),
+  CONSTRAINT `fk_question_collections_center` FOREIGN KEY (`center_id`) REFERENCES `centers` (`id`),
+  CONSTRAINT `fk_question_collections_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_question_collections_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `questions` (
   `points` decimal(6,2) DEFAULT NULL,
   `center_id` bigint NOT NULL,
+  `collection_id` bigint NOT NULL,
+  `display_order` int NOT NULL,
   `created_at` datetime(6) NOT NULL,
   `created_by` bigint NOT NULL,
   `deleted_at` datetime(6) DEFAULT NULL,
@@ -33,14 +62,28 @@ CREATE TABLE `questions` (
   `content` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
   `explanation` longtext COLLATE utf8mb4_unicode_ci,
   `sample_answer` longtext COLLATE utf8mb4_unicode_ci,
-  `title` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `section_code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `difficulty` enum('EASY','HARD','MEDIUM') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `type` enum('ESSAY','MULTIPLE_CHOICE') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active_display_order` int
+    GENERATED ALWAYS AS (
+      CASE WHEN `deleted_at` IS NULL THEN `display_order` ELSE NULL END
+    ) STORED,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_questions_collection_active_display_order` (`collection_id`, `active_display_order`),
   KEY `idx_questions_center_id` (`center_id`),
+  KEY `idx_questions_collection_center` (`collection_id`, `center_id`),
+  KEY `idx_questions_collection_active_order` (`collection_id`, `deleted_at`, `display_order`),
+  KEY `idx_questions_collection_section_active_order` (`collection_id`, `section_code`, `deleted_at`, `display_order`),
+  KEY `idx_questions_center_active_created` (`center_id`, `deleted_at`, `created_at`),
+  KEY `idx_questions_center_active_updated` (`center_id`, `deleted_at`, `updated_at`),
   KEY `idx_questions_created_by` (`created_by`),
   KEY `idx_questions_grading_criteria_id` (`grading_criteria_id`),
   KEY `idx_questions_updated_by` (`updated_by`),
+  CONSTRAINT `chk_questions_display_order` CHECK (`display_order` >= 1),
+  CONSTRAINT `fk_questions_collection_center`
+    FOREIGN KEY (`collection_id`, `center_id`)
+    REFERENCES `question_collections` (`id`, `center_id`),
   CONSTRAINT `fk_questions_grading_criteria_id` FOREIGN KEY (`grading_criteria_id`) REFERENCES `grading_criteria` (`id`),
   CONSTRAINT `fk_questions_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_questions_center_id` FOREIGN KEY (`center_id`) REFERENCES `centers` (`id`),
@@ -57,6 +100,7 @@ CREATE TABLE `question_options` (
   `content` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_question_options_question_id` (`question_id`),
+  CONSTRAINT `chk_question_options_display_order` CHECK (`display_order` >= 1),
   CONSTRAINT `fk_question_options_question_id` FOREIGN KEY (`question_id`) REFERENCES `questions` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

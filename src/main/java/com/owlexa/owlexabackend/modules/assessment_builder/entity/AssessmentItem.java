@@ -56,8 +56,8 @@ public class AssessmentItem {
     @Column
     private String title;
 
-    @Column(nullable = false, columnDefinition = "LONGTEXT")
-    private String content;
+    @Column(name = "content_json", nullable = false, columnDefinition = "LONGTEXT")
+    private String contentJson;
 
     @Enumerated(EnumType.STRING)
     @Column
@@ -66,11 +66,11 @@ public class AssessmentItem {
     @Column(precision = 6, scale = 2)
     private BigDecimal points;
 
-    @Column(columnDefinition = "LONGTEXT")
-    private String explanation;
+    @Column(name = "explanation_json", columnDefinition = "LONGTEXT")
+    private String explanationJson;
 
-    @Column(name = "sample_answer", columnDefinition = "LONGTEXT")
-    private String sampleAnswer;
+    @Column(name = "sample_answer_json", columnDefinition = "LONGTEXT")
+    private String sampleAnswerJson;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "grading_criteria_id")
@@ -79,8 +79,8 @@ public class AssessmentItem {
     @Column(name = "grading_criteria_name")
     private String gradingCriteriaName;
 
-    @Column(name = "grading_criteria_content", columnDefinition = "LONGTEXT")
-    private String gradingCriteriaContent;
+    @Column(name = "grading_criteria_content_json", columnDefinition = "LONGTEXT")
+    private String gradingCriteriaContentJson;
 
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;

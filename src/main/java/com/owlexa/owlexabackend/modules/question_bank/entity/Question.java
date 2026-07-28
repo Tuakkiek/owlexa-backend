@@ -53,15 +53,25 @@ public class Question implements TenantAware {
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "collection_id", nullable = false)
+    private QuestionCollection collection;
+
+    @Column(name = "section_code", nullable = false, length = 50)
+    private String sectionCode;
+
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private QuestionType type;
 
-    @Column
-    private String title;
+    @Column(name = "question_code", nullable = false)
+    private String questionCode;
 
-    @Column(nullable = false, columnDefinition = "LONGTEXT")
-    private String content;
+    @Column(name = "content_json", nullable = false, columnDefinition = "LONGTEXT")
+    private String contentJson;
 
     @Enumerated(EnumType.STRING)
     @Column
@@ -74,11 +84,11 @@ public class Question implements TenantAware {
     @JoinColumn(name = "grading_criteria_id")
     private GradingCriteria gradingCriteria;
 
-    @Column(columnDefinition = "LONGTEXT")
-    private String explanation;
+    @Column(name = "explanation_json", columnDefinition = "LONGTEXT")
+    private String explanationJson;
 
-    @Column(name = "sample_answer", columnDefinition = "LONGTEXT")
-    private String sampleAnswer;
+    @Column(name = "sample_answer_json", columnDefinition = "LONGTEXT")
+    private String sampleAnswerJson;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)

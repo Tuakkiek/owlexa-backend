@@ -3,6 +3,8 @@ package com.owlexa.owlexabackend.modules.assignment.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
@@ -13,7 +15,6 @@ import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentRequest
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentTargetRequest;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentListResponse;
-import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentListResponse;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
@@ -33,6 +34,7 @@ import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -49,6 +51,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -63,6 +66,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class AssignmentServiceTest {
@@ -76,6 +80,7 @@ class AssignmentServiceTest {
     @Mock private CenterRepository centerRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private AuthorizationService authorizationService;
+    @Mock private FileReferenceService fileReferenceService;
 
     private AssignmentService service;
 
@@ -94,6 +99,7 @@ class AssignmentServiceTest {
 
     @BeforeEach
     void setUp() {
+        RichTextDocumentService documentService = new RichTextDocumentService(new ObjectMapper());
         service = new AssignmentService(
                 assignmentRepository,
                 assignmentRecipientRepository,
@@ -104,7 +110,9 @@ class AssignmentServiceTest {
                 centerRepository,
                 membershipRepository,
                 authorizationService,
-                new AssignmentMapper()
+                new AssignmentMapper(documentService, new FileMapper()),
+                documentService,
+                fileReferenceService
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -351,44 +359,6 @@ class AssignmentServiceTest {
     }
 
     @Test
-    @DisplayName("student: detail requires recipient ownership")
-    void findByIdForStudent_whenRecipientMissing_shouldThrowResourceNotFound() {
-        when(authorizationService.getCurrentUser()).thenReturn(student);
-        when(membershipRepository.existsByUser_IdAndCenter_Id(STUDENT_ID, CENTER_ID)).thenReturn(true);
-        when(assignmentRecipientRepository
-                .findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
-                        ASSIGNMENT_ID,
-                        STUDENT_ID,
-                        CENTER_ID
-                )).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.findByIdForStudent(ASSIGNMENT_ID))
-                .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    @DisplayName("student: detail returns assignment snapshot")
-    void findByIdForStudent_whenRecipientExists_shouldReturnSnapshotDetail() {
-        when(authorizationService.getCurrentUser()).thenReturn(student);
-        when(membershipRepository.existsByUser_IdAndCenter_Id(STUDENT_ID, CENTER_ID)).thenReturn(true);
-        Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
-        assignment.getItems().add(buildAssignmentItem(assignment));
-        AssignmentRecipient recipient = recipient(assignment, student);
-        when(assignmentRecipientRepository
-                .findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
-                        ASSIGNMENT_ID,
-                        STUDENT_ID,
-                        CENTER_ID
-                )).thenReturn(Optional.of(recipient));
-
-        StudentAssignmentDetailResponse response = service.findByIdForStudent(ASSIGNMENT_ID);
-
-        assertThat(response.getRecipientId()).isEqualTo(recipient.getId());
-        assertThat(response.getItems()).hasSize(1);
-        assertThat(response.getItems().get(0).getOptions()).hasSize(2);
-    }
-
-    @Test
     @DisplayName("create: non teacher throws AccessDeniedException")
     void create_whenUserIsNotTeacher_shouldThrowAccessDenied() {
         User owner = user(99L, Role.OWNER, "Owner");
@@ -500,7 +470,7 @@ class AssignmentServiceTest {
                 .assessmentItem(buildAssessmentItem())
                 .questionType(QuestionType.MULTIPLE_CHOICE)
                 .title("Question")
-                .content("Content")
+                .contentJson(serializedDocument("Content"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(BigDecimal.ONE)
                 .displayOrder(1)
@@ -546,7 +516,7 @@ class AssignmentServiceTest {
                 .id(600L)
                 .questionType(QuestionType.MULTIPLE_CHOICE)
                 .title("Question")
-                .content("Question content")
+                .contentJson(serializedDocument("Question content"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(new BigDecimal("3.50"))
                 .displayOrder(1)

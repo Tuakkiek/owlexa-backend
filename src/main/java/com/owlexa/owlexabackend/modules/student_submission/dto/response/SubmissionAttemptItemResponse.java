@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.List;
+import tools.jackson.databind.JsonNode;
 
 @Data
 @NoArgsConstructor
@@ -19,13 +20,13 @@ public class SubmissionAttemptItemResponse {
     private Long assignmentItemId;
     private QuestionType questionType;
     private String title;
-    private String content;
+    private JsonNode content;
     private QuestionDifficulty difficulty;
     private BigDecimal points;
-    private String explanation;
-    private String sampleAnswer;
+    private JsonNode explanation;
+    private JsonNode sampleAnswer;
     private String gradingCriteriaName;
-    private String gradingCriteriaContent;
+    private JsonNode gradingCriteriaContent;
     private Integer displayOrder;
     private List<SubmissionAttemptItemOptionResponse> options;
 }

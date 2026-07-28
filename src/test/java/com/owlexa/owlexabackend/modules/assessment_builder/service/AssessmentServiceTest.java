@@ -3,6 +3,7 @@ package com.owlexa.owlexabackend.modules.assessment_builder.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentItemRequest;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentRequest;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentDetailResponse;
@@ -15,6 +16,9 @@ import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType
 import com.owlexa.owlexabackend.modules.assessment_builder.mapper.AssessmentMapper;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
 import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
+import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
+import com.owlexa.owlexabackend.modules.file.repository.StoredFileRepository;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.question_bank.entity.Question;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionDifficulty;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionOption;
@@ -51,15 +55,19 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import tools.jackson.databind.ObjectMapper;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class AssessmentServiceTest {
 
     @Mock private AssessmentRepository assessmentRepository;
     @Mock private QuestionRepository questionRepository;
+    @Mock private StoredFileRepository storedFileRepository;
     @Mock private CenterRepository centerRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private AuthorizationService authorizationService;
+    @Mock private FileReferenceService fileReferenceService;
 
     private AssessmentService service;
 
@@ -75,13 +83,17 @@ class AssessmentServiceTest {
 
     @BeforeEach
     void setUp() {
+        RichTextDocumentService documentService = new RichTextDocumentService(new ObjectMapper());
         service = new AssessmentService(
                 assessmentRepository,
                 questionRepository,
+                storedFileRepository,
                 centerRepository,
                 membershipRepository,
                 authorizationService,
-                new AssessmentMapper()
+                new AssessmentMapper(documentService, new FileMapper()),
+                documentService,
+                fileReferenceService
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -122,6 +134,15 @@ class AssessmentServiceTest {
         assertThat(response.getItems().get(0).getQuestionId()).isEqualTo(QUESTION_ID);
         assertThat(response.getItems().get(0).getPoints()).isEqualByComparingTo("2.50");
         assertThat(response.getItems().get(0).getOptions()).hasSize(2);
+        assertThat(response.getContent().path("type").asText()).isEqualTo("doc");
+        assertThat(response.getContent().toString()).contains("Short quiz");
+        verify(fileReferenceService).syncReferences(
+                eq(com.owlexa.owlexabackend.modules.file.entity.FileOwnerType.ASSESSMENT),
+                eq(ASSESSMENT_ID),
+                eq(CENTER_ID),
+                any(),
+                any()
+        );
     }
 
     @Test
@@ -157,7 +178,8 @@ class AssessmentServiceTest {
         assertThat(response.getItems().get(0).getQuestionType()).isEqualTo(QuestionType.ESSAY);
         assertThat(response.getItems().get(0).getGradingCriteriaId()).isEqualTo(CRITERIA_ID);
         assertThat(response.getItems().get(0).getGradingCriteriaName()).isEqualTo("Writing Rubric");
-        assertThat(response.getItems().get(0).getGradingCriteriaContent()).isEqualTo("Rubric content");
+        assertThat(response.getItems().get(0).getGradingCriteriaContent().toString())
+                .contains("Rubric content");
     }
 
     @Test
@@ -388,6 +410,7 @@ class AssessmentServiceTest {
                 .status(status)
                 .title("Assessment")
                 .description("Description")
+                .contentJson("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Description\"}]}]}")
                 .createdBy(teacher)
                 .updatedBy(teacher)
                 .items(new ArrayList<>())
@@ -407,7 +430,7 @@ class AssessmentServiceTest {
                 .question(buildQuestion(questionId, QuestionType.MULTIPLE_CHOICE))
                 .questionType(QuestionType.MULTIPLE_CHOICE)
                 .title("Capital city")
-                .content("What is the capital of Vietnam?")
+                .contentJson(serializedDocument("What is the capital of Vietnam?"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(new BigDecimal("2.50"))
                 .displayOrder(displayOrder)
@@ -432,8 +455,7 @@ class AssessmentServiceTest {
 
     private Question buildMultipleChoiceQuestion() {
         Question question = buildQuestion(QUESTION_ID, QuestionType.MULTIPLE_CHOICE);
-        question.setTitle("Capital city");
-        question.setContent("What is the capital of Vietnam?");
+        question.setContentJson(serializedDocument("What is the capital of Vietnam?"));
         question.setDifficulty(QuestionDifficulty.EASY);
         question.setPoints(new BigDecimal("2.50"));
         question.setOptions(new ArrayList<>());
@@ -461,18 +483,17 @@ class AssessmentServiceTest {
                 .id(CRITERIA_ID)
                 .center(center)
                 .name("Writing Rubric")
-                .content("Rubric content")
+                .contentJson(serializedDocument("Rubric content"))
                 .createdBy(teacher)
                 .updatedBy(teacher)
                 .build();
 
         Question question = buildQuestion(ESSAY_QUESTION_ID, QuestionType.ESSAY);
-        question.setTitle("Essay");
-        question.setContent("Write an essay");
+        question.setContentJson(serializedDocument("Write an essay"));
         question.setDifficulty(QuestionDifficulty.MEDIUM);
         question.setPoints(BigDecimal.TEN);
         question.setGradingCriteria(criteria);
-        question.setSampleAnswer("Sample answer");
+        question.setSampleAnswerJson(serializedDocument("Sample answer"));
         question.setOptions(new ArrayList<>());
         return question;
     }
@@ -482,8 +503,7 @@ class AssessmentServiceTest {
                 .id(questionId)
                 .center(center)
                 .type(type)
-                .title("Question")
-                .content("Question content")
+                .contentJson(serializedDocument("Question content"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(BigDecimal.ONE)
                 .createdBy(teacher)

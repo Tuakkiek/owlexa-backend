@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.ai_grading.prompt;
 
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnswer;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class AIGradingPromptBuilder {
             """;
 
     private final ObjectMapper objectMapper;
+    private final RichTextDocumentService richTextDocumentService;
 
     public AIGradingPromptSnapshot build(List<SubmissionAnswer> essayAnswers) {
         ObjectNode root = objectMapper.createObjectNode();
@@ -40,10 +42,22 @@ public class AIGradingPromptBuilder {
 
             ObjectNode promptItem = items.addObject();
             promptItem.put("itemNumber", index + 1);
-            promptItem.put("question", item.getContent());
+            promptItem.put(
+                    "question",
+                    richTextDocumentService.toPlainText(
+                            richTextDocumentService.deserialize(item.getContentJson())
+                    )
+            );
             promptItem.put("studentAnswer", answer.getAnswerText() == null ? "" : answer.getAnswerText());
             promptItem.put("rubricName", nullToEmpty(item.getGradingCriteriaName()));
-            promptItem.put("rubric", nullToEmpty(item.getGradingCriteriaContent()));
+            promptItem.put(
+                    "rubric",
+                    item.getGradingCriteriaContentJson() == null
+                            ? ""
+                            : richTextDocumentService.toPlainText(
+                                    richTextDocumentService.deserialize(item.getGradingCriteriaContentJson())
+                            )
+            );
             promptItem.put("maximumScore", maxScore(answer, item));
         }
 

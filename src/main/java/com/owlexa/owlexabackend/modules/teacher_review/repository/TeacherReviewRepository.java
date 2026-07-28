@@ -98,16 +98,14 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
     @EntityGraph(attributePaths = {"selectedAiGradingResult"})
     List<TeacherReview> findAllBySubmissionAttempt_IdIn(Collection<Long> submissionAttemptIds);
 
-    @EntityGraph(attributePaths = {
-            "assignmentRecipient",
-            "assignmentRecipient.assignment",
-            "assignmentRecipient.studentUser",
-            "assignmentRecipient.clazz"
-    })
     @Query(
             value = """
                     SELECT attempt
                     FROM SubmissionAttempt attempt
+                    JOIN FETCH attempt.assignmentRecipient recipient
+                    JOIN FETCH recipient.assignment assignment
+                    JOIN FETCH recipient.studentUser
+                    LEFT JOIN FETCH recipient.clazz
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
@@ -129,16 +127,14 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
             Pageable pageable
     );
 
-    @EntityGraph(attributePaths = {
-            "assignmentRecipient",
-            "assignmentRecipient.assignment",
-            "assignmentRecipient.studentUser",
-            "assignmentRecipient.clazz"
-    })
     @Query(
             value = """
                     SELECT attempt
                     FROM SubmissionAttempt attempt
+                    JOIN FETCH attempt.assignmentRecipient recipient
+                    JOIN FETCH recipient.assignment assignment
+                    JOIN FETCH recipient.studentUser
+                    LEFT JOIN FETCH recipient.clazz
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
@@ -170,16 +166,14 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
             Pageable pageable
     );
 
-    @EntityGraph(attributePaths = {
-            "assignmentRecipient",
-            "assignmentRecipient.assignment",
-            "assignmentRecipient.studentUser",
-            "assignmentRecipient.clazz"
-    })
     @Query(
             value = """
                     SELECT attempt
                     FROM SubmissionAttempt attempt
+                    JOIN FETCH attempt.assignmentRecipient recipient
+                    JOIN FETCH recipient.assignment assignment
+                    JOIN FETCH recipient.studentUser
+                    LEFT JOIN FETCH recipient.clazz
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL

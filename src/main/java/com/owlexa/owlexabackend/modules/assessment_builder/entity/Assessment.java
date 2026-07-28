@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.assessment_builder.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
+import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.CascadeType;
@@ -64,6 +65,19 @@ public class Assessment implements TenantAware {
 
     @Column(columnDefinition = "LONGTEXT")
     private String description;
+
+    @Column(name = "content_json", nullable = false, columnDefinition = "LONGTEXT")
+    @Builder.Default
+    private String contentJson = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "audio_file_id")
+    private StoredFile audioFile;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "playback_mode", nullable = false)
+    @Builder.Default
+    private PlaybackMode playbackMode = PlaybackMode.PRACTICE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)

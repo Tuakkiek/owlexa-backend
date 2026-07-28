@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.assignment.mapper;
 
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetailResponse;
@@ -8,21 +9,28 @@ import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentItemRe
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentListResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentRecipientResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentTargetResponse;
-import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentListResponse;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItemOption;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTarget;
+import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
+import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
+import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
 
 import java.util.Comparator;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class AssignmentMapper {
+
+    private final RichTextDocumentService richTextDocumentService;
+    private final FileMapper fileMapper;
 
     public AssignmentListResponse toListResponse(Assignment assignment) {
         return AssignmentListResponse.builder()
@@ -53,6 +61,8 @@ public class AssignmentMapper {
                 .dueAt(assignment.getDueAt())
                 .attemptLimit(assignment.getAttemptLimit())
                 .assessmentSnapshotAt(assignment.getAssessmentSnapshotAt())
+                .audioFile(toFileResponse(assignment.getAudioFile()))
+                .playbackMode(assignment.getPlaybackMode())
                 .targets(toTargetResponses(assignment.getTargets()))
                 .recipients(toRecipientResponses(assignment.getRecipients()))
                 .items(toItemResponses(assignment.getItems()))
@@ -78,36 +88,18 @@ public class AssignmentMapper {
                 .build();
     }
 
-    public StudentAssignmentDetailResponse toStudentDetailResponse(AssignmentRecipient recipient) {
-        Assignment assignment = recipient.getAssignment();
-        return StudentAssignmentDetailResponse.builder()
-                .id(assignment.getId())
-                .recipientId(recipient.getId())
-                .type(assignment.getType())
-                .status(assignment.getStatus())
-                .recipientStatus(recipient.getStatus())
-                .title(assignment.getTitle())
-                .description(assignment.getDescription())
-                .openAt(assignment.getOpenAt())
-                .dueAt(assignment.getDueAt())
-                .attemptLimit(assignment.getAttemptLimit())
-                .assignedAt(recipient.getAssignedAt())
-                .items(toItemResponses(assignment.getItems()))
-                .build();
-    }
-
     public AssignmentItem toItemSnapshot(AssessmentItem assessmentItem) {
         AssignmentItem item = AssignmentItem.builder()
                 .assessmentItem(assessmentItem)
                 .questionType(assessmentItem.getQuestionType())
                 .title(assessmentItem.getTitle())
-                .content(assessmentItem.getContent())
+                .contentJson(assessmentItem.getContentJson())
                 .difficulty(assessmentItem.getDifficulty())
                 .points(assessmentItem.getPoints())
-                .explanation(assessmentItem.getExplanation())
-                .sampleAnswer(assessmentItem.getSampleAnswer())
+                .explanationJson(assessmentItem.getExplanationJson())
+                .sampleAnswerJson(assessmentItem.getSampleAnswerJson())
                 .gradingCriteriaName(assessmentItem.getGradingCriteriaName())
-                .gradingCriteriaContent(assessmentItem.getGradingCriteriaContent())
+                .gradingCriteriaContentJson(assessmentItem.getGradingCriteriaContentJson())
                 .displayOrder(assessmentItem.getDisplayOrder())
                 .build();
 
@@ -185,13 +177,13 @@ public class AssignmentMapper {
                 .assessmentItemId(item.getAssessmentItem() == null ? null : item.getAssessmentItem().getId())
                 .questionType(item.getQuestionType())
                 .title(item.getTitle())
-                .content(item.getContent())
+                .content(richTextDocumentService.deserialize(item.getContentJson()))
                 .difficulty(item.getDifficulty())
                 .points(item.getPoints())
-                .explanation(item.getExplanation())
-                .sampleAnswer(item.getSampleAnswer())
+                .explanation(richTextDocumentService.deserializeOptional(item.getExplanationJson()))
+                .sampleAnswer(richTextDocumentService.deserializeOptional(item.getSampleAnswerJson()))
                 .gradingCriteriaName(item.getGradingCriteriaName())
-                .gradingCriteriaContent(item.getGradingCriteriaContent())
+                .gradingCriteriaContent(richTextDocumentService.deserializeOptional(item.getGradingCriteriaContentJson()))
                 .displayOrder(item.getDisplayOrder())
                 .options(toOptionResponses(item.getOptions()))
                 .build();
@@ -207,5 +199,9 @@ public class AssignmentMapper {
                         .displayOrder(option.getDisplayOrder())
                         .build())
                 .toList();
+    }
+
+    private FileResponse toFileResponse(StoredFile file) {
+        return file == null ? null : fileMapper.toResponse(file);
     }
 }

@@ -45,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class AIGradingJobLifecycleServiceTest {
@@ -244,7 +245,7 @@ class AIGradingJobLifecycleServiceTest {
                 .id(ITEM_ID + 1)
                 .assignment(assignment)
                 .questionType(QuestionType.ESSAY)
-                .content("Second essay")
+                .contentJson(serializedDocument("Second essay"))
                 .points(new BigDecimal("4.00"))
                 .displayOrder(2)
                 .build();
@@ -395,9 +396,9 @@ class AIGradingJobLifecycleServiceTest {
                 .id(ITEM_ID)
                 .assignment(assignment)
                 .questionType(QuestionType.ESSAY)
-                .content("Explain the answer")
+                .contentJson(serializedDocument("Explain the answer"))
                 .gradingCriteriaName("Writing rubric")
-                .gradingCriteriaContent("Accuracy and clarity")
+                .gradingCriteriaContentJson(serializedDocument("Accuracy and clarity"))
                 .points(new BigDecimal("5.00"))
                 .displayOrder(1)
                 .build();

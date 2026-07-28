@@ -4,6 +4,9 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+import com.owlexa.owlexabackend.modules.file.entity.FileOwnerType;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.grading_criteria.dto.request.GradingCriteriaRequest;
 import com.owlexa.owlexabackend.modules.grading_criteria.dto.response.GradingCriteriaResponse;
 import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
@@ -23,20 +26,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.regex.Pattern;
+import tools.jackson.databind.JsonNode;
 
 @Service
 @RequiredArgsConstructor
 public class GradingCriteriaService {
-
-    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
-    private static final Pattern HTML_ENTITY_PATTERN = Pattern.compile("&(?:nbsp|#160);", Pattern.CASE_INSENSITIVE);
 
     private final GradingCriteriaRepository gradingCriteriaRepository;
     private final CenterRepository centerRepository;
     private final MembershipRepository membershipRepository;
     private final AuthorizationService authorizationService;
     private final QuestionRepository questionRepository;
+    private final RichTextDocumentService richTextDocumentService;
+    private final FileReferenceService fileReferenceService;
 
     @Transactional(readOnly = true)
     public List<GradingCriteriaResponse> findAll(String search) {
@@ -67,7 +69,7 @@ public class GradingCriteriaService {
     public GradingCriteriaResponse create(GradingCriteriaRequest request) {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        validateContentHasText(request.getContent());
+        JsonNode content = requireContent(request.getContent());
 
         Center center = centerRepository.findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
@@ -75,26 +77,30 @@ public class GradingCriteriaService {
         GradingCriteria criteria = GradingCriteria.builder()
                 .center(center)
                 .name(request.getName().trim())
-                .content(request.getContent().trim())
+                .contentJson(richTextDocumentService.serialize(content))
                 .createdBy(currentUser)
                 .updatedBy(currentUser)
                 .build();
 
-        return toResponse(gradingCriteriaRepository.save(criteria));
+        GradingCriteria saved = gradingCriteriaRepository.save(criteria);
+        fileReferenceService.syncDocumentReferences(FileOwnerType.GRADING_CRITERIA, saved.getId(), centerId, content);
+        return toResponse(saved);
     }
 
     @Transactional
     public GradingCriteriaResponse update(Long criteriaId, GradingCriteriaRequest request) {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        validateContentHasText(request.getContent());
+        JsonNode content = requireContent(request.getContent());
 
         GradingCriteria criteria = findActiveCriteria(criteriaId, centerId);
         criteria.setName(request.getName().trim());
-        criteria.setContent(request.getContent().trim());
+        criteria.setContentJson(richTextDocumentService.serialize(content));
         criteria.setUpdatedBy(currentUser);
 
-        return toResponse(gradingCriteriaRepository.save(criteria));
+        GradingCriteria saved = gradingCriteriaRepository.save(criteria);
+        fileReferenceService.syncDocumentReferences(FileOwnerType.GRADING_CRITERIA, saved.getId(), centerId, content);
+        return toResponse(saved);
     }
 
     @Transactional
@@ -107,6 +113,12 @@ public class GradingCriteriaService {
         criteria.setDeletedAt(Instant.now());
         criteria.setUpdatedBy(currentUser);
         gradingCriteriaRepository.save(criteria);
+        fileReferenceService.syncReferences(
+                FileOwnerType.GRADING_CRITERIA,
+                criteria.getId(),
+                centerId,
+                List.of()
+        );
     }
 
     private void validateDelete(GradingCriteria criteria) {
@@ -125,15 +137,12 @@ public class GradingCriteriaService {
         }
     }
 
-    private void validateContentHasText(String content) {
-        if (content == null) {
+    private JsonNode requireContent(JsonNode content) {
+        JsonNode normalized = richTextDocumentService.normalize(content);
+        if (!richTextDocumentService.hasMeaningfulContent(normalized)) {
             throw new BadRequestException("Nội dung tiêu chí chấm không được để trống");
         }
-        String normalized = HTML_ENTITY_PATTERN.matcher(content).replaceAll(" ");
-        String textOnly = HTML_TAG_PATTERN.matcher(normalized).replaceAll(" ");
-        if (textOnly.trim().isBlank()) {
-            throw new BadRequestException("Nội dung tiêu chí chấm không được để trống");
-        }
+        return normalized;
     }
 
     private GradingCriteria findActiveCriteria(Long criteriaId, Long centerId) {
@@ -169,7 +178,7 @@ public class GradingCriteriaService {
         return GradingCriteriaResponse.builder()
                 .id(criteria.getId())
                 .name(criteria.getName())
-                .content(criteria.getContent())
+                .content(richTextDocumentService.deserialize(criteria.getContentJson()))
                 .createdAt(criteria.getCreatedAt())
                 .updatedAt(criteria.getUpdatedAt())
                 .build();

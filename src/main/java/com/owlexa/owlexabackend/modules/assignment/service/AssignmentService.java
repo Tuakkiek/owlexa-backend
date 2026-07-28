@@ -3,15 +3,19 @@ package com.owlexa.owlexabackend.modules.assignment.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+import com.owlexa.owlexabackend.modules.file.entity.FileOwnerType;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
+import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
+import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentRequest;
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentTargetRequest;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentListResponse;
-import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentListResponse;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
@@ -51,7 +55,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.regex.Pattern;
+import tools.jackson.databind.JsonNode;
 
 @Service
 @RequiredArgsConstructor
@@ -70,6 +76,8 @@ public class AssignmentService {
     private final MembershipRepository membershipRepository;
     private final AuthorizationService authorizationService;
     private final AssignmentMapper assignmentMapper;
+    private final RichTextDocumentService richTextDocumentService;
+    private final FileReferenceService fileReferenceService;
 
     @Transactional(readOnly = true)
     public Page<AssignmentListResponse> findAllForTeacher(
@@ -165,7 +173,15 @@ public class AssignmentService {
         assignment.setStatus(resolvePublishedStatus(assignment, now));
         assignment.setUpdatedBy(currentUser);
 
-        return assignmentMapper.toDetailResponse(assignmentRepository.save(assignment));
+        Assignment saved = assignmentRepository.save(assignment);
+        fileReferenceService.syncReferences(
+                FileOwnerType.ASSIGNMENT,
+                saved.getId(),
+                centerId,
+                assignmentReferenceDocuments(saved),
+                assignmentReferencedFileIds(saved)
+        );
+        return assignmentMapper.toDetailResponse(saved);
     }
 
     @Transactional
@@ -208,6 +224,12 @@ public class AssignmentService {
         assignment.setDeletedAt(Instant.now());
         assignment.setUpdatedBy(currentUser);
         assignmentRepository.save(assignment);
+        fileReferenceService.syncReferences(
+                FileOwnerType.ASSIGNMENT,
+                assignment.getId(),
+                centerId,
+                List.of()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -225,22 +247,6 @@ public class AssignmentService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
-    public StudentAssignmentDetailResponse findByIdForStudent(Long assignmentId) {
-        User currentUser = requireStudentInCurrentCenter();
-        Long centerId = requiredCurrentCenterId();
-
-        AssignmentRecipient recipient = assignmentRecipientRepository
-                .findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
-                        assignmentId,
-                        currentUser.getId(),
-                        centerId
-                )
-                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + assignmentId));
-
-        return assignmentMapper.toStudentDetailResponse(recipient);
-    }
-
     private void validateRequest(AssignmentRequest request) {
         if (request.getAssessmentId() == null) {
             throw new BadRequestException("Assessment id is required");
@@ -253,6 +259,24 @@ public class AssignmentService {
             throw new BadRequestException("Attempt limit must be greater than or equal to 1");
         }
         validateTargetRequests(request.getTargets());
+    }
+
+    private List<JsonNode> assignmentReferenceDocuments(Assignment assignment) {
+        List<JsonNode> documents = new ArrayList<>();
+        for (AssignmentItem item : assignment.getItems()) {
+            documents.add(richTextDocumentService.deserialize(item.getContentJson()));
+            addOptionalDocument(documents, item.getExplanationJson());
+            addOptionalDocument(documents, item.getSampleAnswerJson());
+            addOptionalDocument(documents, item.getGradingCriteriaContentJson());
+        }
+        return documents;
+    }
+
+    private void addOptionalDocument(List<JsonNode> documents, String serialized) {
+        JsonNode document = richTextDocumentService.deserializeOptional(serialized);
+        if (document != null) {
+            documents.add(document);
+        }
     }
 
     private void validateTargetRequests(List<AssignmentTargetRequest> targets) {
@@ -341,6 +365,7 @@ public class AssignmentService {
 
     private void rebuildAssignmentSnapshot(Assignment assignment, Instant snapshotAt) {
         assignment.getItems().clear();
+        Assessment assessment = assignment.getAssessment();
         assignment.getAssessment().getItems().stream()
                 .sorted(Comparator.comparing(com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem::getDisplayOrder))
                 .map(assignmentMapper::toItemSnapshot)
@@ -348,7 +373,14 @@ public class AssignmentService {
                     item.setAssignment(assignment);
                     assignment.getItems().add(item);
                 });
+        assignment.setAudioFile(assessment.getAudioFile());
+        assignment.setPlaybackMode(assessment.getPlaybackMode() == null ? PlaybackMode.PRACTICE : assessment.getPlaybackMode());
         assignment.setAssessmentSnapshotAt(snapshotAt);
+    }
+
+    private List<Long> assignmentReferencedFileIds(Assignment assignment) {
+        StoredFile audioFile = assignment.getAudioFile();
+        return audioFile == null ? List.of() : List.of(audioFile.getId());
     }
 
     private void materializeRecipients(Assignment assignment, Instant assignedAt) {

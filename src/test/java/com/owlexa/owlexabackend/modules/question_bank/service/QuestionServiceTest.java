@@ -2,16 +2,24 @@ package com.owlexa.owlexabackend.modules.question_bank.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
+import com.owlexa.owlexabackend.modules.file.entity.FileOwnerType;
 import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
 import com.owlexa.owlexabackend.modules.grading_criteria.repository.GradingCriteriaRepository;
 import com.owlexa.owlexabackend.modules.question_bank.dto.request.QuestionOptionRequest;
 import com.owlexa.owlexabackend.modules.question_bank.dto.request.QuestionRequest;
 import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionResponse;
 import com.owlexa.owlexabackend.modules.question_bank.entity.Question;
+import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionCollection;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionDifficulty;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionOption;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
+import com.owlexa.owlexabackend.modules.question_bank.mapper.QuestionCollectionMapper;
+import com.owlexa.owlexabackend.modules.question_bank.mapper.QuestionMapper;
+import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionCollectionRepository;
 import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
@@ -29,11 +37,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,17 +53,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.document;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class QuestionServiceTest {
 
     @Mock private QuestionRepository questionRepository;
+    @Mock private QuestionCollectionRepository collectionRepository;
     @Mock private GradingCriteriaRepository gradingCriteriaRepository;
     @Mock private CenterRepository centerRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private AuthorizationService authorizationService;
+    @Mock private FileReferenceService fileReferenceService;
 
     private QuestionService service;
 
@@ -63,15 +79,22 @@ class QuestionServiceTest {
 
     private User teacher;
     private Center center;
+    private QuestionCollection collection;
 
     @BeforeEach
     void setUp() {
+        RichTextDocumentService richTextDocumentService =
+                new RichTextDocumentService(new ObjectMapper());
         service = new QuestionService(
                 questionRepository,
+                collectionRepository,
                 gradingCriteriaRepository,
                 centerRepository,
                 membershipRepository,
-                authorizationService
+                authorizationService,
+                richTextDocumentService,
+                fileReferenceService,
+                new QuestionMapper(richTextDocumentService, new QuestionCollectionMapper())
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -82,9 +105,19 @@ class QuestionServiceTest {
 
         center = new Center();
         center.setId(CENTER_ID);
+        collection = QuestionCollection.builder()
+                .id(50L)
+                .center(center)
+                .code("TOEIC_TEST_1")
+                .name("TOEIC Test 1")
+                .createdBy(teacher)
+                .updatedBy(teacher)
+                .build();
 
         lenient().when(authorizationService.getCurrentUser()).thenReturn(teacher);
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(true);
+        lenient().when(collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(50L, CENTER_ID))
+                .thenReturn(Optional.of(collection));
     }
 
     @AfterEach
@@ -96,8 +129,9 @@ class QuestionServiceTest {
     @DisplayName("create: valid multiple choice creates question with options")
     void create_whenValidMultipleChoice_shouldCreateQuestion() {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
-        when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> {
+        when(questionRepository.saveAndFlush(any(Question.class))).thenAnswer(invocation -> {
             Question question = invocation.getArgument(0);
+            assertThat(question.getQuestionCode()).startsWith("TMP-");
             question.setId(QUESTION_ID);
             return question;
         });
@@ -105,10 +139,49 @@ class QuestionServiceTest {
         QuestionResponse response = service.create(validMultipleChoiceRequest());
 
         assertThat(response.getId()).isEqualTo(QUESTION_ID);
+        assertThat(response.getQuestionCode()).isEqualTo("Q-000030");
         assertThat(response.getType()).isEqualTo(QuestionType.MULTIPLE_CHOICE);
         assertThat(response.getOptions()).hasSize(2);
+        assertThat(response.getContent().path("type").asText()).isEqualTo("doc");
+        assertThat(response.getContent().toString()).contains("capital of Vietnam");
         assertThat(response.getOptions()).extracting("displayOrder").containsExactly(1, 2);
         assertThat(response.getOptions()).extracting("isCorrect").containsExactly(false, true);
+        verify(fileReferenceService).syncReferences(
+                eq(FileOwnerType.QUESTION),
+                eq(QUESTION_ID),
+                eq(CENTER_ID),
+                any()
+        );
+    }
+
+    @Test
+    @DisplayName("create: normalizes section code and stores collection metadata")
+    void create_shouldNormalizeQuestionMetadata() {
+        when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
+        when(questionRepository.saveAndFlush(any(Question.class))).thenAnswer(invocation -> {
+            Question question = invocation.getArgument(0);
+            question.setId(QUESTION_ID);
+            return question;
+        });
+        QuestionRequest request = validMultipleChoiceRequest();
+        request.setSectionCode(" part_1 ");
+
+        QuestionResponse response = service.create(request);
+
+        assertThat(response.getCollection().getCode()).isEqualTo("TOEIC_TEST_1");
+        assertThat(response.getSectionCode()).isEqualTo("PART_1");
+        assertThat(response.getDisplayOrder()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("create: duplicate display order in collection is rejected")
+    void create_whenDisplayOrderExists_shouldThrowDuplicateResource() {
+        when(questionRepository.existsByCollection_IdAndDisplayOrderAndDeletedAtIsNull(50L, 1))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(validMultipleChoiceRequest()))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("Display order 1");
     }
 
     @Test
@@ -201,8 +274,9 @@ class QuestionServiceTest {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
         when(gradingCriteriaRepository.findByIdAndCenter_IdAndDeletedAtIsNull(CRITERIA_ID, CENTER_ID))
                 .thenReturn(Optional.of(criteria));
-        when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> {
+        when(questionRepository.saveAndFlush(any(Question.class))).thenAnswer(invocation -> {
             Question question = invocation.getArgument(0);
+            assertThat(question.getQuestionCode()).startsWith("TMP-");
             question.setId(QUESTION_ID);
             return question;
         });
@@ -210,6 +284,7 @@ class QuestionServiceTest {
         QuestionResponse response = service.create(validEssayRequest(CRITERIA_ID));
 
         assertThat(response.getType()).isEqualTo(QuestionType.ESSAY);
+        assertThat(response.getQuestionCode()).isEqualTo("Q-000030");
         assertThat(response.getGradingCriteria()).isNotNull();
         assertThat(response.getGradingCriteria().getId()).isEqualTo(CRITERIA_ID);
         assertThat(response.getOptions()).isEmpty();
@@ -241,11 +316,18 @@ class QuestionServiceTest {
     void findAll_shouldReturnPagedResponses() {
         Question question = buildMultipleChoiceQuestion();
         PageRequest pageable = PageRequest.of(0, 20);
-        when(questionRepository.findAll(any(Specification.class), eq(pageable)))
-                .thenReturn(new PageImpl<>(List.of(question), pageable, 1));
+        PageRequest effectivePageable = PageRequest.of(
+                0,
+                20,
+                Sort.by(Sort.Order.desc("updatedAt"))
+        );
+        when(questionRepository.findAll(any(Specification.class), eq(effectivePageable)))
+                .thenReturn(new PageImpl<>(List.of(question), effectivePageable, 1));
 
         Page<QuestionResponse> response = service.findAll(
                 "capital",
+                null,
+                null,
                 QuestionType.MULTIPLE_CHOICE,
                 QuestionDifficulty.EASY,
                 null,
@@ -254,6 +336,71 @@ class QuestionServiceTest {
 
         assertThat(response.getTotalElements()).isEqualTo(1);
         assertThat(response.getContent().get(0).getOptions()).isNull();
+    }
+
+    @Test
+    @DisplayName("findAll: rejects sort fields outside the public contract")
+    void findAll_whenSortIsUnsupported_shouldThrowBadRequest() {
+        PageRequest pageable = PageRequest.of(0, 20, Sort.by("unknown"));
+
+        assertThatThrownBy(() -> service.findAll(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                pageable
+        )).isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Unsupported question sort");
+    }
+
+    @Test
+    @DisplayName("findAll: collection picker defaults to display order")
+    void findAll_whenCollectionIsSelected_shouldDefaultToDisplayOrder() {
+        PageRequest requested = PageRequest.of(0, 20);
+        PageRequest effective = PageRequest.of(
+                0,
+                20,
+                Sort.by(Sort.Order.asc("displayOrder"))
+        );
+        when(questionRepository.findAll(any(Specification.class), eq(effective)))
+                .thenReturn(new PageImpl<>(List.of(), effective, 0));
+
+        service.findAll(
+                null,
+                50L,
+                null,
+                null,
+                null,
+                null,
+                requested
+        );
+
+        verify(questionRepository).findAll(any(Specification.class), eq(effective));
+    }
+
+    @Test
+    @DisplayName("findSectionCodes: derives section order from the first question")
+    void findSectionCodes_shouldDelegateForActiveTenantCollection() {
+        when(questionRepository.findActiveSectionCodes(50L))
+                .thenReturn(List.of("PART_1", "PART_2"));
+
+        List<String> response = service.findSectionCodes(50L);
+
+        assertThat(response).containsExactly("PART_1", "PART_2");
+        verify(questionRepository).findActiveSectionCodes(50L);
+    }
+
+    @Test
+    @DisplayName("validateImportBatch: duplicate display orders are rejected before persistence")
+    void validateImportBatch_whenOrdersRepeat_shouldThrowDuplicateResource() {
+        QuestionRequest first = validMultipleChoiceRequest();
+        QuestionRequest second = validMultipleChoiceRequest();
+
+        assertThatThrownBy(() -> service.validateImportBatch(List.of(first, second)))
+                .isInstanceOf(DuplicateResourceException.class)
+                .hasMessageContaining("duplicate display order");
     }
 
     @Test
@@ -273,9 +420,11 @@ class QuestionServiceTest {
     @DisplayName("update: replaces multiple choice options")
     void update_whenValid_shouldReplaceQuestionOptions() {
         Question existing = buildMultipleChoiceQuestion();
+        String originalQuestionCode = existing.getQuestionCode();
         when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
                 .thenReturn(Optional.of(existing));
-        when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(questionRepository.saveAndFlush(any(Question.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         QuestionRequest request = validMultipleChoiceRequest();
         request.setOptions(List.of(
@@ -287,6 +436,8 @@ class QuestionServiceTest {
         QuestionResponse response = service.update(QUESTION_ID, request);
 
         assertThat(response.getOptions()).hasSize(3);
+        assertThat(response.getQuestionCode()).isEqualTo(originalQuestionCode);
+        assertThat(existing.getQuestionCode()).isEqualTo(originalQuestionCode);
         assertThat(existing.getOptions()).hasSize(3);
         assertThat(existing.getOptions()).extracting(QuestionOption::getContent)
                 .containsExactly("New A", "New B", "New C");
@@ -305,6 +456,34 @@ class QuestionServiceTest {
         assertThat(existing.getDeletedAt()).isNotNull();
         assertThat(existing.getUpdatedBy()).isEqualTo(teacher);
         verify(questionRepository).save(existing);
+    }
+
+    @Test
+    @DisplayName("deleteMany: selected questions are soft deleted once")
+    void deleteMany_whenQuestionsExist_shouldSoftDeleteDistinctQuestions() {
+        Question first = buildMultipleChoiceQuestion();
+        Question second = buildMultipleChoiceQuestion();
+        second.setId(31L);
+        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+                .thenReturn(Optional.of(first));
+        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(31L, CENTER_ID))
+                .thenReturn(Optional.of(second));
+        when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.deleteMany(Arrays.asList(QUESTION_ID, 31L, QUESTION_ID, null));
+
+        assertThat(first.getDeletedAt()).isNotNull();
+        assertThat(second.getDeletedAt()).isNotNull();
+        assertThat(first.getUpdatedBy()).isEqualTo(teacher);
+        assertThat(second.getUpdatedBy()).isEqualTo(teacher);
+        verify(questionRepository).save(first);
+        verify(questionRepository).save(second);
+        verify(fileReferenceService, times(2)).syncReferences(
+                eq(FileOwnerType.QUESTION),
+                any(),
+                eq(CENTER_ID),
+                eq(List.of())
+        );
     }
 
     @Test
@@ -339,9 +518,11 @@ class QuestionServiceTest {
 
     private QuestionRequest validMultipleChoiceRequest() {
         return QuestionRequest.builder()
+                .collectionId(50L)
+                .sectionCode("PART_1")
+                .displayOrder(1)
                 .type(QuestionType.MULTIPLE_CHOICE)
-                .title("Capital city")
-                .content("What is the capital of Vietnam?")
+                .content(document("What is the capital of Vietnam?"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(BigDecimal.ONE)
                 .options(List.of(
@@ -353,13 +534,15 @@ class QuestionServiceTest {
 
     private QuestionRequest validEssayRequest(Long gradingCriteriaId) {
         return QuestionRequest.builder()
+                .collectionId(50L)
+                .sectionCode("WRITING")
+                .displayOrder(1)
                 .type(QuestionType.ESSAY)
-                .title("Opinion essay")
-                .content("Do you agree or disagree?")
+                .content(document("Do you agree or disagree?"))
                 .difficulty(QuestionDifficulty.MEDIUM)
                 .points(BigDecimal.TEN)
                 .gradingCriteriaId(gradingCriteriaId)
-                .sampleAnswer("Sample answer")
+                .sampleAnswer(document("Sample answer"))
                 .build();
     }
 
@@ -375,9 +558,12 @@ class QuestionServiceTest {
         Question question = Question.builder()
                 .id(QUESTION_ID)
                 .center(center)
+                .collection(collection)
+                .sectionCode("PART_1")
+                .displayOrder(1)
                 .type(QuestionType.MULTIPLE_CHOICE)
-                .title("Capital city")
-                .content("What is the capital of Vietnam?")
+                .questionCode("Q-000030")
+                .contentJson(serializedDocument("What is the capital of Vietnam?"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(BigDecimal.ONE)
                 .createdBy(teacher)
@@ -408,7 +594,7 @@ class QuestionServiceTest {
                 .id(id)
                 .center(center)
                 .name(name)
-                .content("Criteria content")
+                .contentJson(serializedDocument("Criteria content"))
                 .createdBy(teacher)
                 .updatedBy(teacher)
                 .build();

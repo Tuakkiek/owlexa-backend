@@ -48,8 +48,8 @@ public class GradingCriteria implements TenantAware {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, columnDefinition = "LONGTEXT")
-    private String content;
+    @Column(name = "content_json", nullable = false, columnDefinition = "LONGTEXT")
+    private String contentJson;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)

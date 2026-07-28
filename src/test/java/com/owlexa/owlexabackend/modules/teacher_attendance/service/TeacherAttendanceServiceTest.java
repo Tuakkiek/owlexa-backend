@@ -176,7 +176,7 @@ class TeacherAttendanceServiceTest {
                         .records(List.of(item))
                         .build()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a TEACHER");
+                .hasMessageContaining("không phải là Giáo viên");
     }
 
     @Test
@@ -197,7 +197,7 @@ class TeacherAttendanceServiceTest {
                         .records(List.of(item))
                         .build()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a member");
+                .hasMessageContaining("không thuộc trung tâm này");
     }
 
     @Test
@@ -220,7 +220,7 @@ class TeacherAttendanceServiceTest {
                         .records(List.of(item))
                         .build()))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER");
+                .hasMessageContaining("Chỉ có Chủ trung tâm");
     }
 
     @Test
@@ -267,7 +267,7 @@ class TeacherAttendanceServiceTest {
 
         assertThatThrownBy(() -> service.update(ATTENDANCE_ID, TeacherAttendanceStatus.LATE, null))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER");
+                .hasMessageContaining("Chỉ có Chủ trung tâm");
     }
 
     @Test
@@ -303,7 +303,7 @@ class TeacherAttendanceServiceTest {
 
         assertThatThrownBy(() -> service.delete(ATTENDANCE_ID))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER");
+                .hasMessageContaining("Chỉ có Chủ trung tâm");
     }
 
     // ==================== FIND TESTS ====================

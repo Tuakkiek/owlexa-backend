@@ -3,6 +3,8 @@ package com.owlexa.owlexabackend.modules.student_submission.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
@@ -39,6 +41,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -53,6 +56,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
 class SubmissionServiceTest {
@@ -87,7 +91,7 @@ class SubmissionServiceTest {
                 submissionAttemptRepository,
                 authorizationService,
                 membershipRepository,
-                new SubmissionMapper()
+                new SubmissionMapper(new RichTextDocumentService(new ObjectMapper()), new FileMapper())
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -418,7 +422,7 @@ class SubmissionServiceTest {
         AssignmentItem item = AssignmentItem.builder()
                 .assignment(assignment)
                 .questionType(QuestionType.MULTIPLE_CHOICE)
-                .content("Choose correct options")
+                .contentJson(serializedDocument("Choose correct options"))
                 .points(new BigDecimal("2.00"))
                 .displayOrder(1)
                 .options(new ArrayList<>())
@@ -433,7 +437,7 @@ class SubmissionServiceTest {
         AssignmentItem item = AssignmentItem.builder()
                 .assignment(assignment)
                 .questionType(QuestionType.ESSAY)
-                .content("Write essay")
+                .contentJson(serializedDocument("Write essay"))
                 .points(new BigDecimal("5.00"))
                 .displayOrder(2)
                 .options(new ArrayList<>())

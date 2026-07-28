@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.assessment_builder.dto.request;
 
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
+import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -9,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 
@@ -24,8 +26,14 @@ public class AssessmentRequest {
 
     private String description;
 
+    private JsonNode content;
+
     @NotNull(message = "Assessment type is required")
     private AssessmentType type;
+
+    private Long audioFileId;
+
+    private PlaybackMode playbackMode;
 
     @Valid
     private List<AssessmentItemRequest> items;
