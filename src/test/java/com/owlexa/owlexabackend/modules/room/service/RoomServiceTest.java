@@ -279,6 +279,6 @@ class RoomServiceTest {
 
         assertThatThrownBy(() -> service.delete(ROOM_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("cannot be deleted because it is already used by existing schedules");
+                .hasMessageContaining("đang được sử dụng trong lịch học");
     }
 }

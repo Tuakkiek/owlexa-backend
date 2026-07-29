@@ -293,7 +293,7 @@ class UserPermissionServiceTest {
 
         assertThatThrownBy(() -> service.applyOverrides(USER_ID, request))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("does not belong to role");
+                .hasMessageContaining("không thuộc vai trò");
     }
 
     // ═══════════════════════════════════════════════════════════════

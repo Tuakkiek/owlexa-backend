@@ -191,7 +191,7 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a student");
+                .hasMessageContaining("Người dùng không phải là học sinh");
     }
 
     @Test
@@ -220,7 +220,7 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Class is full");
+                .hasMessageContaining("Lớp học đã đầy sĩ số");
     }
 
     @Test
@@ -253,7 +253,7 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.approve(CLASS_ID, STUDENT_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Only PENDING enrollments can be approved");
+                .hasMessageContaining("Chỉ có thể duyệt các yêu cầu đăng ký đang chờ xử lý");
     }
 
     @Test
@@ -299,7 +299,7 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.reject(CLASS_ID, STUDENT_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Only PENDING enrollments can be rejected");
+                .hasMessageContaining("Chỉ có thể từ chối các yêu cầu đăng ký đang chờ xử lý");
     }
 
     @Test

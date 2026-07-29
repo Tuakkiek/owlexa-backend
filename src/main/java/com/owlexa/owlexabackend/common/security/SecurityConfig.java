@@ -54,6 +54,7 @@ public class SecurityConfig {
                                 "/auth/register/owner",
                                 "/auth/refresh-token",
                                 "/public/**",
+                                "/uploads/**",
                                 "/webhooks/sepay"
                         ).permitAll()
                         .requestMatchers(

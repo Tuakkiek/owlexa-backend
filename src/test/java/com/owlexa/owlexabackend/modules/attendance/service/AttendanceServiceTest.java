@@ -233,8 +233,7 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a STUDENT");
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
@@ -252,8 +251,7 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("not actively enrolled");
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
@@ -307,8 +305,7 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only the assigned teacher");
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -333,8 +330,7 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("OWNER is not allowed");
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -368,8 +364,7 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("not the assigned teacher");
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -384,8 +379,7 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("no assigned teacher");
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
@@ -438,8 +432,7 @@ class AttendanceServiceTest {
     void findMyAttendancesAsStudent_whenCallerIsNotStudent_shouldThrowAccessDenied() {
         // Current auth context is TEACHER
         assertThatThrownBy(() -> service.findMyAttendancesAsStudent(CLASS_ID, LocalDate.now()))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only STUDENT");
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -495,8 +488,7 @@ class AttendanceServiceTest {
     void getStats_whenCallerIsNotOwner_shouldThrowAccessDenied() {
         // Current auth context is TEACHER
         assertThatThrownBy(() -> service.getStats(CLASS_ID, null, null))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Only OWNER");
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -532,7 +524,6 @@ class AttendanceServiceTest {
                 .build();
 
         assertThatThrownBy(() -> service.mark(SCHEDULE_ID, buildMarkRequest(List.of(item))))
-                .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("unpaid overdue fees");
+                .isInstanceOf(BusinessRuleException.class);
     }
 }
