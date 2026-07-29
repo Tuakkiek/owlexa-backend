@@ -58,7 +58,7 @@ public class UserPermissionService {
     @Transactional(readOnly = true)
     public UserPermissionsResponse getEffectivePermissions(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
         // Load only the permissions that belong to this user's ROLE
         List<RolePermission> rolePerms = rolePermissionRepository.findAllByRole(user.getRole());
@@ -99,7 +99,7 @@ public class UserPermissionService {
     @Transactional
     public UserPermissionsResponse applyOverrides(Long userId, BulkPermissionOverrideRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
         if (request.getOverrides() == null || request.getOverrides().isEmpty()) {
             // Empty list = remove all overrides → re-enable all role permissions
@@ -122,13 +122,13 @@ public class UserPermissionService {
             }
             if (!rolePermissionCodes.contains(item.getPermissionCode())) {
                 throw new BadRequestException(
-                        "Permission '" + item.getPermissionCode()
-                        + "' does not belong to role " + user.getRole().name()
-                        + ". User permissions must be a subset of role permissions.");
+                        "Quyền '" + item.getPermissionCode()
+                        + "' không thuộc vai trò " + user.getRole().name()
+                        + ". Quyền của người dùng phải thuộc danh mục quyền của vai trò.");
             }
             permissionRepository.findByCode(item.getPermissionCode())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Permission not found: " + item.getPermissionCode()));
+                            "Không tìm thấy quyền: " + item.getPermissionCode()));
         }
 
         // Delete existing overrides
@@ -145,7 +145,7 @@ public class UserPermissionService {
             // DISABLED or DENY: create a user_permission row to disable this permission
             Permission permission = permissionRepository.findByCode(item.getPermissionCode())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Permission not found: " + item.getPermissionCode()));
+                            "Không tìm thấy quyền: " + item.getPermissionCode()));
 
             UserPermission up = new UserPermission();
             up.setUser(user);
@@ -168,7 +168,7 @@ public class UserPermissionService {
     @Transactional
     public EffectivePermission updateSingleOverride(Long userId, String permissionCode, String type) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
         validateOverrideType(type);
 
@@ -181,12 +181,12 @@ public class UserPermissionService {
 
         if (!roleCodes.contains(permissionCode)) {
             throw new BadRequestException(
-                    "Permission '" + permissionCode + "' does not belong to role " + user.getRole().name());
+                    "Quyền '" + permissionCode + "' không thuộc vai trò " + user.getRole().name());
         }
 
         Permission permission = permissionRepository.findByCode(permissionCode)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Permission not found: " + permissionCode));
+                        "Không tìm thấy quyền: " + permissionCode));
 
         // Remove existing override (if any)
         userPermissionRepository.findByUser_IdAndPermission_Code(userId, permissionCode)
@@ -213,7 +213,7 @@ public class UserPermissionService {
     @Transactional
     public void removeAllOverrides(Long userId) {
         if (!userRepository.existsById(userId)) {
-            throw new ResourceNotFoundException("User not found with id: " + userId);
+            throw new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId);
         }
         userPermissionRepository.deleteByUser_Id(userId);
         permissionResolver.evictCache(userId);
@@ -225,13 +225,13 @@ public class UserPermissionService {
 
     private void validateOverrideType(String type) {
         if (type == null || type.isBlank()) {
-            throw new BadRequestException("Override type must not be empty");
+            throw new BadRequestException("Loại ghi đè không được để trống");
         }
         String upper = type.trim().toUpperCase();
         // Accept DISABLED (new) + DENY/INHERIT (backward compat). Reject ALLOW.
         if (!upper.equals("DISABLED") && !upper.equals("DENY") && !upper.equals("INHERIT")) {
             throw new BadRequestException(
-                    "Invalid override type: " + type + ". Must be DISABLED or INHERIT.");
+                    "Loại ghi đè không hợp lệ: " + type + ". Phải là DISABLED hoặc INHERIT.");
         }
     }
 

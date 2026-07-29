@@ -219,7 +219,7 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                         .content(loginPayload("", SEED_PASSWORD)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
-                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("Dữ liệu gửi lên không hợp lệ"))
                 .andExpect(jsonPath("$.errors.phoneNumber").value("Phone number is required"));
     }
 
@@ -241,17 +241,17 @@ class LoginIntegrationTest extends BaseIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Validation failed"));
+                .andExpect(jsonPath("$.message").value("Dữ liệu gửi lên không hợp lệ"));
     }
 
     @Test
-    @DisplayName("Login with malformed JSON returns 400 'Malformed JSON request'")
+    @DisplayName("Login with malformed JSON returns 400 Vietnamese malformed JSON message")
     void login_whenMalformedJson_shouldReturn400() throws Exception {
         mockMvc.perform(post(LOGIN_URL)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{not valid json"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Malformed JSON request"));
+                .andExpect(jsonPath("$.message").value("Yêu cầu định dạng JSON không hợp lệ"));
     }
 
     // ───────────────────────────────────────────────────────────────────────

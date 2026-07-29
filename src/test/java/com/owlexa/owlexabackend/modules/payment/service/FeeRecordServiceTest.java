@@ -78,7 +78,7 @@ class FeeRecordServiceTest {
         student.setPhoneNumber(OWNER_PHONE);
         student.setRole(Role.STUDENT);
         when(userRepository.findByPhoneNumber(OWNER_PHONE)).thenReturn(Optional.of(student));
-        when(feeRecordRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(100L))
+        when(feeRecordRepository.findAllActiveEnrollmentFeesByStudentUserId(100L))
                 .thenReturn(new ArrayList<>());
 
         List<FeeRecordResponse> responses = service.findMyFees();

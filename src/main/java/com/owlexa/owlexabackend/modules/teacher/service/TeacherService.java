@@ -6,42 +6,30 @@ import com.owlexa.owlexabackend.modules.teacher.dto.request.TeacherRequest;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.BulkTeacherError;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.BulkTeacherResult;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherResponse;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestLevel;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.document.entity.StudentDocument;
-import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmissionStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayGradingResult;
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptStatus;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.user.entity.DeviceTypeConverter;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayCriteriaScore;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
-import com.owlexa.owlexabackend.modules.essay.entity.EssaySubmission;
 import com.owlexa.owlexabackend.modules.user.entity.Membership;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayRubric;
 import com.owlexa.owlexabackend.modules.user.entity.UserSession;
 import com.owlexa.owlexabackend.modules.teacher.entity.BulkTeacherStatus;
 import com.owlexa.owlexabackend.modules.user.entity.UserPermission;
 import com.owlexa.owlexabackend.modules.document.entity.DocumentType;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttempt;
 import com.owlexa.owlexabackend.modules.user.entity.DeviceType;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestAttemptAnswer;
-import com.owlexa.owlexabackend.modules.essay.entity.EssayRubricCriterion;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
 import com.owlexa.owlexabackend.modules.user.dto.request.BulkPermissionOverrideRequest;
 import com.owlexa.owlexabackend.modules.user.entity.Permission;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTest;
 import com.owlexa.owlexabackend.modules.user.service.UserPermissionService;
-import com.owlexa.owlexabackend.modules.mocktest.entity.MockTestQuestion;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BulkTeacherValidationException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
@@ -113,7 +101,7 @@ public class TeacherService {
             LOGGER.info("  existsByEmail('{}') = {}", request.getEmail(), emailExists);
             if (emailExists) {
                 LOGGER.error("  >>> THROWING DuplicateResourceException: Email '{}' already exists", request.getEmail());
-                throw new DuplicateResourceException("Email already exists");
+                throw new DuplicateResourceException("Email đã tồn tại.");
             }
             LOGGER.info("  PASSED: email is unique");
         } else {
@@ -134,7 +122,7 @@ public class TeacherService {
             LOGGER.info("[STEP 6a] Role check: role == TEACHER?");
             if (teacherUser.getRole() != Role.TEACHER) {
                 LOGGER.error("  >>> THROWING BadRequestException: User role is {}, not TEACHER", teacherUser.getRole());
-                throw new BadRequestException("User is not TEACHER");
+                throw new BadRequestException("Người dùng không phải là Giáo viên");
             }
             LOGGER.info("  PASSED: role is TEACHER");
 
@@ -201,7 +189,7 @@ public class TeacherService {
 
         Membership membership = membershipRepository
                 .findByUser_IdAndCenter_IdAndUserRole(teacherId, centerId, Role.TEACHER)
-                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found in this center"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giáo viên tại trung tâm này"));
 
         User teacher = membership.getUser();
 
@@ -211,13 +199,13 @@ public class TeacherService {
 
         if (!teacher.getPhoneNumber().equals(phoneNumber)
                 && userRepository.existsByPhoneNumber(phoneNumber)) {
-            throw new DuplicateResourceException("Phone number already exists");
+            throw new DuplicateResourceException("Số điện thoại đã tồn tại.");
         }
 
         if (email != null
                 && !email.equals(teacher.getEmail())
                 && userRepository.existsByEmail(email)) {
-            throw new DuplicateResourceException("Email already exists");
+            throw new DuplicateResourceException("Email đã tồn tại.");
         }
 
         teacher.setPhoneNumber(phoneNumber);
@@ -243,7 +231,7 @@ public class TeacherService {
 
         Membership membership = membershipRepository
                 .findByUser_IdAndCenter_IdAndUserRole(teacherId, centerId, Role.TEACHER)
-                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found in this center"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giáo viên tại trung tâm này"));
 
         membershipRepository.delete(membership);
     }
@@ -252,13 +240,13 @@ public class TeacherService {
     public List<BulkTeacherResult> bulkCreate(@NonNull BulkTeacherRequest request) {
 
         if (request.getTeachers() == null || request.getTeachers().isEmpty()) {
-            throw new BadRequestException("Teachers list must not be empty");
+            throw new BadRequestException("Danh sách giáo viên không được để trống");
         }
 
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
         Center center = centerRepository.findById(centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trung tâm với ID: " + centerId));
 
         assertOwnerAndCenterMembership(currentUser, centerId);
 
@@ -279,7 +267,7 @@ public class TeacherService {
                 error.setRow(row);
                 error.setPhoneNumber(item.getPhoneNumber());
                 error.setStatus(BulkTeacherStatus.INVALID_INPUT);
-                error.setMessage("Phone number and full name are required");
+                error.setMessage("Vui lòng nhập số điện thoại và họ tên");
 
                 errors.add(error);
                 continue;
@@ -293,7 +281,7 @@ public class TeacherService {
                 error.setRow(row);
                 error.setPhoneNumber(item.getPhoneNumber());
                 error.setStatus(BulkTeacherStatus.INVALID_INPUT);
-                error.setMessage("Email already exists");
+                error.setMessage("Email đã tồn tại.");
 
                 errors.add(error);
                 continue;
@@ -308,7 +296,7 @@ public class TeacherService {
                 error.setRow(row);
                 error.setPhoneNumber(item.getPhoneNumber());
                 error.setStatus(BulkTeacherStatus.INVALID_INPUT);
-                error.setMessage("Existing User role is not TEACHER");
+                error.setMessage("Vai trò của người dùng hiện tại không phải là Giáo viên");
 
                 errors.add(error);
                 continue;
@@ -426,7 +414,7 @@ public class TeacherService {
 
     private void assertOwnerAndCenterMembership(User currentUser, Long centerId) {
         if (currentUser.getRole() != Role.OWNER) {
-            throw new AccessDeniedException("Only OWNER can add teacher to center");
+            throw new AccessDeniedException("Chỉ có Chủ trung tâm mới có quyền thêm giáo viên vào trung tâm");
         }
 
         assertCenterMembership(currentUser, centerId);
@@ -435,7 +423,7 @@ public class TeacherService {
     private void assertCenterMembership(User currentUser, Long centerId) {
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
     }
 
@@ -443,13 +431,13 @@ public class TeacherService {
         String phone = SecurityContextHolder.getContext().getAuthentication().getName();
 
         return userRepository.findByPhoneNumber(phone)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng hiện tại"));
     }
 
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
-            throw new BadRequestException("Tenant context not resolved. Ensure the user has an active membership.");
+            throw new BadRequestException("Chưa xác định trung tâm hoạt động. Vui lòng đảm bảo người dùng có vai trò trong trung tâm.");
         }
         return centerId;
     }

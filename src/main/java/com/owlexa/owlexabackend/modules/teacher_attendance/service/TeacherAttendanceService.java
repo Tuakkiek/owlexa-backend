@@ -42,17 +42,17 @@ public class TeacherAttendanceService {
         for (TeacherAttendanceMarkRequest.Item item : request.getRecords()) {
             User teacher = userRepository.findById(item.getTeacherUserId())
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Teacher not found with id: " + item.getTeacherUserId()));
+                            "Không tìm thấy giáo viên với ID: " + item.getTeacherUserId()));
 
             if (teacher.getRole() != Role.TEACHER) {
-                throw new BadRequestException("User is not a TEACHER: " + item.getTeacherUserId());
+                throw new BadRequestException("Người dùng không phải là Giáo viên: " + item.getTeacherUserId());
             }
 
             boolean isMember = membershipRepository.existsByUser_IdAndCenter_Id(
                     teacher.getId(), centerId);
             if (!isMember) {
                 throw new BadRequestException(
-                        "Teacher is not a member of this center: " + item.getTeacherUserId());
+                        "Giáo viên không thuộc trung tâm này: " + item.getTeacherUserId());
             }
 
             TeacherAttendance attendance = teacherAttendanceRepository
@@ -88,10 +88,10 @@ public class TeacherAttendanceService {
 
         TeacherAttendance attendance = teacherAttendanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Teacher attendance not found with id: " + id));
+                        "Không tìm thấy thông tin điểm danh giáo viên với ID: " + id));
 
         if (!attendance.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("Teacher attendance belongs to another center");
+            throw new AccessDeniedException("Thông tin điểm danh giáo viên thuộc trung tâm khác");
         }
 
         attendance.setStatus(status);
@@ -110,10 +110,10 @@ public class TeacherAttendanceService {
 
         TeacherAttendance attendance = teacherAttendanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Teacher attendance not found with id: " + id));
+                        "Không tìm thấy thông tin điểm danh giáo viên với ID: " + id));
 
         if (!attendance.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("Teacher attendance belongs to another center");
+            throw new AccessDeniedException("Thông tin điểm danh giáo viên thuộc trung tâm khác");
         }
 
         teacherAttendanceRepository.delete(attendance);
@@ -165,10 +165,10 @@ public class TeacherAttendanceService {
 
         TeacherAttendance attendance = teacherAttendanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Teacher attendance not found with id: " + id));
+                        "Không tìm thấy thông tin điểm danh giáo viên với ID: " + id));
 
         if (!attendance.getCenter().getId().equals(centerId)) {
-            throw new AccessDeniedException("Teacher attendance belongs to another center");
+            throw new AccessDeniedException("Thông tin điểm danh giáo viên thuộc trung tâm khác");
         }
 
         return toResponse(attendance);
@@ -176,13 +176,13 @@ public class TeacherAttendanceService {
 
     private void assertIsOwner(User currentUser, Long centerId) {
         if (currentUser.getRole() != Role.OWNER) {
-            throw new AccessDeniedException("Only OWNER can manage teacher attendance");
+            throw new AccessDeniedException("Chỉ có Chủ trung tâm mới có quyền quản lý điểm danh giáo viên");
         }
 
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(
                 currentUser.getId(), centerId);
         if (!hasMembership) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm này");
         }
     }
 
@@ -208,20 +208,20 @@ public class TeacherAttendanceService {
         if (authentication == null
                 || !authentication.isAuthenticated()
                 || "anonymousUser".equals(authentication.getName())) {
-            throw new AccessDeniedException("User is not authenticated");
+            throw new AccessDeniedException("Chưa đăng nhập");
         }
 
         String phoneNumber = authentication.getName();
 
         return userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng hiện tại"));
     }
 
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
         if (centerId == null) {
             throw new BadRequestException(
-                    "Tenant context not resolved. Ensure the user has an active membership.");
+                    "Chưa xác định trung tâm hoạt động. Vui lòng đảm bảo người dùng có vai trò trong trung tâm.");
         }
         return centerId;
     }

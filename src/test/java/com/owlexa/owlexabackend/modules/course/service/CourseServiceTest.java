@@ -211,7 +211,7 @@ class CourseServiceTest {
 
         assertThatThrownBy(() -> service.delete(COURSE_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("cannot be deleted because there are classes associated with it");
+                .hasMessageContaining("Không thể xóa khóa học này");
     }
 
     @Test

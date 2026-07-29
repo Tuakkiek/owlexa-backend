@@ -46,12 +46,12 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("TenancyViolationException → HTTP 403 với message ẩn danh 'Resource not found'")
+    @DisplayName("TenancyViolationException → HTTP 403 với message ẩn danh tiếng Việt")
     void tenancyViolationException_shouldReturn403WithAnonymousMessage() throws Exception {
         mockMvc.perform(get("/test/tenancy-violation"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))
-                .andExpect(jsonPath("$.message").value("Resource not found"));
+                .andExpect(jsonPath("$.message").value("Không tìm thấy dữ liệu"));
     }
 
     @Test
