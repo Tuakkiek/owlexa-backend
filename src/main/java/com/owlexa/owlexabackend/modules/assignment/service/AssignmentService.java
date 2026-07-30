@@ -122,6 +122,7 @@ public class AssignmentService {
                 .status(AssignmentStatus.DRAFT)
                 .title(request.getTitle().trim())
                 .description(normalizeOptionalText(request.getDescription()))
+                .contentJson(assessment.getContentJson())
                 .openAt(request.getOpenAt())
                 .dueAt(request.getDueAt())
                 .attemptLimit(request.getAttemptLimit())
@@ -148,6 +149,7 @@ public class AssignmentService {
         assignment.setType(assessment.getType());
         assignment.setTitle(request.getTitle().trim());
         assignment.setDescription(normalizeOptionalText(request.getDescription()));
+        assignment.setContentJson(assessment.getContentJson());
         assignment.setOpenAt(request.getOpenAt());
         assignment.setDueAt(request.getDueAt());
         assignment.setAttemptLimit(request.getAttemptLimit());
@@ -263,6 +265,7 @@ public class AssignmentService {
 
     private List<JsonNode> assignmentReferenceDocuments(Assignment assignment) {
         List<JsonNode> documents = new ArrayList<>();
+        documents.add(richTextDocumentService.deserialize(assignment.getContentJson()));
         for (AssignmentItem item : assignment.getItems()) {
             documents.add(richTextDocumentService.deserialize(item.getContentJson()));
             addOptionalDocument(documents, item.getExplanationJson());
@@ -375,6 +378,7 @@ public class AssignmentService {
                 });
         assignment.setAudioFile(assessment.getAudioFile());
         assignment.setPlaybackMode(assessment.getPlaybackMode() == null ? PlaybackMode.PRACTICE : assessment.getPlaybackMode());
+        assignment.setContentJson(assessment.getContentJson());
         assignment.setAssessmentSnapshotAt(snapshotAt);
     }
 

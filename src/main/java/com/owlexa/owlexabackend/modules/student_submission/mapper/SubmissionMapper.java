@@ -10,6 +10,7 @@ import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptSummaryResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptItemResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.SubmissionAnswerResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.SubmissionAttemptItemOptionResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.SubmissionAttemptItemResponse;
@@ -54,6 +55,7 @@ public class SubmissionMapper {
                 .assignmentRecipientId(recipient.getId())
                 .assignmentTitleSnapshot(attempt.getAssignmentTitleSnapshot())
                 .assignmentTypeSnapshot(attempt.getAssignmentTypeSnapshot())
+                .assignmentContent(richTextDocumentService.deserialize(assignment.getContentJson()))
                 .status(attempt.getStatus())
                 .attemptNumber(attempt.getAttemptNumber())
                 .startedAt(attempt.getStartedAt())
@@ -63,7 +65,7 @@ public class SubmissionMapper {
                 .maxScore(attempt.getMaxScore())
                 .audioFile(toFileResponse(assignment.getAudioFile()))
                 .playbackMode(assignment.getPlaybackMode())
-                .items(toItemResponses(assignment.getItems()))
+                .items(toStudentItemResponses(assignment.getItems()))
                 .answers(toAnswerResponses(attempt.getAnswers()))
                 .build();
     }
@@ -113,6 +115,7 @@ public class SubmissionMapper {
                 .recipientStatus(recipient.getStatus())
                 .assignmentTitleSnapshot(attempt.getAssignmentTitleSnapshot())
                 .assignmentTypeSnapshot(attempt.getAssignmentTypeSnapshot())
+                .assignmentContent(richTextDocumentService.deserialize(assignment.getContentJson()))
                 .status(attempt.getStatus())
                 .attemptNumber(attempt.getAttemptNumber())
                 .startedAt(attempt.getStartedAt())
@@ -130,6 +133,26 @@ public class SubmissionMapper {
                 .sorted(Comparator.comparing(AssignmentItem::getDisplayOrder))
                 .map(this::toItemResponse)
                 .toList();
+    }
+
+    private List<StudentAttemptItemResponse> toStudentItemResponses(List<AssignmentItem> items) {
+        return items.stream()
+                .sorted(Comparator.comparing(AssignmentItem::getDisplayOrder))
+                .map(this::toStudentItemResponse)
+                .toList();
+    }
+
+    private StudentAttemptItemResponse toStudentItemResponse(AssignmentItem item) {
+        return StudentAttemptItemResponse.builder()
+                .assignmentItemId(item.getId())
+                .questionType(item.getQuestionType())
+                .title(item.getTitle())
+                .content(richTextDocumentService.deserialize(item.getContentJson()))
+                .difficulty(item.getDifficulty())
+                .points(item.getPoints())
+                .displayOrder(item.getDisplayOrder())
+                .options(toOptionResponses(item.getOptions()))
+                .build();
     }
 
     private SubmissionAttemptItemResponse toItemResponse(AssignmentItem item) {

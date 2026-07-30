@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -30,6 +31,7 @@ public class TeacherAttemptDetailResponse {
     private AssignmentRecipientStatus recipientStatus;
     private String assignmentTitleSnapshot;
     private AssessmentType assignmentTypeSnapshot;
+    private JsonNode assignmentContent;
     private SubmissionAttemptStatus status;
     private Integer attemptNumber;
     private Instant startedAt;

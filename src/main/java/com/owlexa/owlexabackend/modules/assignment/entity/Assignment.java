@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.assignment.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
+import com.owlexa.owlexabackend.common.assessment_document.AssessmentDocumentFormat;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
@@ -64,6 +65,11 @@ public class Assignment implements TenantAware {
     private AssessmentType type;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "document_format", nullable = false)
+    @Builder.Default
+    private AssessmentDocumentFormat documentFormat = AssessmentDocumentFormat.LEGACY;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AssignmentStatus status;
 
@@ -72,6 +78,10 @@ public class Assignment implements TenantAware {
 
     @Column(columnDefinition = "LONGTEXT")
     private String description;
+
+    @Column(name = "content_json", nullable = false, columnDefinition = "LONGTEXT")
+    @Builder.Default
+    private String contentJson = "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}";
 
     @Column(name = "open_at")
     private Instant openAt;

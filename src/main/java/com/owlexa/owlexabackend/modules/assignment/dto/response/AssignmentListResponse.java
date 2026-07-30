@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 
@@ -21,6 +22,7 @@ public class AssignmentListResponse {
     private AssignmentStatus status;
     private String title;
     private String description;
+    private JsonNode content;
     private Instant openAt;
     private Instant dueAt;
     private Integer attemptLimit;

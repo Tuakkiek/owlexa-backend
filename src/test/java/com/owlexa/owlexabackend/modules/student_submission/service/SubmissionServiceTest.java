@@ -152,7 +152,35 @@ class SubmissionServiceTest {
         assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.IN_PROGRESS);
         assertThat(response.getAssignmentTitleSnapshot()).isEqualTo("Homework 1");
         assertThat(response.getAssignmentTypeSnapshot()).isEqualTo(AssessmentType.HOMEWORK);
+        assertThat(response.getAssignmentContent().toString()).contains("PART 3");
+        assertThat(response.getAssignmentContent().toString()).contains("Directions");
         verify(submissionAttemptRepository).save(any(SubmissionAttempt.class));
+    }
+
+    @Test
+    @DisplayName("student attempt response: excludes teacher-only question fields")
+    void studentAttemptResponse_shouldExcludeTeacherOnlyQuestionFields() throws Exception {
+        Assignment assignment = activeAssignment(null, null, null);
+        AssignmentItem item = assignment.getItems().get(0);
+        item.setExplanationJson(serializedDocument("Teacher explanation"));
+        item.setSampleAnswerJson(serializedDocument("Expected answer"));
+        item.setGradingCriteriaName("Teacher rubric");
+        item.setGradingCriteriaContentJson(serializedDocument("Rubric details"));
+        SubmissionAttempt attempt = attempt(recipient(assignment), SubmissionAttemptStatus.IN_PROGRESS, 1);
+
+        StudentAttemptDetailResponse response = new SubmissionMapper(
+                new RichTextDocumentService(new ObjectMapper()),
+                new FileMapper()
+        ).toStudentAttemptDetailResponse(attempt);
+
+        String json = new ObjectMapper().writeValueAsString(response);
+
+        assertThat(json)
+                .doesNotContain("explanation")
+                .doesNotContain("sampleAnswer")
+                .doesNotContain("gradingCriteria")
+                .doesNotContain("isCorrect")
+                .contains("assignmentItemId", "displayOrder", "options");
     }
 
     @Test
@@ -380,6 +408,7 @@ class SubmissionServiceTest {
                 .type(AssessmentType.HOMEWORK)
                 .status(AssignmentStatus.ACTIVE)
                 .title("Homework 1")
+                .contentJson(serializedDocument("PART 3\n\nDirections: You will hear some conversations."))
                 .openAt(openAt)
                 .dueAt(dueAt)
                 .attemptLimit(attemptLimit)

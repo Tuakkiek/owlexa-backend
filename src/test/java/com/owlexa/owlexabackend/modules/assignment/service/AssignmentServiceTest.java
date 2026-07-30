@@ -240,6 +240,9 @@ class AssignmentServiceTest {
 
         assertThat(response.getStatus()).isEqualTo(AssignmentStatus.ACTIVE);
         assertThat(response.getAssessmentSnapshotAt()).isNotNull();
+        assertThat(response.getContent().toString()).contains("PART 3");
+        assertThat(response.getContent().toString()).contains("Directions");
+        assertThat(assignment.getContentJson()).contains("PART 3");
         assertThat(response.getItems()).hasSize(1);
         assertThat(response.getItems().get(0).getOptions()).hasSize(2);
         assertThat(response.getRecipients()).hasSize(2);
@@ -501,6 +504,7 @@ class AssignmentServiceTest {
                 .status(status)
                 .title("Assessment")
                 .description("Assessment description")
+                .contentJson(serializedDocument("PART 3\n\nDirections: You will hear some conversations."))
                 .createdBy(teacher)
                 .updatedBy(teacher)
                 .items(new ArrayList<>())

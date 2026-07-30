@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,6 +25,7 @@ public class StudentAttemptDetailResponse {
     private Long assignmentRecipientId;
     private String assignmentTitleSnapshot;
     private AssessmentType assignmentTypeSnapshot;
+    private JsonNode assignmentContent;
     private SubmissionAttemptStatus status;
     private Integer attemptNumber;
     private Instant startedAt;
@@ -33,6 +35,6 @@ public class StudentAttemptDetailResponse {
     private BigDecimal maxScore;
     private FileResponse audioFile;
     private PlaybackMode playbackMode;
-    private List<SubmissionAttemptItemResponse> items;
+    private List<StudentAttemptItemResponse> items;
     private List<SubmissionAnswerResponse> answers;
 }

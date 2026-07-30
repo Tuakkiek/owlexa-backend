@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.assessment_builder.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
+import com.owlexa.owlexabackend.common.assessment_document.AssessmentDocumentFormat;
 import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -19,10 +20,13 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
@@ -55,6 +59,11 @@ public class Assessment implements TenantAware {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AssessmentType type;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "document_format", nullable = false)
+    @Builder.Default
+    private AssessmentDocumentFormat documentFormat = AssessmentDocumentFormat.LEGACY;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -101,6 +110,12 @@ public class Assessment implements TenantAware {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @Version
+    @Column(nullable = false)
+    @Builder.Default
+    @Setter(AccessLevel.NONE)
+    private Long version = 0L;
 
     @Override
     public Long getCenterId() {
