@@ -1,6 +1,5 @@
 package com.owlexa.owlexabackend.modules.assignment.dto.response;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +17,6 @@ public class AssignmentListResponse {
 
     private Long id;
     private Long assessmentId;
-    private AssessmentType type;
     private AssignmentStatus status;
     private String title;
     private String description;

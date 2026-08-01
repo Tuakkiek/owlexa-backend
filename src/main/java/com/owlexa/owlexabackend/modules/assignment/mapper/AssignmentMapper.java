@@ -3,6 +3,7 @@ package com.owlexa.owlexabackend.modules.assignment.mapper;
 import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
+import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentBlockResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentItemOptionResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentItemResponse;
@@ -36,7 +37,6 @@ public class AssignmentMapper {
         return AssignmentListResponse.builder()
                 .id(assignment.getId())
                 .assessmentId(assignment.getAssessment().getId())
-                .type(assignment.getType())
                 .status(assignment.getStatus())
                 .title(assignment.getTitle())
                 .description(assignment.getDescription())
@@ -54,7 +54,6 @@ public class AssignmentMapper {
         return AssignmentDetailResponse.builder()
                 .id(assignment.getId())
                 .assessmentId(assignment.getAssessment().getId())
-                .type(assignment.getType())
                 .status(assignment.getStatus())
                 .title(assignment.getTitle())
                 .description(assignment.getDescription())
@@ -62,15 +61,33 @@ public class AssignmentMapper {
                 .openAt(assignment.getOpenAt())
                 .dueAt(assignment.getDueAt())
                 .attemptLimit(assignment.getAttemptLimit())
+                .showScore(assignment.getShowScore())
+                .allowReview(assignment.getAllowReview())
+                .accessPassword(assignment.getAccessPassword())
+                .hasPassword(assignment.getAccessPassword() != null && !assignment.getAccessPassword().isBlank())
                 .assessmentSnapshotAt(assignment.getAssessmentSnapshotAt())
-                .audioFile(toFileResponse(assignment.getAudioFile()))
-                .playbackMode(assignment.getPlaybackMode())
                 .targets(toTargetResponses(assignment.getTargets()))
                 .recipients(toRecipientResponses(assignment.getRecipients()))
                 .items(toItemResponses(assignment.getItems()))
+                .blocks(toBlockResponses(assignment.getBlocks()))
                 .createdAt(assignment.getCreatedAt())
                 .updatedAt(assignment.getUpdatedAt())
                 .build();
+    }
+
+    private List<AssignmentBlockResponse> toBlockResponses(
+            List<com.owlexa.owlexabackend.modules.assignment.entity.AssignmentContentBlock> blocks
+    ) {
+        if (blocks == null) return List.of();
+        return blocks.stream()
+                .sorted(Comparator.comparing(com.owlexa.owlexabackend.modules.assignment.entity.AssignmentContentBlock::getPosition))
+                .map(block -> AssignmentBlockResponse.builder()
+                        .id(block.getId())
+                        .position(block.getPosition())
+                        .title(block.getTitle())
+                        .content(richTextDocumentService.deserialize(block.getContentJson()))
+                        .build())
+                .toList();
     }
 
     public StudentAssignmentListResponse toStudentListResponse(AssignmentRecipient recipient) {
@@ -78,7 +95,6 @@ public class AssignmentMapper {
         return StudentAssignmentListResponse.builder()
                 .id(assignment.getId())
                 .recipientId(recipient.getId())
-                .type(assignment.getType())
                 .status(assignment.getStatus())
                 .recipientStatus(recipient.getStatus())
                 .title(assignment.getTitle())
@@ -86,6 +102,9 @@ public class AssignmentMapper {
                 .openAt(assignment.getOpenAt())
                 .dueAt(assignment.getDueAt())
                 .attemptLimit(assignment.getAttemptLimit())
+                .showScore(assignment.getShowScore())
+                .allowReview(assignment.getAllowReview())
+                .hasPassword(assignment.getAccessPassword() != null && !assignment.getAccessPassword().isBlank())
                 .assignedAt(recipient.getAssignedAt())
                 .build();
     }

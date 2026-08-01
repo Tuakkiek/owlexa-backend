@@ -1,6 +1,6 @@
 package com.owlexa.owlexabackend.modules.student_submission.dto.response;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
+import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentBlockResponse;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
@@ -30,7 +30,6 @@ public class TeacherAttemptDetailResponse {
     private AssignmentTargetType sourceType;
     private AssignmentRecipientStatus recipientStatus;
     private String assignmentTitleSnapshot;
-    private AssessmentType assignmentTypeSnapshot;
     private JsonNode assignmentContent;
     private SubmissionAttemptStatus status;
     private Integer attemptNumber;
@@ -41,4 +40,5 @@ public class TeacherAttemptDetailResponse {
     private BigDecimal maxScore;
     private List<SubmissionAttemptItemResponse> items;
     private List<SubmissionAnswerResponse> answers;
+    private List<AssignmentBlockResponse> blocks;
 }

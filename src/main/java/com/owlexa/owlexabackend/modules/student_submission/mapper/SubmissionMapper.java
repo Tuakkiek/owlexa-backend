@@ -5,9 +5,11 @@ import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItemOption;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
+
 import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
 import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
+import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentBlockResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptSummaryResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptItemResponse;
@@ -19,10 +21,12 @@ import com.owlexa.owlexabackend.modules.student_submission.dto.response.TeacherS
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnswer;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnswerOption;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
+import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 
@@ -42,6 +46,7 @@ public class SubmissionMapper {
                 .lastSavedAt(attempt.getLastSavedAt())
                 .submittedAt(attempt.getSubmittedAt())
                 .autoScore(attempt.getAutoScore())
+                .displayedScore(attempt.getAutoScore())
                 .maxScore(attempt.getMaxScore())
                 .build();
     }
@@ -49,31 +54,42 @@ public class SubmissionMapper {
     public StudentAttemptDetailResponse toStudentAttemptDetailResponse(SubmissionAttempt attempt) {
         AssignmentRecipient recipient = attempt.getAssignmentRecipient();
         Assignment assignment = recipient.getAssignment();
+
+        boolean showScore = assignment.getShowScore() == null || assignment.getShowScore();
+        boolean allowReview = assignment.getAllowReview() == null || assignment.getAllowReview();
+        boolean hasPassword = assignment.getAccessPassword() != null && !assignment.getAccessPassword().isBlank();
+
         return StudentAttemptDetailResponse.builder()
                 .id(attempt.getId())
                 .assignmentId(assignment.getId())
                 .assignmentRecipientId(recipient.getId())
                 .assignmentTitleSnapshot(attempt.getAssignmentTitleSnapshot())
-                .assignmentTypeSnapshot(attempt.getAssignmentTypeSnapshot())
+
                 .assignmentContent(richTextDocumentService.deserialize(assignment.getContentJson()))
                 .status(attempt.getStatus())
                 .attemptNumber(attempt.getAttemptNumber())
                 .startedAt(attempt.getStartedAt())
                 .lastSavedAt(attempt.getLastSavedAt())
                 .submittedAt(attempt.getSubmittedAt())
-                .autoScore(attempt.getAutoScore())
-                .maxScore(attempt.getMaxScore())
+                .autoScore(showScore ? attempt.getAutoScore() : null)
+                .maxScore(showScore ? attempt.getMaxScore() : null)
                 .audioFile(toFileResponse(assignment.getAudioFile()))
                 .playbackMode(assignment.getPlaybackMode())
                 .items(toStudentItemResponses(assignment.getItems()))
-                .answers(toAnswerResponses(attempt.getAnswers()))
+                .answers((allowReview || attempt.getStatus() == SubmissionAttemptStatus.IN_PROGRESS) ? toAnswerResponses(attempt.getAnswers()) : List.of())
+                .blocks(toBlockResponses(assignment.getBlocks()))
+                .showScore(showScore)
+                .allowReview(allowReview)
+                .hasPassword(hasPassword)
                 .build();
     }
 
     public TeacherSubmissionSummaryResponse toTeacherSubmissionSummaryResponse(
             AssignmentRecipient recipient,
             SubmissionAttempt latestAttempt,
-            long attemptsCount
+            long attemptsCount,
+            BigDecimal latestFinalScore,
+            Boolean isGraded
     ) {
         User student = recipient.getStudentUser();
         com.owlexa.owlexabackend.modules.class_management.entity.Class clazz = recipient.getClazz();
@@ -92,6 +108,8 @@ public class SubmissionMapper {
                 .latestStartedAt(latestAttempt == null ? null : latestAttempt.getStartedAt())
                 .latestSubmittedAt(latestAttempt == null ? null : latestAttempt.getSubmittedAt())
                 .latestAutoScore(latestAttempt == null ? null : latestAttempt.getAutoScore())
+                .latestFinalScore(latestFinalScore)
+                .isGraded(isGraded)
                 .maxScore(latestAttempt == null ? null : latestAttempt.getMaxScore())
                 .attemptsCount(attemptsCount)
                 .build();
@@ -114,7 +132,7 @@ public class SubmissionMapper {
                 .sourceType(recipient.getSourceType())
                 .recipientStatus(recipient.getStatus())
                 .assignmentTitleSnapshot(attempt.getAssignmentTitleSnapshot())
-                .assignmentTypeSnapshot(attempt.getAssignmentTypeSnapshot())
+
                 .assignmentContent(richTextDocumentService.deserialize(assignment.getContentJson()))
                 .status(attempt.getStatus())
                 .attemptNumber(attempt.getAttemptNumber())
@@ -125,7 +143,23 @@ public class SubmissionMapper {
                 .maxScore(attempt.getMaxScore())
                 .items(toItemResponses(assignment.getItems()))
                 .answers(toAnswerResponses(attempt.getAnswers()))
+                .blocks(toBlockResponses(assignment.getBlocks()))
                 .build();
+    }
+
+    private List<AssignmentBlockResponse> toBlockResponses(
+            List<com.owlexa.owlexabackend.modules.assignment.entity.AssignmentContentBlock> blocks
+    ) {
+        if (blocks == null) return List.of();
+        return blocks.stream()
+                .sorted(Comparator.comparing(com.owlexa.owlexabackend.modules.assignment.entity.AssignmentContentBlock::getPosition))
+                .map(block -> AssignmentBlockResponse.builder()
+                        .id(block.getId())
+                        .position(block.getPosition())
+                        .title(block.getTitle())
+                        .content(richTextDocumentService.deserialize(block.getContentJson()))
+                        .build())
+                .toList();
     }
 
     private List<SubmissionAttemptItemResponse> toItemResponses(List<AssignmentItem> items) {

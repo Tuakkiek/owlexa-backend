@@ -1,6 +1,5 @@
 package com.owlexa.owlexabackend.modules.assignment.controller;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentRequest;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentListResponse;
@@ -34,12 +33,11 @@ public class TeacherAssignmentController {
     @GetMapping
     public Page<AssignmentListResponse> findAll(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) AssessmentType type,
             @RequestParam(required = false) AssignmentStatus status,
             @RequestParam(required = false) Long classId,
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return assignmentService.findAllForTeacher(search, type, status, classId, pageable);
+        return assignmentService.findAllForTeacher(search, status, classId, pageable);
     }
 
     @GetMapping("/{assignmentId}")
@@ -74,6 +72,11 @@ public class TeacherAssignmentController {
     @PostMapping("/{assignmentId}/archive")
     public AssignmentDetailResponse archive(@PathVariable Long assignmentId) {
         return assignmentService.archive(assignmentId);
+    }
+
+    @PostMapping("/{assignmentId}/restore")
+    public AssignmentDetailResponse restore(@PathVariable Long assignmentId) {
+        return assignmentService.restore(assignmentId);
     }
 
     @DeleteMapping("/{assignmentId}")

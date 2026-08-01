@@ -1,6 +1,5 @@
 package com.owlexa.owlexabackend.modules.student_submission.entity;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -52,10 +51,6 @@ public class SubmissionAttempt {
 
     @Column(name = "assignment_title_snapshot", nullable = false)
     private String assignmentTitleSnapshot;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "assignment_type_snapshot", nullable = false)
-    private AssessmentType assignmentTypeSnapshot;
 
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;

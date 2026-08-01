@@ -4,6 +4,7 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
+
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentItemRequest;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentRequest;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentDetailResponse;
@@ -12,7 +13,6 @@ import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.mapper.AssessmentMapper;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
 import com.owlexa.owlexabackend.modules.grading_criteria.entity.GradingCriteria;
@@ -53,6 +53,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import tools.jackson.databind.ObjectMapper;
@@ -168,7 +169,6 @@ class AssessmentServiceTest {
 
         AssessmentRequest request = AssessmentRequest.builder()
                 .title("Essay Exam")
-                .type(AssessmentType.EXAM)
                 .items(List.of(item(ESSAY_QUESTION_ID, null, 1)))
                 .build();
 
@@ -187,7 +187,6 @@ class AssessmentServiceTest {
     void create_whenDuplicateQuestionIds_shouldThrowBadRequest() {
         AssessmentRequest request = AssessmentRequest.builder()
                 .title("Quiz")
-                .type(AssessmentType.QUIZ)
                 .items(List.of(
                         item(QUESTION_ID, null, 1),
                         item(QUESTION_ID, null, 2)
@@ -203,7 +202,6 @@ class AssessmentServiceTest {
     void create_whenDuplicateDisplayOrders_shouldThrowBadRequest() {
         AssessmentRequest request = AssessmentRequest.builder()
                 .title("Quiz")
-                .type(AssessmentType.QUIZ)
                 .items(List.of(
                         item(QUESTION_ID, null, 1),
                         item(ESSAY_QUESTION_ID, null, 1)
@@ -237,7 +235,6 @@ class AssessmentServiceTest {
 
         AssessmentRequest request = AssessmentRequest.builder()
                 .title("Updated Assessment")
-                .type(AssessmentType.HOMEWORK)
                 .items(List.of(item(ESSAY_QUESTION_ID, BigDecimal.TEN, 1)))
                 .build();
 
@@ -249,6 +246,7 @@ class AssessmentServiceTest {
         assertThat(response.getItems().get(0).getQuestionType()).isEqualTo(QuestionType.ESSAY);
         assertThat(response.getItems().get(0).getPoints()).isEqualByComparingTo("10.00");
     }
+
 
     @Test
     @DisplayName("publish: draft assessment with items becomes published")
@@ -263,6 +261,7 @@ class AssessmentServiceTest {
         assertThat(response.getStatus()).isEqualTo(AssessmentStatus.PUBLISHED);
         assertThat(assessment.getUpdatedBy()).isEqualTo(teacher);
     }
+
 
     @Test
     @DisplayName("publish: draft assessment without items throws BadRequestException")
@@ -336,7 +335,6 @@ class AssessmentServiceTest {
 
         Page<AssessmentListResponse> response = service.findAll(
                 "quiz",
-                AssessmentType.QUIZ,
                 AssessmentStatus.DRAFT,
                 pageable
         );
@@ -389,7 +387,6 @@ class AssessmentServiceTest {
         return AssessmentRequest.builder()
                 .title("Quiz")
                 .description("Short quiz")
-                .type(AssessmentType.QUIZ)
                 .items(List.of(item(QUESTION_ID, points, 1)))
                 .build();
     }
@@ -406,7 +403,6 @@ class AssessmentServiceTest {
         Assessment assessment = Assessment.builder()
                 .id(ASSESSMENT_ID)
                 .center(center)
-                .type(AssessmentType.QUIZ)
                 .status(status)
                 .title("Assessment")
                 .description("Description")
@@ -498,11 +494,11 @@ class AssessmentServiceTest {
         return question;
     }
 
-    private Question buildQuestion(Long questionId, QuestionType type) {
+    private Question buildQuestion(Long questionId, QuestionType questionType) {
         return Question.builder()
                 .id(questionId)
                 .center(center)
-                .type(type)
+                .type(questionType)
                 .contentJson(serializedDocument("Question content"))
                 .difficulty(QuestionDifficulty.EASY)
                 .points(BigDecimal.ONE)

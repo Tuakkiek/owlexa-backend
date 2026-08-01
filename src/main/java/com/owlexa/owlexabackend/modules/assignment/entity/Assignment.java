@@ -2,9 +2,7 @@ package com.owlexa.owlexabackend.modules.assignment.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
-import com.owlexa.owlexabackend.common.assessment_document.AssessmentDocumentFormat;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
@@ -22,6 +20,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -62,15 +61,6 @@ public class Assignment implements TenantAware {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private AssessmentType type;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "document_format", nullable = false)
-    @Builder.Default
-    private AssessmentDocumentFormat documentFormat = AssessmentDocumentFormat.LEGACY;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private AssignmentStatus status;
 
     @Column(nullable = false)
@@ -91,6 +81,17 @@ public class Assignment implements TenantAware {
 
     @Column(name = "attempt_limit")
     private Integer attemptLimit;
+
+    @Column(name = "show_score", nullable = false)
+    @Builder.Default
+    private Boolean showScore = true;
+
+    @Column(name = "allow_review", nullable = false)
+    @Builder.Default
+    private Boolean allowReview = true;
+
+    @Column(name = "access_password")
+    private String accessPassword;
 
     @Column(name = "assessment_snapshot_at")
     private Instant assessmentSnapshotAt;
@@ -123,6 +124,12 @@ public class Assignment implements TenantAware {
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<AssignmentItem> items = new ArrayList<>();
+
+    @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @jakarta.persistence.OrderBy("position ASC")
+    @Builder.Default
+    private List<AssignmentContentBlock> blocks = new ArrayList<>();
+
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

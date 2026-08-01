@@ -1,7 +1,7 @@
 package com.owlexa.owlexabackend.modules.student_submission.dto.response;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
+import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentBlockResponse;
 import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import lombok.AllArgsConstructor;
@@ -24,7 +24,6 @@ public class StudentAttemptDetailResponse {
     private Long assignmentId;
     private Long assignmentRecipientId;
     private String assignmentTitleSnapshot;
-    private AssessmentType assignmentTypeSnapshot;
     private JsonNode assignmentContent;
     private SubmissionAttemptStatus status;
     private Integer attemptNumber;
@@ -37,4 +36,9 @@ public class StudentAttemptDetailResponse {
     private PlaybackMode playbackMode;
     private List<StudentAttemptItemResponse> items;
     private List<SubmissionAnswerResponse> answers;
+    private List<AssignmentBlockResponse> blocks;
+    private Boolean showScore;
+    private Boolean allowReview;
+    private Boolean hasPassword;
+    private StudentAIGradingResultResponse aiResult;
 }

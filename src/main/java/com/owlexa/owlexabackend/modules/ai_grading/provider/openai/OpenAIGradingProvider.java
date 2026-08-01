@@ -1,30 +1,40 @@
 package com.owlexa.owlexabackend.modules.ai_grading.provider.openai;
 
 import com.owlexa.owlexabackend.modules.ai_grading.config.AIGradingProperties;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingCriterionOutput;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingImprovementOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIModelProvider;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingProvider;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingProviderException;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProviderRequest;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProviderResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
+import java.io.IOException;
 import java.net.http.HttpClient;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Component
 public class OpenAIGradingProvider implements AIGradingProvider {
 
     private static final String RESPONSES_PATH = "/v1/responses";
+    private static final int RETRY_MAX_TOKENS_CAP = 16000;
+    private static final int RETRY_MAX_TOKENS_INCREMENT = 2000;
 
     private final AIGradingProperties properties;
     private final ObjectMapper objectMapper;
@@ -64,60 +74,144 @@ public class OpenAIGradingProvider implements AIGradingProvider {
             throw new AIGradingProviderException("OpenAI API key is not configured");
         }
 
-        try {
-            String rawResponse = restClient.post()
-                    .uri(RESPONSES_PATH)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .headers(headers -> headers.setBearerAuth(properties.getApiKey()))
-                    .body(buildRequestBody(request))
-                    .retrieve()
-                    .body(String.class);
+        return gradeInternal(request, true);
+    }
 
-            if (rawResponse == null || rawResponse.isBlank()) {
-                throw new AIGradingProviderException("OpenAI returned an empty response");
+    private String resolveEndpointPath() {
+        String baseUrl = properties.getBaseUrl();
+        if (baseUrl != null && (baseUrl.endsWith("/v1") || baseUrl.endsWith("/v1/"))) {
+            return "/chat/completions";
+        }
+        return "/v1/chat/completions";
+    }
+
+    private AIGradingProviderResponse gradeInternal(AIGradingProviderRequest request, boolean allowRetry) {
+        String requestBody = buildRequestBody(request);
+        String endpointPath = resolveEndpointPath();
+        log.info(
+                "AI grading HTTP request prepared: provider={}, baseUrl={}, endpoint={}, model={}, maxTokens={}, temperature={}, systemPromptLength={}, userPromptLength={}, payloadLength={}",
+                provider(),
+                properties.getBaseUrl(),
+                endpointPath,
+                request.modelName(),
+                request.maxTokens(),
+                request.temperature(),
+                request.systemPrompt().length(),
+                request.userPrompt().length(),
+                requestBody.length()
+        );
+
+        try {
+            AtomicInteger responseStatus = new AtomicInteger();
+            String rawResponse = restClient.post()
+                    .uri(endpointPath)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .headers(headers -> {
+                        headers.setBearerAuth(properties.getApiKey());
+                        headers.set(HttpHeaders.ACCEPT_ENCODING, "identity");
+                    })
+                    .body(requestBody)
+                    .exchange((clientRequest, clientResponse) -> {
+                        responseStatus.set(clientResponse.getStatusCode().value());
+                        String responseBody;
+                        try {
+                            responseBody = StreamUtils.copyToString(
+                                    clientResponse.getBody(),
+                                    StandardCharsets.UTF_8
+                            );
+                        } catch (IOException exception) {
+                            throw new RestClientException("Unable to read AI provider response body", exception);
+                        }
+                        return responseBody;
+                    });
+
+            if (responseStatus.get() >= 400) {
+                log.warn(
+                        "AI grading HTTP status failure: provider={}, model={}, status={}, responsePreview={}",
+                        provider(),
+                        request.modelName(),
+                        responseStatus.get(),
+                        preview(rawResponse)
+                );
+                throw new AIGradingProviderException(
+                        "AI provider request failed with status " + responseStatus.get()
+                );
             }
 
-            AIGradingOutput output = resultParser.parse(rawResponse);
-            return new AIGradingProviderResponse(output, rawResponse);
-        } catch (AIGradingProviderException exception) {
-            throw exception;
-        } catch (RestClientResponseException exception) {
-            throw new AIGradingProviderException(
-                    "OpenAI request failed with status " + exception.getStatusCode().value(),
+            if (rawResponse == null || rawResponse.isBlank()) {
+                throw new AIGradingProviderException("AI provider returned an empty response");
+            }
+
+            log.info(
+                    "AI grading HTTP response received: provider={}, model={}, rawResponseLength={}, responsePreview={}",
+                    provider(),
+                    request.modelName(),
+                    rawResponse.length(),
+                    preview(rawResponse)
+            );
+
+            try {
+                AIGradingOutput output = resultParser.parse(rawResponse);
+                return new AIGradingProviderResponse(output, rawResponse);
+            } catch (AIGradingProviderException exception) {
+                if (allowRetry && isRetryableMaxOutputFailure(rawResponse)) {
+                    AIGradingProviderRequest retriedRequest = expandMaxTokens(request);
+                    if (retriedRequest.maxTokens() != null && !retriedRequest.maxTokens().equals(request.maxTokens())) {
+                        log.warn(
+                                "AI grading response was truncated; retrying once with a larger output budget: provider={}, model={}, originalMaxTokens={}, retryMaxTokens={}",
+                                provider(),
+                                request.modelName(),
+                                request.maxTokens(),
+                                retriedRequest.maxTokens()
+                        );
+                        return gradeInternal(retriedRequest, false);
+                    }
+                }
+
+                log.warn(
+                        "AI grading provider-level failure: provider={}, model={}, error={}",
+                        provider(),
+                        request.modelName(),
+                        exception.getMessage()
+                );
+                throw exception;
+            }
+        } catch (RestClientException exception) {
+            log.warn(
+                    "AI grading transport failure: provider={}, model={}, error={}",
+                    provider(),
+                    request.modelName(),
+                    exception.getMessage(),
                     exception
             );
-        } catch (RestClientException exception) {
-            throw new AIGradingProviderException("OpenAI request failed", exception);
+            throw new AIGradingProviderException("AI provider request failed", exception);
         }
     }
 
     private String buildRequestBody(AIGradingProviderRequest request) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", request.modelName());
-        root.put("store", false);
-        root.put("max_output_tokens", request.maxTokens());
+        root.put("max_tokens", request.maxTokens());
         if (request.temperature() != null) {
             root.put("temperature", request.temperature());
         }
 
-        ArrayNode input = root.putArray("input");
-        input.addObject()
+        ArrayNode messages = root.putArray("messages");
+        messages.addObject()
                 .put("role", "system")
                 .put("content", request.systemPrompt());
-        input.addObject()
+        messages.addObject()
                 .put("role", "user")
                 .put("content", request.userPrompt());
 
-        ObjectNode format = root.putObject("text").putObject("format");
-        format.put("type", "json_schema");
-        format.put("name", "essay_grading_result");
-        format.put("strict", true);
-        format.set("schema", resultSchema());
+        ObjectNode responseFormat = root.putObject("response_format");
+        responseFormat.put("type", "json_object");
 
         try {
             return objectMapper.writeValueAsString(root);
         } catch (JacksonException exception) {
-            throw new AIGradingProviderException("Unable to serialize OpenAI grading request", exception);
+            throw new AIGradingProviderException("Unable to serialize AI grading request", exception);
         }
     }
 
@@ -144,7 +238,42 @@ public class OpenAIGradingProvider implements AIGradingProvider {
         ObjectNode propertiesNode = objectMapper.createObjectNode();
         propertiesNode.set("summary", stringSchema());
         propertiesNode.set("overallFeedback", stringSchema());
+        propertiesNode.set("focusArea", stringSchema());
         propertiesNode.set("confidence", numberSchema(0, 1));
+
+        ObjectNode criterionProperties = objectMapper.createObjectNode();
+        criterionProperties.set("name", stringSchema());
+        criterionProperties.set("score", numberSchema(0, null));
+        criterionProperties.set("maxScore", numberSchema(0, null));
+        criterionProperties.set("feedback", stringSchema());
+
+        ObjectNode criterionSchema = objectMapper.createObjectNode();
+        criterionSchema.put("type", "object");
+        criterionSchema.set("properties", criterionProperties);
+        criterionSchema.set("required", requiredArray("name", "score", "maxScore", "feedback"));
+        criterionSchema.put("additionalProperties", false);
+
+        ObjectNode criteriaArraySchema = objectMapper.createObjectNode();
+        criteriaArraySchema.put("type", "array");
+        criteriaArraySchema.set("items", criterionSchema);
+        propertiesNode.set("criteria", criteriaArraySchema);
+
+        ObjectNode improvementProperties = objectMapper.createObjectNode();
+        improvementProperties.set("category", stringSchema());
+        improvementProperties.set("issue", stringSchema());
+        improvementProperties.set("suggestion", stringSchema());
+        improvementProperties.set("example", stringSchema());
+
+        ObjectNode improvementSchema = objectMapper.createObjectNode();
+        improvementSchema.put("type", "object");
+        improvementSchema.set("properties", improvementProperties);
+        improvementSchema.set("required", requiredArray("category", "issue", "suggestion", "example"));
+        improvementSchema.put("additionalProperties", false);
+
+        ObjectNode improvementsArraySchema = objectMapper.createObjectNode();
+        improvementsArraySchema.put("type", "array");
+        improvementsArraySchema.set("items", improvementSchema);
+        propertiesNode.set("improvements", improvementsArraySchema);
 
         ObjectNode itemsArraySchema = objectMapper.createObjectNode();
         itemsArraySchema.put("type", "array");
@@ -154,7 +283,15 @@ public class OpenAIGradingProvider implements AIGradingProvider {
         ObjectNode schema = objectMapper.createObjectNode();
         schema.put("type", "object");
         schema.set("properties", propertiesNode);
-        schema.set("required", requiredArray("summary", "overallFeedback", "confidence", "items"));
+        schema.set("required", requiredArray(
+                "summary",
+                "overallFeedback",
+                "focusArea",
+                "confidence",
+                "criteria",
+                "improvements",
+                "items"
+        ));
         schema.put("additionalProperties", false);
         return schema;
     }
@@ -186,5 +323,45 @@ public class OpenAIGradingProvider implements AIGradingProvider {
             required.add(name);
         }
         return required;
+    }
+
+    private boolean isRetryableMaxOutputFailure(String rawResponse) {
+        try {
+            ObjectNode response = (ObjectNode) objectMapper.readTree(rawResponse);
+            return "incomplete".equals(response.path("status").asText())
+                    && "max_output_tokens".equals(response.path("incomplete_details").path("reason").asText());
+        } catch (JacksonException exception) {
+            return false;
+        }
+    }
+
+    private AIGradingProviderRequest expandMaxTokens(AIGradingProviderRequest request) {
+        if (request.maxTokens() == null || request.maxTokens() <= 0) {
+            return request;
+        }
+
+        int expandedMaxTokens = Math.min(
+                RETRY_MAX_TOKENS_CAP,
+                Math.max(request.maxTokens() * 2, request.maxTokens() + RETRY_MAX_TOKENS_INCREMENT)
+        );
+        if (expandedMaxTokens <= request.maxTokens()) {
+            return request;
+        }
+
+        return new AIGradingProviderRequest(
+                request.modelName(),
+                request.temperature(),
+                expandedMaxTokens,
+                request.systemPrompt(),
+                request.userPrompt()
+        );
+    }
+
+    private String preview(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String normalized = value.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= 300 ? normalized : normalized.substring(0, 300);
     }
 }

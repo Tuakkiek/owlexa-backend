@@ -5,7 +5,6 @@ import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 import com.owlexa.owlexabackend.modules.file.mapper.FileMapper;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItemOption;
@@ -13,7 +12,14 @@ import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJob;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.openai.OpenAIGradingResultParser;
+import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
+import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingOutputReader;
+import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingService;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SaveSubmissionAnswersRequest;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SubmissionAnswerRequest;
@@ -25,6 +31,7 @@ import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAtte
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import com.owlexa.owlexabackend.modules.student_submission.mapper.SubmissionMapper;
 import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
+import com.owlexa.owlexabackend.modules.teacher_review.repository.TeacherReviewRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -52,6 +59,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -65,6 +73,9 @@ class SubmissionServiceTest {
     @Mock private SubmissionAttemptRepository submissionAttemptRepository;
     @Mock private AuthorizationService authorizationService;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private AIGradingResultRepository aiGradingResultRepository;
+    @Mock private AIGradingService aiGradingService;
+    @Mock private TeacherReviewRepository teacherReviewRepository;
 
     private SubmissionService service;
 
@@ -86,12 +97,21 @@ class SubmissionServiceTest {
 
     @BeforeEach
     void setUp() {
+        RichTextDocumentService documentService = new RichTextDocumentService(new ObjectMapper());
+        FileMapper fileMapper = new FileMapper();
         service = new SubmissionService(
                 assignmentRecipientRepository,
                 submissionAttemptRepository,
                 authorizationService,
                 membershipRepository,
-                new SubmissionMapper(new RichTextDocumentService(new ObjectMapper()), new FileMapper())
+                new SubmissionMapper(
+                        documentService,
+                        fileMapper
+                ),
+                aiGradingResultRepository,
+                aiGradingService,
+                new AIGradingOutputReader(new OpenAIGradingResultParser(new ObjectMapper())),
+                teacherReviewRepository
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -121,7 +141,7 @@ class SubmissionServiceTest {
         when(submissionAttemptRepository.findByAssignmentRecipient_IdAndStatus(RECIPIENT_ID, SubmissionAttemptStatus.IN_PROGRESS))
                 .thenReturn(Optional.of(attempt));
 
-        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID);
+        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID, null);
 
         assertThat(response.getId()).isEqualTo(ATTEMPT_ID);
         assertThat(response.getAttemptNumber()).isEqualTo(1);
@@ -146,12 +166,11 @@ class SubmissionServiceTest {
             return saved;
         });
 
-        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID);
+        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID, null);
 
         assertThat(response.getAttemptNumber()).isEqualTo(1);
         assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.IN_PROGRESS);
         assertThat(response.getAssignmentTitleSnapshot()).isEqualTo("Homework 1");
-        assertThat(response.getAssignmentTypeSnapshot()).isEqualTo(AssessmentType.HOMEWORK);
         assertThat(response.getAssignmentContent().toString()).contains("PART 3");
         assertThat(response.getAssignmentContent().toString()).contains("Directions");
         verify(submissionAttemptRepository).save(any(SubmissionAttempt.class));
@@ -162,15 +181,18 @@ class SubmissionServiceTest {
     void studentAttemptResponse_shouldExcludeTeacherOnlyQuestionFields() throws Exception {
         Assignment assignment = activeAssignment(null, null, null);
         AssignmentItem item = assignment.getItems().get(0);
+
         item.setExplanationJson(serializedDocument("Teacher explanation"));
         item.setSampleAnswerJson(serializedDocument("Expected answer"));
         item.setGradingCriteriaName("Teacher rubric");
         item.setGradingCriteriaContentJson(serializedDocument("Rubric details"));
         SubmissionAttempt attempt = attempt(recipient(assignment), SubmissionAttemptStatus.IN_PROGRESS, 1);
 
+        RichTextDocumentService documentService = new RichTextDocumentService(new ObjectMapper());
+        FileMapper fileMapper = new FileMapper();
         StudentAttemptDetailResponse response = new SubmissionMapper(
-                new RichTextDocumentService(new ObjectMapper()),
-                new FileMapper()
+                documentService,
+                fileMapper
         ).toStudentAttemptDetailResponse(attempt);
 
         String json = new ObjectMapper().writeValueAsString(response);
@@ -198,7 +220,7 @@ class SubmissionServiceTest {
                 .thenReturn(Optional.of(previous));
         when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID);
+        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID, null);
 
         assertThat(response.getAttemptNumber()).isEqualTo(2);
     }
@@ -213,7 +235,7 @@ class SubmissionServiceTest {
                 .thenReturn(Optional.empty());
         when(submissionAttemptRepository.countByAssignmentRecipient_Id(RECIPIENT_ID)).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID))
+        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID, null))
                 .isInstanceOf(BadRequestException.class);
     }
 
@@ -223,7 +245,7 @@ class SubmissionServiceTest {
         when(assignmentRecipientRepository.findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
                 ASSIGNMENT_ID, STUDENT_ID, CENTER_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID))
+        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -234,7 +256,7 @@ class SubmissionServiceTest {
         when(assignmentRecipientRepository.findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
                 ASSIGNMENT_ID, STUDENT_ID, CENTER_ID)).thenReturn(Optional.of(recipient(notOpen)));
 
-        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID))
+        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID, null))
                 .isInstanceOf(BadRequestException.class);
     }
 
@@ -352,6 +374,74 @@ class SubmissionServiceTest {
     }
 
     @Test
+    @DisplayName("submit+auto-grade: commits submission then triggers automatic AI grading")
+    void submitAttemptWithAutoGrading_shouldSubmitAndTriggerAutoGrading() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        attempt.setActiveAttemptKey(RECIPIENT_ID);
+        attempt.getAnswers().add(answer(attempt, mcItem(assignment), CORRECT_OPTION_ID));
+        attempt.getAnswers().add(essayAnswer(attempt, essayItem(assignment), "My essay"));
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiGradingService.autoGradeOnSubmit(ATTEMPT_ID, CENTER_ID, STUDENT_ID)).thenReturn(true);
+        when(aiGradingResultRepository.findTopBySubmissionAttempt_IdAndJob_StatusOrderByCreatedAtDesc(
+                ATTEMPT_ID,
+                AIGradingJobStatus.COMPLETED
+        )).thenReturn(Optional.of(completedAiResult(attempt, "4.00")));
+
+        StudentAttemptDetailResponse response = service.submitAttemptWithAutoGrading(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.SUBMITTED);
+        assertThat(response.getAutoScore()).isEqualByComparingTo("2.00");
+        assertThat(response.getAiResult()).isNotNull();
+        assertThat(response.getAiResult().getAiScore()).isEqualByComparingTo("4.00");
+        verify(aiGradingService).autoGradeOnSubmit(ATTEMPT_ID, CENTER_ID, STUDENT_ID);
+    }
+
+    @Test
+    @DisplayName("submit+auto-grade: AI grading failure does not block the submission")
+    void submitAttemptWithAutoGrading_whenAiGradingThrows_shouldStillSubmit() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        attempt.setActiveAttemptKey(RECIPIENT_ID);
+        attempt.getAnswers().add(essayAnswer(attempt, essayItem(assignment), "My essay"));
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiGradingService.autoGradeOnSubmit(ATTEMPT_ID, CENTER_ID, STUDENT_ID))
+                .thenThrow(new RuntimeException("AI provider unavailable"));
+
+        StudentAttemptDetailResponse response = service.submitAttemptWithAutoGrading(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("submit+auto-grade: blank essay still creates a placeholder answer and triggers AI grading")
+    void submitAttemptWithAutoGrading_whenEssayLeftBlank_shouldStillTriggerAutoGrading() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        attempt.setActiveAttemptKey(RECIPIENT_ID);
+        attempt.getAnswers().add(answer(attempt, mcItem(assignment), CORRECT_OPTION_ID));
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiGradingService.autoGradeOnSubmit(ATTEMPT_ID, CENTER_ID, STUDENT_ID)).thenReturn(true);
+
+        StudentAttemptDetailResponse response = service.submitAttemptWithAutoGrading(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.SUBMITTED);
+        assertThat(attempt.getAnswers())
+                .filteredOn(answer -> answer.getAssignmentItem().getQuestionType() == QuestionType.ESSAY)
+                .hasSize(1)
+                .first()
+                .extracting(SubmissionAnswer::getAnswerText)
+                .isNull();
+        verify(aiGradingService).autoGradeOnSubmit(ATTEMPT_ID, CENTER_ID, STUDENT_ID);
+    }
+
+    @Test
     @DisplayName("teacher submissions: includes recipients without attempts")
     void findAssignmentSubmissions_whenRecipientHasNoAttempt_shouldReturnSummaryWithoutLatestAttempt() {
         when(authorizationService.getCurrentUser()).thenReturn(teacher);
@@ -381,7 +471,7 @@ class SubmissionServiceTest {
     void startOrResume_whenCurrentUserIsNotStudent_shouldThrowAccessDenied() {
         when(authorizationService.getCurrentUser()).thenReturn(teacher);
 
-        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID))
+        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID, null))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -390,7 +480,7 @@ class SubmissionServiceTest {
     void startOrResume_whenTenantMissing_shouldThrowBadRequest() {
         TenantContext.clear();
 
-        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID))
+        assertThatThrownBy(() -> service.startOrResumeAttempt(ASSIGNMENT_ID, null))
                 .isInstanceOf(BadRequestException.class);
     }
 
@@ -405,7 +495,6 @@ class SubmissionServiceTest {
     private Assignment activeAssignment(Instant openAt, Instant dueAt, Integer attemptLimit) {
         Assignment assignment = Assignment.builder()
                 .center(center)
-                .type(AssessmentType.HOMEWORK)
                 .status(AssignmentStatus.ACTIVE)
                 .title("Homework 1")
                 .contentJson(serializedDocument("PART 3\n\nDirections: You will hear some conversations."))
@@ -438,7 +527,6 @@ class SubmissionServiceTest {
                 .status(status)
                 .attemptNumber(attemptNumber)
                 .assignmentTitleSnapshot(recipient.getAssignment().getTitle())
-                .assignmentTypeSnapshot(recipient.getAssignment().getType())
                 .startedAt(Instant.now())
                 .activeAttemptKey(status == SubmissionAttemptStatus.IN_PROGRESS ? recipient.getId() : null)
                 .answers(new ArrayList<>())
@@ -509,6 +597,25 @@ class SubmissionServiceTest {
                 .assignmentItem(item)
                 .answerText(text)
                 .selectedOptions(new ArrayList<>())
+                .build();
+    }
+
+    private AIGradingResult completedAiResult(SubmissionAttempt attempt, String aiScore) {
+        AIGradingJob job = AIGradingJob.builder()
+                .id(999L)
+                .status(AIGradingJobStatus.COMPLETED)
+                .submissionAttempt(attempt)
+                .build();
+        return AIGradingResult.builder()
+                .id(1000L)
+                .job(job)
+                .submissionAttempt(attempt)
+                .summary("AI summary")
+                .overallFeedback("AI overall feedback")
+                .aiScore(new BigDecimal(aiScore))
+                .maxScore(new BigDecimal("5.00"))
+                .confidence(new BigDecimal("0.9000"))
+                .itemResults(new ArrayList<>())
                 .build();
     }
 

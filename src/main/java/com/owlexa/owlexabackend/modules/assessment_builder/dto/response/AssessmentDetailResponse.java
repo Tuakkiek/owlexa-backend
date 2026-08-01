@@ -1,7 +1,6 @@
 package com.owlexa.owlexabackend.modules.assessment_builder.dto.response;
 
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
 import lombok.AllArgsConstructor;
@@ -20,7 +19,6 @@ import java.util.List;
 public class AssessmentDetailResponse {
 
     private Long id;
-    private AssessmentType type;
     private AssessmentStatus status;
     private String title;
     private String description;
@@ -29,6 +27,7 @@ public class AssessmentDetailResponse {
     private FileResponse audioFile;
     private PlaybackMode playbackMode;
     private List<AssessmentItemResponse> items;
+    private List<AssessmentBlockResponse> blocks;
     private Instant createdAt;
     private Instant updatedAt;
 }

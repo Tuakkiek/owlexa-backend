@@ -3,6 +3,12 @@ package com.owlexa.owlexabackend.modules.student_submission.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
+import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
+import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingOutputReader;
+import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingService;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItemOption;
@@ -12,6 +18,10 @@ import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipien
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SaveSubmissionAnswersRequest;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SubmissionAnswerRequest;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAIGradingCriterionResultResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAIGradingItemResultResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAIGradingImprovementResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAIGradingResultResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptSummaryResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.TeacherAttemptDetailResponse;
@@ -22,11 +32,14 @@ import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAtte
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import com.owlexa.owlexabackend.modules.student_submission.mapper.SubmissionMapper;
 import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
+import com.owlexa.owlexabackend.modules.teacher_review.entity.TeacherReview;
+import com.owlexa.owlexabackend.modules.teacher_review.repository.TeacherReviewRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,16 +48,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubmissionService {
@@ -56,21 +72,33 @@ public class SubmissionService {
     private final AuthorizationService authorizationService;
     private final MembershipRepository membershipRepository;
     private final SubmissionMapper submissionMapper;
+    private final AIGradingResultRepository aiGradingResultRepository;
+    private final AIGradingService aiGradingService;
+    private final AIGradingOutputReader aiGradingOutputReader;
+    private final TeacherReviewRepository teacherReviewRepository;
 
     @Transactional
-    public StudentAttemptDetailResponse startOrResumeAttempt(Long assignmentId) {
+    public StudentAttemptDetailResponse startOrResumeAttempt(Long assignmentId, com.owlexa.owlexabackend.modules.student_submission.dto.request.StartAttemptRequest request) {
         User student = requireStudentInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         Instant now = Instant.now();
 
         AssignmentRecipient recipient = findStudentRecipient(assignmentId, student.getId(), centerId);
-        validateCanStartAttempt(recipient.getAssignment(), now);
+        Assignment assignment = recipient.getAssignment();
+        validateCanStartAttempt(assignment, now);
+
+        if (assignment.getAccessPassword() != null && !assignment.getAccessPassword().isBlank()) {
+            String providedPassword = request != null && request.getPassword() != null ? request.getPassword().trim() : "";
+            if (!assignment.getAccessPassword().trim().equals(providedPassword)) {
+                throw new BadRequestException("Mật khẩu đề thi không đúng.");
+            }
+        }
 
         SubmissionAttempt attempt = submissionAttemptRepository
                 .findByAssignmentRecipient_IdAndStatus(recipient.getId(), SubmissionAttemptStatus.IN_PROGRESS)
                 .orElseGet(() -> createAttempt(recipient, now));
 
-        return submissionMapper.toStudentAttemptDetailResponse(attempt);
+        return toStudentDetail(attempt);
     }
 
     @Transactional(readOnly = true)
@@ -81,7 +109,7 @@ public class SubmissionService {
         AssignmentRecipient recipient = findStudentRecipient(assignmentId, student.getId(), centerId);
         return submissionAttemptRepository.findAllByAssignmentRecipient_IdOrderByAttemptNumberDesc(recipient.getId())
                 .stream()
-                .map(submissionMapper::toStudentAttemptSummaryResponse)
+                .map(attempt -> toStudentSummary(attempt))
                 .toList();
     }
 
@@ -98,7 +126,7 @@ public class SubmissionService {
                 )
                 .orElseThrow(() -> new ResourceNotFoundException("Submission attempt not found with id: " + attemptId));
 
-        return submissionMapper.toStudentAttemptDetailResponse(attempt);
+        return toStudentDetail(attempt);
     }
 
     @Transactional
@@ -113,7 +141,7 @@ public class SubmissionService {
         replaceAnswers(attempt, request);
         attempt.setLastSavedAt(now);
 
-        return submissionMapper.toStudentAttemptDetailResponse(submissionAttemptRepository.save(attempt));
+        return toStudentDetail(submissionAttemptRepository.save(attempt));
     }
 
     @Transactional
@@ -135,7 +163,169 @@ public class SubmissionService {
         attempt.setActiveAttemptKey(null);
         attempt.setLastSavedAt(now);
 
-        return submissionMapper.toStudentAttemptDetailResponse(submissionAttemptRepository.save(attempt));
+        return toStudentDetail(submissionAttemptRepository.save(attempt));
+    }
+
+    /**
+     * Submits the attempt and, when the assignment contains essay questions,
+     * automatically triggers AI grading so the AI score and feedback are stored
+     * immediately after submission. Student visibility of the AI result still
+     * depends on the assignment's "show score" setting. AI grading failures
+     * never block or roll back the submission itself.
+     */
+    public StudentAttemptDetailResponse submitAttemptWithAutoGrading(Long attemptId) {
+        // Commit the submission (auto-scoring + status change) first.
+        StudentAttemptDetailResponse submittedAttempt = submitAttempt(attemptId);
+
+        User student = requireStudentInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+        int essayCount = (int) submittedAttempt.getItems().stream()
+                .filter(item -> item.getQuestionType() == QuestionType.ESSAY)
+                .count();
+
+        log.info(
+                "Student submission committed: attemptId={}, assignmentId={}, studentId={}, status={}, showScore={}, essayCount={}",
+                attemptId,
+                submittedAttempt.getAssignmentId(),
+                student.getId(),
+                submittedAttempt.getStatus(),
+                submittedAttempt.getShowScore(),
+                essayCount
+        );
+
+        try {
+            boolean triggered = aiGradingService.autoGradeOnSubmit(attemptId, centerId, student.getId());
+            log.info(
+                    "Auto AI grading evaluation finished: attemptId={}, assignmentId={}, studentId={}, triggered={}, showScore={}, essayCount={}",
+                    attemptId,
+                    submittedAttempt.getAssignmentId(),
+                    student.getId(),
+                    triggered,
+                    submittedAttempt.getShowScore(),
+                    essayCount
+            );
+        } catch (Exception exception) {
+            // Auto-grading must never block the submission.
+            log.warn(
+                    "Auto AI grading failed: attemptId={}, assignmentId={}, studentId={}, showScore={}, essayCount={}, error={}",
+                    attemptId,
+                    submittedAttempt.getAssignmentId(),
+                    student.getId(),
+                    submittedAttempt.getShowScore(),
+                    essayCount,
+                    exception.getMessage(),
+                    exception
+            );
+        }
+
+        // Re-read so the response includes the freshly created AI grading result.
+        return getAttemptDetail(attemptId);
+    }
+
+    private StudentAttemptSummaryResponse toStudentSummary(SubmissionAttempt attempt) {
+        StudentAttemptSummaryResponse response = submissionMapper.toStudentAttemptSummaryResponse(attempt);
+        attachAiSummary(response, attempt);
+        return response;
+    }
+
+    private StudentAttemptDetailResponse toStudentDetail(SubmissionAttempt attempt) {
+        StudentAttemptDetailResponse response = submissionMapper.toStudentAttemptDetailResponse(attempt);
+        attachAiResult(response, attempt);
+        return response;
+    }
+
+    /**
+     * Expose the latest completed AI grading result to the student only when the
+     * assignment has "show score" enabled and the attempt is no longer in
+     * progress. When disabled, the student cannot see AI feedback — the teacher
+     * can always review it on the teacher side.
+     */
+    private void attachAiResult(StudentAttemptDetailResponse response, SubmissionAttempt attempt) {
+        if (!Boolean.TRUE.equals(response.getShowScore())) {
+            return;
+        }
+        if (attempt.getStatus() == SubmissionAttemptStatus.IN_PROGRESS) {
+            return;
+        }
+        aiGradingResultRepository
+                .findTopBySubmissionAttempt_IdAndJob_StatusOrderByCreatedAtDesc(
+                        attempt.getId(),
+                        AIGradingJobStatus.COMPLETED
+                )
+                .ifPresent(result -> response.setAiResult(toStudentAiResult(result)));
+    }
+
+    private void attachAiSummary(StudentAttemptSummaryResponse response, SubmissionAttempt attempt) {
+        Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
+        boolean showScore = assignment.getShowScore() == null || assignment.getShowScore();
+        if (!showScore) {
+            response.setAutoScore(null);
+            response.setAiScore(null);
+            response.setDisplayedScore(null);
+            response.setMaxScore(null);
+            return;
+        }
+        if (attempt.getStatus() == SubmissionAttemptStatus.IN_PROGRESS) {
+            response.setDisplayedScore(null);
+            return;
+        }
+
+        aiGradingResultRepository
+                .findTopBySubmissionAttempt_IdAndJob_StatusOrderByCreatedAtDesc(
+                        attempt.getId(),
+                        AIGradingJobStatus.COMPLETED
+                )
+                .ifPresent(result -> {
+                    response.setAiScore(result.getAiScore());
+                    response.setDisplayedScore(scoreValue(response.getAutoScore()).add(scoreValue(result.getAiScore())));
+                });
+    }
+
+    private StudentAIGradingResultResponse toStudentAiResult(AIGradingResult result) {
+        Optional<AIGradingOutput> structuredOutput = aiGradingOutputReader.read(result);
+        return StudentAIGradingResultResponse.builder()
+                .resultId(result.getId())
+                .jobId(result.getJob().getId())
+                .summary(result.getSummary())
+                .overallFeedback(result.getOverallFeedback())
+                .focusArea(structuredOutput.map(AIGradingOutput::focusArea).orElse(null))
+                .aiScore(result.getAiScore())
+                .maxScore(result.getMaxScore())
+                .confidence(result.getConfidence())
+                .createdAt(result.getCreatedAt())
+                .criteria(structuredOutput
+                        .map(output -> output.criteria() == null ? List.<StudentAIGradingCriterionResultResponse>of() : output.criteria().stream()
+                                .map(criterion -> StudentAIGradingCriterionResultResponse.builder()
+                                        .name(criterion.name())
+                                        .score(criterion.score())
+                                        .maxScore(criterion.maxScore())
+                                        .feedback(criterion.feedback())
+                                        .build())
+                                .toList())
+                        .orElseGet(List::of))
+                .improvements(structuredOutput
+                        .map(output -> output.improvements() == null ? List.<StudentAIGradingImprovementResponse>of() : output.improvements().stream()
+                                .map(improvement -> StudentAIGradingImprovementResponse.builder()
+                                        .category(improvement.category())
+                                        .issue(improvement.issue())
+                                        .suggestion(improvement.suggestion())
+                                        .example(improvement.example())
+                                        .build())
+                                .toList())
+                        .orElseGet(List::of))
+                .itemResults(result.getItemResults().stream()
+                        .sorted(Comparator.comparing(item -> item.getAssignmentItem().getDisplayOrder()))
+                        .map(item -> StudentAIGradingItemResultResponse.builder()
+                                .id(item.getId())
+                                .assignmentItemId(item.getAssignmentItem().getId())
+                                .aiScore(item.getAiScore())
+                                .maxScore(item.getMaxScore())
+                                .feedback(item.getFeedback())
+                                .rubricAnalysis(item.getRubricAnalysis())
+                                .confidence(item.getConfidence())
+                                .build())
+                        .toList())
+                .build();
     }
 
     @Transactional(readOnly = true)
@@ -154,7 +344,49 @@ public class SubmissionService {
                             .findTopByAssignmentRecipient_IdOrderByStartedAtDesc(recipient.getId())
                             .orElse(null);
                     long attemptsCount = submissionAttemptRepository.countByAssignmentRecipient_Id(recipient.getId());
-                    return submissionMapper.toTeacherSubmissionSummaryResponse(recipient, latestAttempt, attemptsCount);
+
+                    BigDecimal latestFinalScore = null;
+                    boolean isGraded = false;
+
+                    if (latestAttempt != null && latestAttempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS) {
+                        Optional<TeacherReview> reviewOpt = teacherReviewRepository != null
+                                ? teacherReviewRepository.findBySubmissionAttempt_Id(latestAttempt.getId())
+                                : Optional.empty();
+                        if (reviewOpt.isPresent() && reviewOpt.get().getFinalScore() != null) {
+                            latestFinalScore = reviewOpt.get().getFinalScore();
+                            isGraded = true;
+                        } else {
+                            Optional<AIGradingResult> aiOpt = aiGradingResultRepository != null
+                                    ? aiGradingResultRepository.findTopBySubmissionAttempt_IdAndJob_StatusOrderByCreatedAtDesc(
+                                            latestAttempt.getId(),
+                                            AIGradingJobStatus.COMPLETED
+                                    )
+                                    : Optional.empty();
+                            if (aiOpt.isPresent() && aiOpt.get().getAiScore() != null) {
+                                BigDecimal auto = latestAttempt.getAutoScore() != null ? latestAttempt.getAutoScore() : BigDecimal.ZERO;
+                                latestFinalScore = auto.add(aiOpt.get().getAiScore());
+                                isGraded = true;
+                            } else {
+                                boolean hasSubjectiveItems = recipient.getAssignment().getItems() != null && recipient.getAssignment().getItems().stream()
+                                        .anyMatch(item -> item.getQuestionType() != QuestionType.MULTIPLE_CHOICE);
+                                if (!hasSubjectiveItems) {
+                                    latestFinalScore = latestAttempt.getAutoScore();
+                                    isGraded = true;
+                                } else {
+                                    latestFinalScore = latestAttempt.getAutoScore();
+                                    isGraded = false;
+                                }
+                            }
+                        }
+                    }
+
+                    return submissionMapper.toTeacherSubmissionSummaryResponse(
+                            recipient,
+                            latestAttempt,
+                            attemptsCount,
+                            latestFinalScore,
+                            isGraded
+                    );
                 });
     }
 
@@ -187,7 +419,6 @@ public class SubmissionService {
                 .status(SubmissionAttemptStatus.IN_PROGRESS)
                 .attemptNumber(nextAttemptNumber)
                 .assignmentTitleSnapshot(assignment.getTitle())
-                .assignmentTypeSnapshot(assignment.getType())
                 .startedAt(now)
                 .lastSavedAt(now)
                 .activeAttemptKey(recipient.getId())
@@ -314,7 +545,9 @@ public class SubmissionService {
 
             SubmissionAnswer answer = answersByItemId.get(item.getId());
             if (answer == null) {
-                continue;
+                answer = createBlankAnswer(attempt, item);
+                attempt.getAnswers().add(answer);
+                answersByItemId.put(item.getId(), answer);
             }
 
             answer.setMaxScore(itemMaxScore);
@@ -331,6 +564,14 @@ public class SubmissionService {
 
         attempt.setAutoScore(autoScore);
         attempt.setMaxScore(maxScore);
+    }
+
+    private SubmissionAnswer createBlankAnswer(SubmissionAttempt attempt, AssignmentItem item) {
+        return SubmissionAnswer.builder()
+                .attempt(attempt)
+                .assignmentItem(item)
+                .selectedOptions(new java.util.ArrayList<>())
+                .build();
     }
 
     private boolean isExactMatch(SubmissionAnswer answer, AssignmentItem item) {

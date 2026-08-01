@@ -1,6 +1,5 @@
 package com.owlexa.owlexabackend.modules.assignment.dto.response;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
@@ -21,7 +20,6 @@ public class AssignmentDetailResponse {
 
     private Long id;
     private Long assessmentId;
-    private AssessmentType type;
     private AssignmentStatus status;
     private String title;
     private String description;
@@ -29,12 +27,17 @@ public class AssignmentDetailResponse {
     private Instant openAt;
     private Instant dueAt;
     private Integer attemptLimit;
+    private Boolean showScore;
+    private Boolean allowReview;
+    private String accessPassword;
+    private Boolean hasPassword;
     private Instant assessmentSnapshotAt;
     private FileResponse audioFile;
     private PlaybackMode playbackMode;
     private List<AssignmentTargetResponse> targets;
     private List<AssignmentRecipientResponse> recipients;
     private List<AssignmentItemResponse> items;
+    private List<AssignmentBlockResponse> blocks;
     private Instant createdAt;
     private Instant updatedAt;
 }

@@ -9,8 +9,8 @@ import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
+
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentRequest;
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentTargetRequest;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetailResponse;
@@ -22,8 +22,10 @@ import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTarget;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
 import com.owlexa.owlexabackend.modules.assignment.mapper.AssignmentMapper;
+
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRepository;
+import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
 import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
@@ -64,7 +66,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
@@ -73,7 +77,9 @@ class AssignmentServiceTest {
 
     @Mock private AssignmentRepository assignmentRepository;
     @Mock private AssignmentRecipientRepository assignmentRecipientRepository;
+    @Mock private SubmissionAttemptRepository submissionAttemptRepository;
     @Mock private AssessmentRepository assessmentRepository;
+
     @Mock private ClassRepository classRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private UserRepository userRepository;
@@ -100,9 +106,12 @@ class AssignmentServiceTest {
     @BeforeEach
     void setUp() {
         RichTextDocumentService documentService = new RichTextDocumentService(new ObjectMapper());
+        FileMapper fileMapper = new FileMapper();
+        AssignmentMapper assignmentMapper = new AssignmentMapper(documentService, fileMapper);
         service = new AssignmentService(
                 assignmentRepository,
                 assignmentRecipientRepository,
+                submissionAttemptRepository,
                 assessmentRepository,
                 classRepository,
                 classEnrollmentRepository,
@@ -110,7 +119,8 @@ class AssignmentServiceTest {
                 centerRepository,
                 membershipRepository,
                 authorizationService,
-                new AssignmentMapper(documentService, new FileMapper()),
+                assignmentMapper,
+                new AssignmentSnapshotService(assignmentMapper),
                 documentService,
                 fileReferenceService
         );
@@ -213,14 +223,39 @@ class AssignmentServiceTest {
     }
 
     @Test
-    @DisplayName("update: only draft assignments can be updated")
-    void update_whenAssignmentIsNotDraft_shouldThrowBadRequest() {
-        Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
+    @DisplayName("update: archived assignments cannot be updated")
+    void update_whenAssignmentIsArchived_shouldThrowBadRequest() {
+        Assignment assignment = buildAssignment(AssignmentStatus.ARCHIVED);
         when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
                 .thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.update(ASSIGNMENT_ID, validClassAssignmentRequest()))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("archived");
+    }
+
+    @Test
+    @DisplayName("update: active assignment can be updated, syncs recipients and rebuilds snapshot")
+    void update_whenAssignmentIsActive_shouldUpdatePublishedAssignmentAndRebuildSnapshot() {
+        Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
+        assignment.setAssessment(buildAssessment(AssessmentStatus.PUBLISHED));
+        assignment.setTargets(new ArrayList<>(List.of(buildClassTarget())));
+
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(assignment));
+        when(assessmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSESSMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(buildAssessment(AssessmentStatus.PUBLISHED)));
+        when(classRepository.findByIdAndCenter_Id(CLASS_ID, CENTER_ID))
+                .thenReturn(Optional.of(buildClass(ClassStatus.ACTIVE)));
+        when(classEnrollmentRepository.findAllByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE))
+                .thenReturn(List.of(enrollment(student)));
+        when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AssignmentDetailResponse response = service.update(ASSIGNMENT_ID, validClassAssignmentRequest());
+
+        assertThat(response.getTitle()).isEqualTo("Homework");
+        assertThat(response.getStatus()).isEqualTo(AssignmentStatus.ACTIVE);
+        verify(assignmentRepository).save(assignment);
     }
 
     @Test
@@ -281,6 +316,36 @@ class AssignmentServiceTest {
     }
 
     @Test
+    @DisplayName("publish: source assessment must still be published")
+    void publish_whenSourceAssessmentIsNoLongerPublished_shouldRejectBeforeSnapshot() {
+        Assignment assignment = buildDraftAssignmentWithTargets(List.of(buildStudentTarget(student)));
+        assignment.getAssessment().setStatus(AssessmentStatus.DRAFT);
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.publish(ASSIGNMENT_ID))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("must be published");
+
+
+        verify(assignmentRepository, never()).save(any(Assignment.class));
+    }
+
+    @Test
+    @DisplayName("publish: assignment lookup is scoped to the current tenant")
+    void publish_whenAssignmentIsOutsideTenant_shouldReturnNotFound() {
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.publish(ASSIGNMENT_ID))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(assignmentRepository)
+                .findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID);
+
+    }
+
+    @Test
     @DisplayName("close: active assignment becomes closed")
     void close_whenActive_shouldCloseAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
@@ -308,7 +373,33 @@ class AssignmentServiceTest {
     }
 
     @Test
-    @DisplayName("delete: only draft assignment can be soft deleted")
+    @DisplayName("restore: archived assignment becomes closed again")
+    void restore_whenAssignmentIsArchived_shouldRestoreAssignment() {
+        Assignment assignment = buildAssignment(AssignmentStatus.ARCHIVED);
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AssignmentDetailResponse response = service.restore(ASSIGNMENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(AssignmentStatus.CLOSED);
+        assertThat(assignment.getUpdatedBy()).isEqualTo(teacher);
+    }
+
+    @Test
+    @DisplayName("restore: only archived assignments can be restored")
+    void restore_whenAssignmentIsNotArchived_shouldThrowBadRequest() {
+        Assignment assignment = buildAssignment(AssignmentStatus.CLOSED);
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.restore(ASSIGNMENT_ID))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("archived");
+    }
+
+    @Test
+    @DisplayName("delete: draft assignment can be soft deleted")
     void delete_whenDraft_shouldSoftDeleteAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.DRAFT);
         when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
@@ -323,6 +414,33 @@ class AssignmentServiceTest {
     }
 
     @Test
+    @DisplayName("delete: archived assignment can be soft deleted")
+    void delete_whenArchived_shouldSoftDeleteAssignment() {
+        Assignment assignment = buildAssignment(AssignmentStatus.ARCHIVED);
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.delete(ASSIGNMENT_ID);
+
+        assertThat(assignment.getDeletedAt()).isNotNull();
+        assertThat(assignment.getUpdatedBy()).isEqualTo(teacher);
+        verify(assignmentRepository).save(assignment);
+    }
+
+    @Test
+    @DisplayName("delete: active assignment still cannot be deleted")
+    void delete_whenActive_shouldThrowBadRequest() {
+        Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
+        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+                .thenReturn(Optional.of(assignment));
+
+        assertThatThrownBy(() -> service.delete(ASSIGNMENT_ID))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("draft or archived");
+    }
+
+    @Test
     @DisplayName("findAllForTeacher: returns paged assignment list")
     void findAllForTeacher_shouldReturnPagedList() {
         Assignment assignment = buildAssignment(AssignmentStatus.DRAFT);
@@ -332,7 +450,6 @@ class AssignmentServiceTest {
 
         Page<AssignmentListResponse> response = service.findAllForTeacher(
                 "homework",
-                AssessmentType.HOMEWORK,
                 AssignmentStatus.DRAFT,
                 CLASS_ID,
                 pageable
@@ -417,7 +534,6 @@ class AssignmentServiceTest {
                 .id(ASSIGNMENT_ID)
                 .center(center)
                 .assessment(buildAssessment(AssessmentStatus.PUBLISHED))
-                .type(AssessmentType.HOMEWORK)
                 .status(status)
                 .title("Assignment")
                 .description("Description")
@@ -500,7 +616,6 @@ class AssignmentServiceTest {
         Assessment assessment = Assessment.builder()
                 .id(ASSESSMENT_ID)
                 .center(center)
-                .type(AssessmentType.HOMEWORK)
                 .status(status)
                 .title("Assessment")
                 .description("Assessment description")
