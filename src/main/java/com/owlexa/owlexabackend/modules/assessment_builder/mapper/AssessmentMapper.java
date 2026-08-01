@@ -31,7 +31,6 @@ public class AssessmentMapper {
     public AssessmentListResponse toListResponse(Assessment assessment) {
         return AssessmentListResponse.builder()
                 .id(assessment.getId())
-                .type(assessment.getType())
                 .status(assessment.getStatus())
                 .title(assessment.getTitle())
                 .description(assessment.getDescription())
@@ -43,7 +42,6 @@ public class AssessmentMapper {
     public AssessmentDetailResponse toDetailResponse(Assessment assessment) {
         return AssessmentDetailResponse.builder()
                 .id(assessment.getId())
-                .type(assessment.getType())
                 .status(assessment.getStatus())
                 .title(assessment.getTitle())
                 .description(assessment.getDescription())
@@ -52,9 +50,25 @@ public class AssessmentMapper {
                 .audioFile(toFileResponse(assessment.getAudioFile()))
                 .playbackMode(assessment.getPlaybackMode())
                 .items(toItemResponses(assessment.getItems()))
+                .blocks(toBlockResponses(assessment.getBlocks()))
                 .createdAt(assessment.getCreatedAt())
                 .updatedAt(assessment.getUpdatedAt())
                 .build();
+    }
+
+    private List<com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentBlockResponse> toBlockResponses(
+            List<com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock> blocks
+    ) {
+        if (blocks == null) return List.of();
+        return blocks.stream()
+                .sorted(Comparator.comparing(com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock::getPosition))
+                .map(block -> com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentBlockResponse.builder()
+                        .id(block.getId())
+                        .position(block.getPosition())
+                        .title(block.getTitle())
+                        .content(richTextDocumentService.deserialize(block.getContentJson()))
+                        .build())
+                .toList();
     }
 
     public AssessmentItem toItemSnapshot(Question question, BigDecimal points, Integer displayOrder) {

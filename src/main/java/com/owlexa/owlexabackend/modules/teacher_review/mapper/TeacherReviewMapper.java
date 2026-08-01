@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.teacher_review.mapper;
 
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
 import com.owlexa.owlexabackend.modules.teacher_review.dto.response.StudentReviewItemResultResponse;
 import com.owlexa.owlexabackend.modules.teacher_review.dto.response.StudentReviewResultResponse;
@@ -81,17 +82,23 @@ public class TeacherReviewMapper {
                 .build();
     }
 
-    public StudentReviewResultResponse toStudentResultResponse(TeacherReview review) {
+    public StudentReviewResultResponse toStudentResultResponse(
+            TeacherReview review,
+            StudentAttemptDetailResponse attemptDetail
+    ) {
         SubmissionAttempt attempt = review.getSubmissionAttempt();
         return StudentReviewResultResponse.builder()
                 .submissionAttemptId(attempt.getId())
                 .assignmentTitleSnapshot(attempt.getAssignmentTitleSnapshot())
-                .assignmentTypeSnapshot(attempt.getAssignmentTypeSnapshot())
+
                 .attemptNumber(attempt.getAttemptNumber())
                 .finalScore(review.getFinalScore())
                 .maxScore(review.getMaxScore())
                 .overallComment(review.getOverallComment())
                 .releasedAt(review.getReleasedAt())
+                .items(attemptDetail.getItems())
+
+                .answers(attemptDetail.getAnswers())
                 .essayItems(toStudentItemResponses(review.getItems()))
                 .build();
     }

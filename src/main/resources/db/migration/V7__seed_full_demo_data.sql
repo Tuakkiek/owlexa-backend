@@ -301,10 +301,10 @@ INSERT IGNORE INTO `question_options` (`id`, `question_id`, `display_order`, `co
 (64, 18, 4, 'To describe a new residential development.', 0, '2026-02-20 10:05:00.000000', '2026-02-20 10:05:00.000000');
 
 -- 17. ASSESSMENTS & ASSESSMENT ITEMS & OPTIONS
-INSERT IGNORE INTO `assessments` (`id`, `center_id`, `created_by`, `updated_by`, `title`, `description`, `type`, `status`, `created_at`, `updated_at`) VALUES
-(1, 1, 8, 8, 'TOEIC Grammar & Vocabulary Midterm Test', 'Đề thi giữa kỳ đánh giá từ vựng và ngữ pháp TOEIC.', 'QUIZ', 'PUBLISHED', '2026-03-01 08:00:00.000000', '2026-03-01 08:00:00.000000'),
-(2, 1, 10, 10, 'IELTS Academic Essay Writing Assessment', 'Đề kiểm tra kỹ năng viết Essay Task 2.', 'HOMEWORK', 'PUBLISHED', '2026-03-01 09:00:00.000000', '2026-03-01 09:00:00.000000'),
-(3, 1, 8, 8, 'TOEIC Test 1 Listening Practice', 'Bài luyện nghe sử dụng các câu Part 1 và Part 2 từ TOEIC Test 1.', 'QUIZ', 'PUBLISHED', '2026-03-01 10:00:00.000000', '2026-03-01 10:00:00.000000');
+INSERT IGNORE INTO `assessments` (`id`, `center_id`, `created_by`, `updated_by`, `title`, `description`, `status`, `created_at`, `updated_at`) VALUES
+(1, 1, 8, 8, 'TOEIC Grammar & Vocabulary Midterm Test', 'Đề thi giữa kỳ đánh giá từ vựng và ngữ pháp TOEIC.', 'PUBLISHED', '2026-03-01 08:00:00.000000', '2026-03-01 08:00:00.000000'),
+(2, 1, 10, 10, 'IELTS Academic Essay Writing Assessment', 'Đề kiểm tra kỹ năng viết Essay Task 2.', 'PUBLISHED', '2026-03-01 09:00:00.000000', '2026-03-01 09:00:00.000000'),
+(3, 1, 8, 8, 'TOEIC Test 1 Listening Practice', 'Bài luyện nghe sử dụng các câu Part 1 và Part 2 từ TOEIC Test 1.', 'PUBLISHED', '2026-03-01 10:00:00.000000', '2026-03-01 10:00:00.000000');
 
 INSERT IGNORE INTO `assessment_items` (`id`, `assessment_id`, `question_id`, `grading_criteria_id`, `display_order`, `title`, `question_type`, `difficulty`, `points`, `content`, `sample_answer`, `explanation`, `grading_criteria_name`, `grading_criteria_content`, `created_at`, `updated_at`) VALUES
 (1, 1, 7, NULL, 1, 'Budget approval', 'MULTIPLE_CHOICE', 'EASY', 1.00, 'The committee _______ to approve the new marketing budget proposed by the director yesterday.', NULL, 'The singular subject and past-time marker require "decided".', NULL, NULL, '2026-03-01 08:10:00.000000', '2026-03-01 08:10:00.000000'),
@@ -355,10 +355,10 @@ FROM `question_options` qo
 WHERE qo.question_id BETWEEN 1 AND 6;
 
 -- 18. ASSIGNMENTS & TARGETS & RECIPIENTS
-INSERT IGNORE INTO `assignments` (`id`, `center_id`, `assessment_id`, `created_by`, `updated_by`, `title`, `description`, `type`, `status`, `attempt_limit`, `open_at`, `due_at`, `assessment_snapshot_at`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 8, 8, 'Bài kiểm tra giữa kỳ TOEIC K24', 'Học viên lớp TOEIC K24 hoàn thành trước hạn 31/07.', 'QUIZ', 'ACTIVE', 2, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:00:00.000000', '2026-07-20 08:00:00.000000', '2026-07-20 08:00:00.000000'),
-(2, 1, 2, 10, 10, 'Bài tập Viết IELTS Essay Task 2', 'Nộp bài essay về chủ đề AI trong giáo dục đại học.', 'HOMEWORK', 'ACTIVE', 1, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000'),
-(3, 1, 3, 8, 8, 'TOEIC Test 1 Listening Practice', 'Nghe audio chung và trả lời sáu câu Part 1, Part 2.', 'QUIZ', 'ACTIVE', 2, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 09:00:00.000000', '2026-07-20 09:00:00.000000', '2026-07-20 09:00:00.000000');
+INSERT IGNORE INTO `assignments` (`id`, `center_id`, `assessment_id`, `created_by`, `updated_by`, `title`, `description`, `status`, `attempt_limit`, `open_at`, `due_at`, `assessment_snapshot_at`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, 8, 8, 'Bài kiểm tra giữa kỳ TOEIC K24', 'Học viên lớp TOEIC K24 hoàn thành trước hạn 31/07.', 'ACTIVE', 2, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:00:00.000000', '2026-07-20 08:00:00.000000', '2026-07-20 08:00:00.000000'),
+(2, 1, 2, 10, 10, 'Bài tập Viết IELTS Essay Task 2', 'Nộp bài essay về chủ đề AI trong giáo dục đại học.', 'ACTIVE', 1, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000', '2026-07-20 08:30:00.000000'),
+(3, 1, 3, 8, 8, 'TOEIC Test 1 Listening Practice', 'Nghe audio chung và trả lời sáu câu Part 1, Part 2.', 'ACTIVE', 2, '2026-07-20 00:00:00.000000', '2026-07-31 23:59:59.000000', '2026-07-20 09:00:00.000000', '2026-07-20 09:00:00.000000', '2026-07-20 09:00:00.000000');
 
 INSERT IGNORE INTO `assignment_targets` (`id`, `assignment_id`, `target_type`, `class_id`, `student_user_id`, `created_at`, `updated_at`) VALUES
 (1, 1, 'CLASS', 1, NULL, '2026-07-20 08:05:00.000000', '2026-07-20 08:05:00.000000'),
@@ -424,9 +424,9 @@ FROM `assessment_item_options` aio
 WHERE aio.assessment_item_id BETWEEN 4 AND 9;
 
 -- 20. SUBMISSION ATTEMPTS & SUBMISSION ANSWERS & OPTIONS
-INSERT IGNORE INTO `submission_attempts` (`id`, `assignment_recipient_id`, `attempt_number`, `assignment_title_snapshot`, `assignment_type_snapshot`, `status`, `auto_score`, `max_score`, `started_at`, `submitted_at`, `last_saved_at`, `created_at`, `updated_at`) VALUES
-(1, 1, 1, 'Bài kiểm tra giữa kỳ TOEIC K24', 'QUIZ', 'SUBMITTED', 2.00, 2.00, '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000'),
-(2, 4, 1, 'Bài tập Viết IELTS Essay Task 2', 'HOMEWORK', 'SUBMITTED', NULL, 10.00, '2026-07-22 19:00:00.000000', '2026-07-22 20:10:00.000000', '2026-07-22 20:10:00.000000', '2026-07-22 19:00:00.000000', '2026-07-22 20:10:00.000000');
+INSERT IGNORE INTO `submission_attempts` (`id`, `assignment_recipient_id`, `attempt_number`, `assignment_title_snapshot`, `status`, `auto_score`, `max_score`, `started_at`, `submitted_at`, `last_saved_at`, `created_at`, `updated_at`) VALUES
+(1, 1, 1, 'Bài kiểm tra giữa kỳ TOEIC K24', 'SUBMITTED', 2.00, 2.00, '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:15:00.000000', '2026-07-21 14:00:00.000000', '2026-07-21 14:15:00.000000'),
+(2, 4, 1, 'Bài tập Viết IELTS Essay Task 2', 'SUBMITTED', NULL, 10.00, '2026-07-22 19:00:00.000000', '2026-07-22 20:10:00.000000', '2026-07-22 20:10:00.000000', '2026-07-22 19:00:00.000000', '2026-07-22 20:10:00.000000');
 
 INSERT IGNORE INTO `submission_answers` (`id`, `attempt_id`, `assignment_item_id`, `answer_text`, `auto_score`, `max_score`, `graded_at`, `created_at`, `updated_at`) VALUES
 (1, 1, 1, NULL, 1.00, 1.00, '2026-07-21 14:15:00.000000', '2026-07-21 14:05:00.000000', '2026-07-21 14:15:00.000000'),

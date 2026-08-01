@@ -6,7 +6,10 @@ import java.util.List;
 public record AIGradingOutput(
         String summary,
         String overallFeedback,
+        String focusArea,
         BigDecimal confidence,
+        List<AIGradingCriterionOutput> criteria,
+        List<AIGradingImprovementOutput> improvements,
         List<AIGradingItemOutput> items
 ) {
 }

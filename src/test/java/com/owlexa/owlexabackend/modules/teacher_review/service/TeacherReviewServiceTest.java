@@ -7,7 +7,6 @@ import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJob;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
@@ -16,9 +15,13 @@ import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRepository;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptItemResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.SubmissionAnswerResponse;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnswer;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
+import com.owlexa.owlexabackend.modules.student_submission.mapper.SubmissionMapper;
 import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
 import com.owlexa.owlexabackend.modules.teacher_review.dto.request.TeacherReviewItemRequest;
 import com.owlexa.owlexabackend.modules.teacher_review.dto.request.TeacherReviewUpdateRequest;
@@ -43,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -80,6 +84,7 @@ class TeacherReviewServiceTest {
     @Mock private AIGradingResultRepository aiGradingResultRepository;
     @Mock private AuthorizationService authorizationService;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private SubmissionMapper submissionMapper;
 
     private TeacherReviewService service;
 
@@ -109,7 +114,8 @@ class TeacherReviewServiceTest {
                 aiGradingResultRepository,
                 authorizationService,
                 membershipRepository,
-                new TeacherReviewMapper()
+                new TeacherReviewMapper(),
+                submissionMapper
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -174,6 +180,25 @@ class TeacherReviewServiceTest {
                         any(), any()
                 );
         verify(teacherReviewRepository, never()).saveAndFlush(any(TeacherReview.class));
+    }
+
+    @Test
+    @DisplayName("create: concurrent duplicate insert falls back to the already-created review")
+    void createOrGet_whenConcurrentInsertCreatesDuplicate_shouldReturnExistingReview() {
+        SubmissionAttempt attempt = submittedAttempt(true);
+        TeacherReview existing = review(TeacherReviewStatus.IN_PROGRESS);
+        when(teacherReviewRepository.findDetailBySubmissionAttemptIdAndCenterId(ATTEMPT_ID, CENTER_ID))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+        whenTeacherAttemptFound(attempt);
+        when(teacherReviewRepository.saveAndFlush(any(TeacherReview.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "Duplicate entry '60' for key 'teacher_reviews.uk_teacher_reviews_submission_attempt_id'"
+                ));
+
+        TeacherReviewDetailResponse response = service.createOrGetReview(ATTEMPT_ID);
+
+        assertThat(response.getId()).isEqualTo(REVIEW_ID);
+        verify(teacherReviewRepository).saveAndFlush(any(TeacherReview.class));
     }
 
     @Test
@@ -566,12 +591,27 @@ class TeacherReviewServiceTest {
                 CENTER_ID,
                 TeacherReviewStatus.RELEASED
         )).thenReturn(Optional.of(review));
+        when(submissionMapper.toStudentAttemptDetailResponse(review.getSubmissionAttempt()))
+                .thenReturn(StudentAttemptDetailResponse.builder()
+
+                        .items(List.of(StudentAttemptItemResponse.builder()
+                                .assignmentItemId(ESSAY_ITEM_ID)
+                                .build()))
+                        .answers(List.of(SubmissionAnswerResponse.builder()
+                                .assignmentItemId(ESSAY_ITEM_ID)
+                                .build()))
+                        .build());
 
         StudentReviewResultResponse response = service.getStudentReleasedResult(ATTEMPT_ID);
 
         assertThat(response.getSubmissionAttemptId()).isEqualTo(ATTEMPT_ID);
         assertThat(response.getFinalScore()).isEqualByComparingTo("10.00");
         assertThat(response.getOverallComment()).isEqualTo("Released feedback");
+
+        assertThat(response.getItems()).extracting(StudentAttemptItemResponse::getAssignmentItemId)
+                .containsExactly(ESSAY_ITEM_ID);
+        assertThat(response.getAnswers()).extracting(SubmissionAnswerResponse::getAssignmentItemId)
+                .containsExactly(ESSAY_ITEM_ID);
         assertThat(response.getEssayItems()).hasSize(2);
         verify(teacherReviewRepository).findReleasedDetailForStudent(
                 ATTEMPT_ID,
@@ -640,7 +680,6 @@ class TeacherReviewServiceTest {
     private Assignment assignment(boolean includeEssays) {
         Assignment assignment = Assignment.builder()
                 .center(center)
-                .type(AssessmentType.EXAM)
                 .status(AssignmentStatus.CLOSED)
                 .title("Final Exam")
                 .items(new ArrayList<>())
@@ -712,7 +751,6 @@ class TeacherReviewServiceTest {
                 .status(SubmissionAttemptStatus.SUBMITTED)
                 .attemptNumber(1)
                 .assignmentTitleSnapshot(assignment.getTitle())
-                .assignmentTypeSnapshot(assignment.getType())
                 .startedAt(Instant.now().minusSeconds(600))
                 .submittedAt(Instant.now())
                 .autoScore(new BigDecimal("2.00"))

@@ -11,6 +11,8 @@ import com.owlexa.owlexabackend.modules.ai_grading.entity.AIModelProvider;
 import com.owlexa.owlexabackend.modules.ai_grading.mapper.AIGradingMapper;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingProvider;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingProviderException;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingCriterionOutput;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingImprovementOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProviderRequest;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProviderResponse;
@@ -115,7 +117,25 @@ class AIGradingServiceTest {
                 request
         );
         AIGradingProviderResponse providerResponse = new AIGradingProviderResponse(
-                new AIGradingOutput("Summary", "Feedback", new BigDecimal("0.9000"), List.of()),
+                new AIGradingOutput(
+                        "Summary",
+                        "Feedback",
+                        "Ngữ pháp",
+                        new BigDecimal("0.9000"),
+                        List.of(new AIGradingCriterionOutput(
+                                "Ngữ pháp",
+                                new BigDecimal("4.00"),
+                                new BigDecimal("5.00"),
+                                "Tương đối chắc."
+                        )),
+                        List.of(new AIGradingImprovementOutput(
+                                "Ngữ pháp",
+                                "Một vài câu còn cứng.",
+                                "Đa dạng hóa cấu trúc câu.",
+                                "Thử kết hợp câu đơn và câu phức."
+                        )),
+                        List.of()
+                ),
                 "{\"status\":\"completed\"}"
         );
         AIGradingJobSummaryResponse completed = jobSummary(AIGradingJobStatus.COMPLETED);

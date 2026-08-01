@@ -46,6 +46,10 @@ public class AssessmentItem {
     private Assessment assessment;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "block_id")
+    private AssessmentContentBlock block;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "question_id", nullable = false)
     private Question question;
 

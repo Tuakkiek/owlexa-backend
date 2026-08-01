@@ -19,10 +19,13 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
@@ -52,9 +55,6 @@ public class Assessment implements TenantAware {
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private AssessmentType type;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -91,6 +91,11 @@ public class Assessment implements TenantAware {
     @Builder.Default
     private List<AssessmentItem> items = new ArrayList<>();
 
+    @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @jakarta.persistence.OrderBy("position ASC")
+    @Builder.Default
+    private List<AssessmentContentBlock> blocks = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -101,6 +106,7 @@ public class Assessment implements TenantAware {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
 
     @Override
     public Long getCenterId() {
