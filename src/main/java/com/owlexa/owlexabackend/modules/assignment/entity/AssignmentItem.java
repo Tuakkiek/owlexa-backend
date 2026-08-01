@@ -45,6 +45,10 @@ public class AssignmentItem {
     private Assignment assignment;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "block_id")
+    private AssignmentContentBlock block;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assessment_item_id")
     private AssessmentItem assessmentItem;
 

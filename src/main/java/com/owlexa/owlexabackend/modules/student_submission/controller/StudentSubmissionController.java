@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.student_submission.controller;
 
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SaveSubmissionAnswersRequest;
+import com.owlexa.owlexabackend.modules.student_submission.dto.request.StartAttemptRequest;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptDetailResponse;
 import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptSummaryResponse;
 import com.owlexa.owlexabackend.modules.student_submission.service.SubmissionService;
@@ -24,8 +25,11 @@ public class StudentSubmissionController {
     private final SubmissionService submissionService;
 
     @PostMapping("/assignments/{assignmentId}/attempts/start")
-    public StudentAttemptDetailResponse startOrResumeAttempt(@PathVariable Long assignmentId) {
-        return submissionService.startOrResumeAttempt(assignmentId);
+    public StudentAttemptDetailResponse startOrResumeAttempt(
+            @PathVariable Long assignmentId,
+            @RequestBody(required = false) StartAttemptRequest request
+    ) {
+        return submissionService.startOrResumeAttempt(assignmentId, request);
     }
 
     @GetMapping("/assignments/{assignmentId}/attempts")
@@ -48,6 +52,6 @@ public class StudentSubmissionController {
 
     @PostMapping("/submission-attempts/{attemptId}/submit")
     public StudentAttemptDetailResponse submitAttempt(@PathVariable Long attemptId) {
-        return submissionService.submitAttempt(attemptId);
+        return submissionService.submitAttemptWithAutoGrading(attemptId);
     }
 }

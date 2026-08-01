@@ -10,7 +10,9 @@ import com.owlexa.owlexabackend.modules.ai_grading.mapper.AIGradingMapper;
 import com.owlexa.owlexabackend.modules.ai_grading.prompt.AIGradingPromptBuilder;
 import com.owlexa.owlexabackend.modules.ai_grading.prompt.AIGradingPromptSnapshot;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingProviderException;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingCriterionOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingItemOutput;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingImprovementOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingJobRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
@@ -189,6 +191,18 @@ class AIGradingJobLifecycleServiceTest {
     }
 
     @Test
+    @DisplayName("eligibility: essay attempts auto-grade even when student score display is disabled")
+    void isAutoGradeEligible_whenShowScoreDisabledButEssayExists_shouldStillReturnTrue() {
+        SubmissionAttempt attempt = submittedAttempt();
+        attempt.getAssignmentRecipient().getAssignment().setShowScore(false);
+        whenAttemptFound(attempt);
+
+        boolean eligible = service.isAutoGradeEligible(ATTEMPT_ID, CENTER_ID);
+
+        assertThat(eligible).isTrue();
+    }
+
+    @Test
     @DisplayName("lifecycle: pending job transitions to running")
     void markRunning_whenPending_shouldSetStartedAt() {
         AIGradingJob job = job(submittedAttempt(), AIGradingJobStatus.PENDING);
@@ -266,7 +280,10 @@ class AIGradingJobLifecycleServiceTest {
         AIGradingOutput output = new AIGradingOutput(
                 "Summary",
                 "Feedback",
+                "Ngữ pháp",
                 new BigDecimal("0.9000"),
+                criteria(),
+                improvements(),
                 List.of(
                         new AIGradingItemOutput(
                                 2,
@@ -302,7 +319,10 @@ class AIGradingJobLifecycleServiceTest {
         AIGradingOutput output = new AIGradingOutput(
                 "Summary",
                 "Feedback",
+                "Ngữ pháp",
                 new BigDecimal("0.9000"),
+                criteria(),
+                improvements(),
                 List.of()
         );
 
@@ -331,7 +351,10 @@ class AIGradingJobLifecycleServiceTest {
         AIGradingOutput output = new AIGradingOutput(
                 "Summary",
                 "Feedback",
+                "Ngữ pháp",
                 new BigDecimal("1.1000"),
+                criteria(),
+                improvements(),
                 List.of(new AIGradingItemOutput(
                         1,
                         new BigDecimal("3.00"),
@@ -434,7 +457,10 @@ class AIGradingJobLifecycleServiceTest {
         return new AIGradingOutput(
                 "Summary",
                 "Overall feedback",
+                "Ngữ pháp",
                 new BigDecimal("0.9000"),
+                criteria(),
+                improvements(),
                 List.of(new AIGradingItemOutput(
                         1,
                         new BigDecimal(score),
@@ -442,6 +468,34 @@ class AIGradingJobLifecycleServiceTest {
                         "Rubric analysis",
                         new BigDecimal("0.8000")
                 ))
+        );
+    }
+
+    private List<AIGradingCriterionOutput> criteria() {
+        return List.of(
+                new AIGradingCriterionOutput(
+                        "Hoàn thành nhiệm vụ",
+                        new BigDecimal("3.50"),
+                        new BigDecimal("5.00"),
+                        "Đã bám đề nhưng cần phát triển ý sâu hơn."
+                ),
+                new AIGradingCriterionOutput(
+                        "Ngữ pháp",
+                        new BigDecimal("3.00"),
+                        new BigDecimal("5.00"),
+                        "Cần kiểm soát câu phức tốt hơn."
+                )
+        );
+    }
+
+    private List<AIGradingImprovementOutput> improvements() {
+        return List.of(
+                new AIGradingImprovementOutput(
+                        "Ngữ pháp",
+                        "Một số câu thiếu độ linh hoạt.",
+                        "Kết hợp câu đơn và câu phức tự nhiên hơn.",
+                        "Ví dụ: dùng mệnh đề quan hệ để nối ý."
+                )
         );
     }
 }

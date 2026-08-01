@@ -66,6 +66,7 @@ public class SecurityConfig {
                                 "/account",
                                 "/account/**"
                         ).authenticated()
+                        .requestMatchers("/teacher/assessment-documents/**").hasRole("TEACHER")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(domainResolverFilter, UsernamePasswordAuthenticationFilter.class)

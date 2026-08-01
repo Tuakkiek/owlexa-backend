@@ -8,8 +8,6 @@ import com.owlexa.owlexabackend.modules.file.entity.FileOwnerType;
 import com.owlexa.owlexabackend.modules.file.service.FileReferenceService;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.file.entity.StoredFile;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
 import com.owlexa.owlexabackend.modules.assignment.dto.request.AssignmentRequest;
@@ -18,6 +16,7 @@ import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentDetail
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentListResponse;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.StudentAssignmentListResponse;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
+
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus;
@@ -40,6 +39,7 @@ import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
+import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,10 +48,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,6 +67,7 @@ public class AssignmentService {
 
     private final AssignmentRepository assignmentRepository;
     private final AssignmentRecipientRepository assignmentRecipientRepository;
+    private final SubmissionAttemptRepository submissionAttemptRepository;
     private final AssessmentRepository assessmentRepository;
     private final ClassRepository classRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
@@ -76,13 +76,13 @@ public class AssignmentService {
     private final MembershipRepository membershipRepository;
     private final AuthorizationService authorizationService;
     private final AssignmentMapper assignmentMapper;
+    private final AssignmentSnapshotService assignmentSnapshotService;
     private final RichTextDocumentService richTextDocumentService;
     private final FileReferenceService fileReferenceService;
 
     @Transactional(readOnly = true)
     public Page<AssignmentListResponse> findAllForTeacher(
             String search,
-            AssessmentType type,
             AssignmentStatus status,
             Long classId,
             Pageable pageable
@@ -91,7 +91,7 @@ public class AssignmentService {
         Long centerId = requiredCurrentCenterId();
 
         return assignmentRepository.findAll(
-                        AssignmentSpecifications.search(centerId, search, type, status, classId),
+                        AssignmentSpecifications.search(centerId, search, status, classId),
                         pageable
                 )
                 .map(assignmentMapper::toListResponse);
@@ -118,13 +118,17 @@ public class AssignmentService {
         Assignment assignment = Assignment.builder()
                 .center(center)
                 .assessment(assessment)
-                .type(assessment.getType())
+
                 .status(AssignmentStatus.DRAFT)
                 .title(request.getTitle().trim())
                 .description(normalizeOptionalText(request.getDescription()))
+                .contentJson(assessment.getContentJson())
                 .openAt(request.getOpenAt())
                 .dueAt(request.getDueAt())
                 .attemptLimit(request.getAttemptLimit())
+                .showScore(request.getShowScore() != null ? request.getShowScore() : true)
+                .allowReview(request.getAllowReview() != null ? request.getAllowReview() : true)
+                .accessPassword(normalizeOptionalText(request.getAccessPassword()))
                 .createdBy(currentUser)
                 .updatedBy(currentUser)
                 .build();
@@ -141,19 +145,42 @@ public class AssignmentService {
         validateRequest(request);
 
         Assignment assignment = findActiveAssignment(assignmentId, centerId);
-        requireDraft(assignment, "Only draft assignments can be updated");
+        if (assignment.getStatus() == AssignmentStatus.ARCHIVED) {
+            throw new BadRequestException("Cannot update an archived assignment");
+        }
+
         Assessment assessment = findPublishedAssessment(request.getAssessmentId(), centerId);
 
         assignment.setAssessment(assessment);
-        assignment.setType(assessment.getType());
         assignment.setTitle(request.getTitle().trim());
         assignment.setDescription(normalizeOptionalText(request.getDescription()));
         assignment.setOpenAt(request.getOpenAt());
         assignment.setDueAt(request.getDueAt());
         assignment.setAttemptLimit(request.getAttemptLimit());
+        if (request.getShowScore() != null) {
+            assignment.setShowScore(request.getShowScore());
+        }
+        if (request.getAllowReview() != null) {
+            assignment.setAllowReview(request.getAllowReview());
+        }
+        assignment.setAccessPassword(normalizeOptionalText(request.getAccessPassword()));
         assignment.setUpdatedBy(currentUser);
 
         replaceTargets(assignment, request.getTargets(), centerId);
+
+        if (assignment.getStatus() != AssignmentStatus.DRAFT) {
+            Instant now = Instant.now();
+            assignmentSnapshotService.rebuildSnapshot(assignment, now);
+            updateRecipientsForPublishedAssignment(assignment, now);
+            assignment.setStatus(resolveStatusAfterUpdate(assignment, now));
+            fileReferenceService.syncReferences(
+                    FileOwnerType.ASSIGNMENT,
+                    assignment.getId(),
+                    centerId,
+                    assignmentReferenceDocuments(assignment),
+                    assignmentReferencedFileIds(assignment)
+            );
+        }
 
         return assignmentMapper.toDetailResponse(assignmentRepository.save(assignment));
     }
@@ -168,7 +195,7 @@ public class AssignmentService {
         validatePublishable(assignment);
 
         Instant now = Instant.now();
-        rebuildAssignmentSnapshot(assignment, now);
+        assignmentSnapshotService.rebuildSnapshot(assignment, now);
         materializeRecipients(assignment, now);
         assignment.setStatus(resolvePublishedStatus(assignment, now));
         assignment.setUpdatedBy(currentUser);
@@ -215,12 +242,30 @@ public class AssignmentService {
     }
 
     @Transactional
+    public AssignmentDetailResponse restore(Long assignmentId) {
+        User currentUser = requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+
+        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        if (assignment.getStatus() != AssignmentStatus.ARCHIVED) {
+            throw new BadRequestException("Only archived assignments can be restored");
+        }
+
+        assignment.setStatus(AssignmentStatus.CLOSED);
+        assignment.setUpdatedBy(currentUser);
+        return assignmentMapper.toDetailResponse(assignmentRepository.save(assignment));
+    }
+
+    @Transactional
     public void delete(Long assignmentId) {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
         Assignment assignment = findActiveAssignment(assignmentId, centerId);
-        requireDraft(assignment, "Only draft assignments can be deleted");
+        if (assignment.getStatus() != AssignmentStatus.DRAFT
+                && assignment.getStatus() != AssignmentStatus.ARCHIVED) {
+            throw new BadRequestException("Only draft or archived assignments can be deleted");
+        }
         assignment.setDeletedAt(Instant.now());
         assignment.setUpdatedBy(currentUser);
         assignmentRepository.save(assignment);
@@ -263,6 +308,7 @@ public class AssignmentService {
 
     private List<JsonNode> assignmentReferenceDocuments(Assignment assignment) {
         List<JsonNode> documents = new ArrayList<>();
+        documents.add(richTextDocumentService.deserialize(assignment.getContentJson()));
         for (AssignmentItem item : assignment.getItems()) {
             documents.add(richTextDocumentService.deserialize(item.getContentJson()));
             addOptionalDocument(documents, item.getExplanationJson());
@@ -363,24 +409,13 @@ public class AssignmentService {
         }
     }
 
-    private void rebuildAssignmentSnapshot(Assignment assignment, Instant snapshotAt) {
-        assignment.getItems().clear();
-        Assessment assessment = assignment.getAssessment();
-        assignment.getAssessment().getItems().stream()
-                .sorted(Comparator.comparing(com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem::getDisplayOrder))
-                .map(assignmentMapper::toItemSnapshot)
-                .forEach(item -> {
-                    item.setAssignment(assignment);
-                    assignment.getItems().add(item);
-                });
-        assignment.setAudioFile(assessment.getAudioFile());
-        assignment.setPlaybackMode(assessment.getPlaybackMode() == null ? PlaybackMode.PRACTICE : assessment.getPlaybackMode());
-        assignment.setAssessmentSnapshotAt(snapshotAt);
-    }
-
     private List<Long> assignmentReferencedFileIds(Assignment assignment) {
+        Set<Long> fileIds = new LinkedHashSet<>();
         StoredFile audioFile = assignment.getAudioFile();
-        return audioFile == null ? List.of() : List.of(audioFile.getId());
+        if (audioFile != null) {
+            fileIds.add(audioFile.getId());
+        }
+        return List.copyOf(fileIds);
     }
 
     private void materializeRecipients(Assignment assignment, Instant assignedAt) {
@@ -423,6 +458,77 @@ public class AssignmentService {
 
         assignment.getRecipients().addAll(recipientsByStudentId.values());
     }
+
+    private void updateRecipientsForPublishedAssignment(Assignment assignment, Instant assignedAt) {
+        Map<Long, TargetRecipientInfo> requiredRecipients = new LinkedHashMap<>();
+        for (AssignmentTarget target : assignment.getTargets()) {
+            if (target.getTargetType() == AssignmentTargetType.CLASS) {
+                List<ClassEnrollment> enrollments = classEnrollmentRepository
+                        .findAllByClazz_IdAndStatus(target.getClazz().getId(), EnrollmentStatus.ACTIVE);
+                for (ClassEnrollment enrollment : enrollments) {
+                    requiredRecipients.putIfAbsent(
+                            enrollment.getStudentUser().getId(),
+                            new TargetRecipientInfo(enrollment.getStudentUser(), target.getClazz(), AssignmentTargetType.CLASS)
+                    );
+                }
+            } else {
+                requiredRecipients.putIfAbsent(
+                        target.getStudentUser().getId(),
+                        new TargetRecipientInfo(target.getStudentUser(), null, AssignmentTargetType.STUDENT)
+                );
+            }
+        }
+
+        if (requiredRecipients.isEmpty()) {
+            throw new BadRequestException("Assignment targets must produce at least 1 recipient");
+        }
+
+        Map<Long, AssignmentRecipient> existingByStudentId = new LinkedHashMap<>();
+        List<AssignmentRecipient> currentRecipients = new ArrayList<>(assignment.getRecipients());
+        for (AssignmentRecipient recipient : currentRecipients) {
+            existingByStudentId.put(recipient.getStudentUser().getId(), recipient);
+        }
+
+        for (AssignmentRecipient existing : currentRecipients) {
+            Long studentId = existing.getStudentUser().getId();
+            if (!requiredRecipients.containsKey(studentId)) {
+                long attemptCount = submissionAttemptRepository.countByAssignmentRecipient_Id(existing.getId());
+                if (attemptCount == 0) {
+                    assignment.getRecipients().remove(existing);
+                }
+            }
+        }
+
+        for (Map.Entry<Long, TargetRecipientInfo> entry : requiredRecipients.entrySet()) {
+            Long studentId = entry.getKey();
+            if (!existingByStudentId.containsKey(studentId)) {
+                TargetRecipientInfo info = entry.getValue();
+                assignment.getRecipients().add(buildRecipient(
+                        assignment,
+                        info.student,
+                        info.clazz,
+                        info.sourceType,
+                        assignedAt
+                ));
+            }
+        }
+    }
+
+    private AssignmentStatus resolveStatusAfterUpdate(Assignment assignment, Instant now) {
+        if (assignment.getDueAt() != null && now.isAfter(assignment.getDueAt())) {
+            return AssignmentStatus.CLOSED;
+        }
+        if (assignment.getOpenAt() != null && assignment.getOpenAt().isAfter(now)) {
+            return AssignmentStatus.SCHEDULED;
+        }
+        return AssignmentStatus.ACTIVE;
+    }
+
+    private record TargetRecipientInfo(
+            User student,
+            com.owlexa.owlexabackend.modules.class_management.entity.Class clazz,
+            AssignmentTargetType sourceType
+    ) {}
 
     private AssignmentRecipient buildRecipient(
             Assignment assignment,

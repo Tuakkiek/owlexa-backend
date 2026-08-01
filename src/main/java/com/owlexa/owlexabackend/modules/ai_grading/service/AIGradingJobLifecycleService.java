@@ -12,11 +12,14 @@ import com.owlexa.owlexabackend.modules.ai_grading.mapper.AIGradingMapper;
 import com.owlexa.owlexabackend.modules.ai_grading.prompt.AIGradingPromptBuilder;
 import com.owlexa.owlexabackend.modules.ai_grading.prompt.AIGradingPromptSnapshot;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingProviderException;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingCriterionOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingItemOutput;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingImprovementOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProviderRequest;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingJobRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
+import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnswer;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
@@ -24,6 +27,7 @@ import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAtte
 import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 class AIGradingJobLifecycleService {
@@ -63,6 +68,13 @@ class AIGradingJobLifecycleService {
 
         Optional<AIGradingJob> activeJob = jobRepository.findByActiveJobKey(submissionAttemptId);
         if (activeJob.isPresent()) {
+            log.info(
+                    "AI grading pending job reused: attemptId={}, centerId={}, jobId={}, status={}",
+                    submissionAttemptId,
+                    centerId,
+                    activeJob.get().getId(),
+                    activeJob.get().getStatus()
+            );
             return new AIGradingExecutionContext(activeJob.get().getId(), false, provider, null);
         }
 
@@ -71,6 +83,16 @@ class AIGradingJobLifecycleService {
         if (essayAnswers.isEmpty()) {
             throw new BadRequestException("Submission attempt has no essay answers to grade");
         }
+        log.info(
+                "AI grading pending job creation: attemptId={}, centerId={}, requestedByUserId={}, essayAnswerCount={}, submissionStatus={}, provider={}, model={}",
+                submissionAttemptId,
+                centerId,
+                requestedByUserId,
+                essayAnswers.size(),
+                attempt.getStatus(),
+                provider,
+                modelName
+        );
 
         AIGradingPromptSnapshot prompt = promptBuilder.build(essayAnswers);
         AIGradingJob job = AIGradingJob.builder()
@@ -89,6 +111,15 @@ class AIGradingJobLifecycleService {
                 .build();
 
         AIGradingJob savedJob = jobRepository.saveAndFlush(job);
+        log.info(
+                "AI grading job saved: attemptId={}, centerId={}, jobId={}, essayAnswerCount={}, systemPromptLength={}, userPromptLength={}",
+                submissionAttemptId,
+                centerId,
+                savedJob.getId(),
+                essayAnswers.size(),
+                prompt.systemPrompt().length(),
+                prompt.userPrompt().length()
+        );
         AIGradingProviderRequest providerRequest = new AIGradingProviderRequest(
                 modelName,
                 temperature,
@@ -109,6 +140,12 @@ class AIGradingJobLifecycleService {
         job.setStatus(AIGradingJobStatus.RUNNING);
         job.setStartedAt(Instant.now());
         jobRepository.save(job);
+        log.info(
+                "AI grading job running: jobId={}, attemptId={}, startedAt={}",
+                jobId,
+                job.getSubmissionAttempt().getId(),
+                job.getStartedAt()
+        );
     }
 
     @Transactional
@@ -120,6 +157,13 @@ class AIGradingJobLifecycleService {
 
         List<SubmissionAnswer> essayAnswers = essayAnswers(job.getSubmissionAttempt());
         Map<Integer, AIGradingItemOutput> outputByItemNumber = validateOutput(output, essayAnswers);
+        log.info(
+                "AI grading completion started: jobId={}, attemptId={}, essayAnswerCount={}, outputItemCount={}",
+                jobId,
+                job.getSubmissionAttempt().getId(),
+                essayAnswers.size(),
+                output.items() == null ? 0 : output.items().size()
+        );
 
         AIGradingResult result = AIGradingResult.builder()
                 .job(job)
@@ -161,12 +205,26 @@ class AIGradingJobLifecycleService {
         result.setAiScore(score(totalScore));
         result.setMaxScore(score(totalMaxScore));
         resultRepository.save(result);
+        log.info(
+                "AI grading result persisted: jobId={}, attemptId={}, aiScore={}, maxScore={}, itemResultCount={}",
+                jobId,
+                job.getSubmissionAttempt().getId(),
+                result.getAiScore(),
+                result.getMaxScore(),
+                result.getItemResults().size()
+        );
 
         job.setResult(result);
         job.setStatus(AIGradingJobStatus.COMPLETED);
         job.setCompletedAt(Instant.now());
         job.setActiveJobKey(null);
         jobRepository.save(job);
+        log.info(
+                "AI grading job completed: jobId={}, attemptId={}, completedAt={}",
+                jobId,
+                job.getSubmissionAttempt().getId(),
+                job.getCompletedAt()
+        );
     }
 
     @Transactional
@@ -181,6 +239,13 @@ class AIGradingJobLifecycleService {
         job.setFailedAt(Instant.now());
         job.setErrorMessage(truncate(errorMessage));
         job.setActiveJobKey(null);
+        log.warn(
+                "AI grading job failed: jobId={}, attemptId={}, statusBeforeSave={}, error={}",
+                jobId,
+                job.getSubmissionAttempt().getId(),
+                job.getStatus(),
+                job.getErrorMessage()
+        );
         return mapper.toJobSummaryResponse(jobRepository.save(job));
     }
 
@@ -199,6 +264,29 @@ class AIGradingJobLifecycleService {
     public Optional<AIGradingJobSummaryResponse> findActiveJobSummary(Long submissionAttemptId) {
         return jobRepository.findByActiveJobKey(submissionAttemptId)
                 .map(mapper::toJobSummaryResponse);
+    }
+
+    /**
+     * Determines whether a submitted attempt qualifies for automatic AI grading:
+     * the assignment contains at least one essay question. Student visibility of
+     * the AI score remains controlled separately by the assignment's "show score"
+     * flag.
+     */
+    @Transactional(readOnly = true)
+    public boolean isAutoGradeEligible(Long submissionAttemptId, Long centerId) {
+        SubmissionAttempt attempt = findAttempt(submissionAttemptId, centerId);
+        Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
+        boolean eligible = assignment.getItems().stream()
+                .anyMatch(item -> item.getQuestionType() == QuestionType.ESSAY);
+        log.info(
+                "AI grading eligibility checked: attemptId={}, centerId={}, eligible={}, submissionStatus={}, itemCount={}",
+                submissionAttemptId,
+                centerId,
+                eligible,
+                attempt.getStatus(),
+                assignment.getItems().size()
+        );
+        return eligible;
     }
 
     @Transactional(readOnly = true)
@@ -255,7 +343,10 @@ class AIGradingJobLifecycleService {
         }
         requireText(output.summary(), "AI grading summary is missing");
         requireText(output.overallFeedback(), "AI overall feedback is missing");
+        requireText(output.focusArea(), "AI focus area is missing");
         confidence(output.confidence());
+        validateCriteria(output.criteria());
+        validateImprovements(output.improvements());
 
         Map<Integer, AIGradingItemOutput> outputByItemNumber = new HashMap<>();
         for (AIGradingItemOutput item : output.items()) {
@@ -275,6 +366,45 @@ class AIGradingJobLifecycleService {
             confidence(item.confidence());
         }
         return outputByItemNumber;
+    }
+
+    private void validateCriteria(List<AIGradingCriterionOutput> criteria) {
+        if (criteria == null || criteria.isEmpty()) {
+            throw new AIGradingProviderException("AI criterion breakdown is missing");
+        }
+
+        for (AIGradingCriterionOutput criterion : criteria) {
+            if (criterion == null) {
+                throw new AIGradingProviderException("AI criterion breakdown contains an empty item");
+            }
+            requireText(criterion.name(), "AI criterion name is missing");
+            requireText(criterion.feedback(), "AI criterion feedback is missing");
+            if (criterion.score() == null || criterion.score().compareTo(BigDecimal.ZERO) < 0) {
+                throw new AIGradingProviderException("AI criterion score is invalid");
+            }
+            if (criterion.maxScore() == null || criterion.maxScore().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new AIGradingProviderException("AI criterion max score is invalid");
+            }
+            if (criterion.score().compareTo(criterion.maxScore()) > 0) {
+                throw new AIGradingProviderException("AI criterion score exceeds its maximum score");
+            }
+        }
+    }
+
+    private void validateImprovements(List<AIGradingImprovementOutput> improvements) {
+        if (improvements == null || improvements.isEmpty()) {
+            throw new AIGradingProviderException("AI improvement suggestions are missing");
+        }
+
+        for (AIGradingImprovementOutput improvement : improvements) {
+            if (improvement == null) {
+                throw new AIGradingProviderException("AI improvement suggestions contain an empty item");
+            }
+            requireText(improvement.category(), "AI improvement category is missing");
+            requireText(improvement.issue(), "AI improvement issue is missing");
+            requireText(improvement.suggestion(), "AI improvement suggestion is missing");
+            requireText(improvement.example(), "AI improvement example is missing");
+        }
     }
 
     private BigDecimal maxScore(SubmissionAnswer answer) {

@@ -13,6 +13,7 @@ import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAnswer;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
+import com.owlexa.owlexabackend.modules.student_submission.mapper.SubmissionMapper;
 import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
 import com.owlexa.owlexabackend.modules.teacher_review.dto.request.TeacherReviewItemRequest;
 import com.owlexa.owlexabackend.modules.teacher_review.dto.request.TeacherReviewUpdateRequest;
@@ -29,6 +30,8 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -49,6 +52,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TeacherReviewService {
@@ -65,6 +69,7 @@ public class TeacherReviewService {
     private final AuthorizationService authorizationService;
     private final MembershipRepository membershipRepository;
     private final TeacherReviewMapper teacherReviewMapper;
+    private final SubmissionMapper submissionMapper;
 
     @Transactional
     public TeacherReviewDetailResponse createOrGetReview(Long submissionAttemptId) {
@@ -82,7 +87,22 @@ public class TeacherReviewService {
         requireSubmittedAttempt(attempt);
 
         TeacherReview review = createReview(attempt, teacher);
-        return teacherReviewMapper.toDetailResponse(teacherReviewRepository.saveAndFlush(review));
+        try {
+            return teacherReviewMapper.toDetailResponse(teacherReviewRepository.saveAndFlush(review));
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateReviewForAttempt(exception)) {
+                log.info(
+                        "Teacher review already exists after concurrent create request: attemptId={}, centerId={}",
+                        submissionAttemptId,
+                        centerId
+                );
+                return teacherReviewRepository
+                        .findDetailBySubmissionAttemptIdAndCenterId(submissionAttemptId, centerId)
+                        .map(teacherReviewMapper::toDetailResponse)
+                        .orElseThrow(() -> exception);
+            }
+            throw exception;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -232,7 +252,10 @@ public class TeacherReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy kết quả đánh giá đã công bố cho bài nộp: " + submissionAttemptId
                 ));
-        return teacherReviewMapper.toStudentResultResponse(review);
+        return teacherReviewMapper.toStudentResultResponse(
+                review,
+                submissionMapper.toStudentAttemptDetailResponse(review.getSubmissionAttempt())
+        );
     }
 
     private TeacherReview createReview(SubmissionAttempt attempt, User teacher) {
@@ -510,5 +533,17 @@ public class TeacherReviewService {
             return null;
         }
         return value.trim();
+    }
+
+    private boolean isDuplicateReviewForAttempt(DataIntegrityViolationException exception) {
+        Throwable current = exception;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains("uk_teacher_reviews_submission_attempt_id")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

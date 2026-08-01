@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.teacher_review.dto.response;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.StudentAttemptItemResponse;
+import com.owlexa.owlexabackend.modules.student_submission.dto.response.SubmissionAnswerResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,11 +19,12 @@ public class StudentReviewResultResponse {
 
     private Long submissionAttemptId;
     private String assignmentTitleSnapshot;
-    private AssessmentType assignmentTypeSnapshot;
     private Integer attemptNumber;
     private BigDecimal finalScore;
     private BigDecimal maxScore;
     private String overallComment;
     private Instant releasedAt;
+    private List<StudentAttemptItemResponse> items;
+    private List<SubmissionAnswerResponse> answers;
     private List<StudentReviewItemResultResponse> essayItems;
 }

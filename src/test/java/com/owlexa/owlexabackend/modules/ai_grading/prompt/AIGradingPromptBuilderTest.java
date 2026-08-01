@@ -56,7 +56,7 @@ class AIGradingPromptBuilderTest {
         JsonNode userPrompt = objectMapper.readTree(prompt.userPrompt());
         JsonNode promptItem = userPrompt.path("items").get(0);
 
-        assertThat(prompt.promptTemplateVersion()).isEqualTo("essay-grading-v1");
+        assertThat(prompt.promptTemplateVersion()).isEqualTo("essay-grading-v3-insight");
         assertThat(prompt.promptBuilderVersion()).isEqualTo("assignment-snapshot-v1");
         assertThat(promptItem.path("itemNumber").asInt()).isEqualTo(1);
         assertThat(promptItem.path("question").asText()).isEqualTo("Snapshot question");
@@ -74,6 +74,10 @@ class AIGradingPromptBuilderTest {
                 .doesNotContain("center")
                 .doesNotContain("recipient")
                 .doesNotContain("\"id\"");
+        assertThat(prompt.systemPrompt())
+                .contains("summary: 20 to 45 words")
+                .contains("overallFeedback: 90 to 180 words")
+                .contains("focusArea: 3 to 8 words");
     }
 
     @Test

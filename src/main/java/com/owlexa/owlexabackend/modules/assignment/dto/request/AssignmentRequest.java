@@ -35,6 +35,12 @@ public class AssignmentRequest {
     @Min(value = 1, message = "Attempt limit must be greater than or equal to 1")
     private Integer attemptLimit;
 
+    private Boolean showScore;
+
+    private Boolean allowReview;
+
+    private String accessPassword;
+
     @Valid
     private List<AssignmentTargetRequest> targets;
 }

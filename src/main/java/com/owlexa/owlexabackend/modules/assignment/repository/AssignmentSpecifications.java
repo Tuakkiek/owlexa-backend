@@ -1,6 +1,5 @@
 package com.owlexa.owlexabackend.modules.assignment.repository;
 
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import jakarta.persistence.criteria.JoinType;
@@ -18,7 +17,6 @@ public final class AssignmentSpecifications {
     public static Specification<Assignment> search(
             Long centerId,
             String search,
-            AssessmentType type,
             AssignmentStatus status,
             Long classId
     ) {
@@ -33,10 +31,6 @@ public final class AssignmentSpecifications {
                         cb.like(cb.lower(root.get("title")), pattern),
                         cb.like(cb.lower(root.get("description")), pattern)
                 ));
-            }
-
-            if (type != null) {
-                predicates.add(cb.equal(root.get("type"), type));
             }
 
             if (status != null) {

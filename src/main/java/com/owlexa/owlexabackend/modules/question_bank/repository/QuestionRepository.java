@@ -24,6 +24,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     @EntityGraph(attributePaths = {"collection", "gradingCriteria", "options"})
     Optional<Question> findByIdAndCenter_IdAndDeletedAtIsNull(Long id, Long centerId);
 
+    @EntityGraph(attributePaths = {"collection", "gradingCriteria", "options"})
+    List<Question> findAllByIdInAndCenter_IdAndDeletedAtIsNull(Collection<Long> ids, Long centerId);
+
     boolean existsByCollection_IdAndDeletedAtIsNull(Long collectionId);
 
     boolean existsByCollection_IdAndDisplayOrderAndDeletedAtIsNull(

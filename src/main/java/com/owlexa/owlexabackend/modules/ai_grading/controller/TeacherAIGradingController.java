@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/teacher")
 @RequiredArgsConstructor
@@ -30,6 +32,11 @@ public class TeacherAIGradingController {
     @GetMapping("/ai-grading-jobs/{jobId}")
     public AIGradingJobSummaryResponse getJob(@PathVariable Long jobId) {
         return aiGradingService.getJob(jobId);
+    }
+
+    @GetMapping("/submission-attempts/{attemptId}/ai-grading-jobs")
+    public List<AIGradingJobSummaryResponse> listJobs(@PathVariable Long attemptId) {
+        return aiGradingService.listJobs(attemptId);
     }
 
     @GetMapping("/submission-attempts/{attemptId}/ai-grading-results")

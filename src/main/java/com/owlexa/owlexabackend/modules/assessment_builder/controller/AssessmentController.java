@@ -4,7 +4,6 @@ import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.Assessmen
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentListResponse;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.service.AssessmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +33,10 @@ public class AssessmentController {
     @GetMapping
     public Page<AssessmentListResponse> findAll(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) AssessmentType type,
             @RequestParam(required = false) AssessmentStatus status,
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return assessmentService.findAll(search, type, status, pageable);
+        return assessmentService.findAll(search, status, pageable);
     }
 
     @GetMapping("/{assessmentId}")

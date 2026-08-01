@@ -30,6 +30,8 @@ public class TeacherSubmissionSummaryResponse {
     private Instant latestStartedAt;
     private Instant latestSubmittedAt;
     private BigDecimal latestAutoScore;
+    private BigDecimal latestFinalScore;
+    private Boolean isGraded;
     private BigDecimal maxScore;
     private Long attemptsCount;
 }

@@ -2,7 +2,6 @@ package com.owlexa.owlexabackend.modules.assessment_builder.repository;
 
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -17,7 +16,6 @@ public final class AssessmentSpecifications {
     public static Specification<Assessment> search(
             Long centerId,
             String search,
-            AssessmentType type,
             AssessmentStatus status
     ) {
         return (root, query, cb) -> {
@@ -31,10 +29,6 @@ public final class AssessmentSpecifications {
                         cb.like(cb.lower(root.get("title")), pattern),
                         cb.like(cb.lower(root.get("description")), pattern)
                 ));
-            }
-
-            if (type != null) {
-                predicates.add(cb.equal(root.get("type"), type));
             }
 
             if (status != null) {

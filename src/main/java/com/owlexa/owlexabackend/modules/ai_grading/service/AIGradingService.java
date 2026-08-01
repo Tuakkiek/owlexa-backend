@@ -21,6 +21,7 @@ import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AIGradingService {
@@ -47,6 +49,36 @@ public class AIGradingService {
         User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         return startGrading(submissionAttemptId, centerId, teacher.getId());
+    }
+
+    /**
+     * Automatically grades a freshly submitted attempt (no TEACHER role required).
+     * Runs synchronously so essay feedback is stored immediately after submission.
+     * Skips silently when AI grading is disabled or the submission has no essay
+     * answers. Student visibility of the AI score is controlled elsewhere by the
+     * assignment's "show score" flag. Returns {@code true} when a grading job was
+     * executed.
+     */
+    public boolean autoGradeOnSubmit(Long submissionAttemptId, Long centerId, Long requestedByUserId) {
+        if (!properties.isEnabled()) {
+            log.info("Auto AI grading skipped: attemptId={}, centerId={}, reason=disabled", submissionAttemptId, centerId);
+            return false;
+        }
+        boolean eligible = lifecycleService.isAutoGradeEligible(submissionAttemptId, centerId);
+        if (!eligible) {
+            log.info("Auto AI grading skipped: attemptId={}, centerId={}, reason=not_eligible", submissionAttemptId, centerId);
+            return false;
+        }
+        log.info(
+                "Auto AI grading starting: attemptId={}, centerId={}, requestedByUserId={}, provider={}, model={}",
+                submissionAttemptId,
+                centerId,
+                requestedByUserId,
+                properties.getProvider(),
+                properties.getModel()
+        );
+        startGrading(submissionAttemptId, centerId, requestedByUserId);
+        return true;
     }
 
     public AIGradingJobSummaryResponse retryJob(Long jobId) {
@@ -116,6 +148,16 @@ public class AIGradingService {
     ) {
         validateConfiguration();
         AIGradingProvider provider = resolveProvider();
+        log.info(
+                "AI grading requested: attemptId={}, centerId={}, requestedByUserId={}, provider={}, model={}, maxTokens={}, temperature={}",
+                submissionAttemptId,
+                centerId,
+                requestedByUserId,
+                properties.getProvider(),
+                properties.getModel(),
+                properties.getMaxTokens(),
+                properties.getTemperature()
+        );
 
         AIGradingExecutionContext context;
         try {
@@ -129,20 +171,57 @@ public class AIGradingService {
                     properties.getMaxTokens()
             );
         } catch (DataIntegrityViolationException exception) {
+            log.warn(
+                    "AI grading createPendingJob hit active-job race: attemptId={}, centerId={}, error={}",
+                    submissionAttemptId,
+                    centerId,
+                    exception.getMessage()
+            );
             return lifecycleService.findActiveJobSummary(submissionAttemptId)
                     .orElseThrow(() -> exception);
         }
 
         if (!context.shouldExecute()) {
+            log.info(
+                    "AI grading reused active job: attemptId={}, centerId={}, jobId={}",
+                    submissionAttemptId,
+                    centerId,
+                    context.jobId()
+            );
             return lifecycleService.getJobSummary(context.jobId(), centerId);
         }
 
         lifecycleService.markRunning(context.jobId());
+        log.info(
+                "AI grading provider call started: attemptId={}, centerId={}, jobId={}, provider={}, model={}",
+                submissionAttemptId,
+                centerId,
+                context.jobId(),
+                provider.provider(),
+                context.providerRequest().modelName()
+        );
         try {
             AIGradingProviderResponse response = provider.grade(context.providerRequest());
             lifecycleService.completeJob(context.jobId(), response.output(), response.rawResponse());
+            log.info(
+                    "AI grading provider call completed: attemptId={}, centerId={}, jobId={}, provider={}, itemCount={}",
+                    submissionAttemptId,
+                    centerId,
+                    context.jobId(),
+                    provider.provider(),
+                    response.output().items() == null ? 0 : response.output().items().size()
+            );
             return lifecycleService.getJobSummary(context.jobId(), centerId);
         } catch (AIGradingProviderException exception) {
+            log.warn(
+                    "AI grading provider call failed: attemptId={}, centerId={}, jobId={}, provider={}, error={}",
+                    submissionAttemptId,
+                    centerId,
+                    context.jobId(),
+                    provider.provider(),
+                    exception.getMessage(),
+                    exception
+            );
             return lifecycleService.failJob(context.jobId(), exception.getMessage());
         }
     }

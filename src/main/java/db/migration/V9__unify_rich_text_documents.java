@@ -62,32 +62,124 @@ public class V9__unify_rich_text_documents extends BaseJavaMigration {
     }
 
     private void renameLegacyColumns(Connection connection) throws Exception {
-        execute(connection, """
-                ALTER TABLE `questions`
-                  CHANGE COLUMN `content` `content_json` LONGTEXT COLLATE utf8mb4_bin NOT NULL,
-                  CHANGE COLUMN `explanation` `explanation_json` LONGTEXT COLLATE utf8mb4_bin NULL,
-                  CHANGE COLUMN `sample_answer` `sample_answer_json` LONGTEXT COLLATE utf8mb4_bin NULL
-                """);
-        execute(connection, """
-                ALTER TABLE `grading_criteria`
-                  CHANGE COLUMN `content` `content_json` LONGTEXT COLLATE utf8mb4_bin NOT NULL
-                """);
-        execute(connection, """
-                ALTER TABLE `assessment_items`
-                  CHANGE COLUMN `content` `content_json` LONGTEXT COLLATE utf8mb4_bin NOT NULL,
-                  CHANGE COLUMN `explanation` `explanation_json` LONGTEXT COLLATE utf8mb4_bin NULL,
-                  CHANGE COLUMN `sample_answer` `sample_answer_json` LONGTEXT COLLATE utf8mb4_bin NULL,
-                  CHANGE COLUMN `grading_criteria_content`
-                    `grading_criteria_content_json` LONGTEXT COLLATE utf8mb4_bin NULL
-                """);
-        execute(connection, """
-                ALTER TABLE `assignment_items`
-                  CHANGE COLUMN `content` `content_json` LONGTEXT COLLATE utf8mb4_bin NOT NULL,
-                  CHANGE COLUMN `explanation` `explanation_json` LONGTEXT COLLATE utf8mb4_bin NULL,
-                  CHANGE COLUMN `sample_answer` `sample_answer_json` LONGTEXT COLLATE utf8mb4_bin NULL,
-                  CHANGE COLUMN `grading_criteria_content`
-                    `grading_criteria_content_json` LONGTEXT COLLATE utf8mb4_bin NULL
-                """);
+        // Idempotent: each rename only runs when the legacy column still exists,
+        // so a partially-migrated DB (previous failed run) can be completed safely.
+        renameColumnIfExists(
+                connection,
+                "questions",
+                "content",
+                "content_json",
+                "LONGTEXT COLLATE utf8mb4_bin NOT NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "questions",
+                "explanation",
+                "explanation_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "questions",
+                "sample_answer",
+                "sample_answer_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "grading_criteria",
+                "content",
+                "content_json",
+                "LONGTEXT COLLATE utf8mb4_bin NOT NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assessment_items",
+                "content",
+                "content_json",
+                "LONGTEXT COLLATE utf8mb4_bin NOT NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assessment_items",
+                "explanation",
+                "explanation_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assessment_items",
+                "sample_answer",
+                "sample_answer_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assessment_items",
+                "grading_criteria_content",
+                "grading_criteria_content_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assignment_items",
+                "content",
+                "content_json",
+                "LONGTEXT COLLATE utf8mb4_bin NOT NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assignment_items",
+                "explanation",
+                "explanation_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assignment_items",
+                "sample_answer",
+                "sample_answer_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+        renameColumnIfExists(
+                connection,
+                "assignment_items",
+                "grading_criteria_content",
+                "grading_criteria_content_json",
+                "LONGTEXT COLLATE utf8mb4_bin NULL"
+        );
+    }
+
+    private void renameColumnIfExists(
+            Connection connection,
+            String table,
+            String oldName,
+            String newName,
+            String columnDefinition
+    ) throws Exception {
+        if (columnExists(connection, table, oldName) && !columnExists(connection, table, newName)) {
+            execute(
+                    connection,
+                    "ALTER TABLE `" + table + "` CHANGE COLUMN `" + oldName + "` `" + newName + "` " + columnDefinition
+            );
+        }
+    }
+
+    private boolean columnExists(
+            Connection connection,
+            String table,
+            String column
+    ) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?"
+        )) {
+            statement.setString(1, table);
+            statement.setString(2, column);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt(1) > 0;
+            }
+        }
     }
 
     private void convertColumn(
@@ -378,14 +470,33 @@ public class V9__unify_rich_text_documents extends BaseJavaMigration {
             String column,
             boolean nullable
     ) throws Exception {
+        String constraintName = "chk_" + table + "_" + column;
+        if (constraintExists(connection, constraintName)) {
+            return;
+        }
         String condition = nullable
                 ? "`" + column + "` IS NULL OR JSON_VALID(`" + column + "`)"
                 : "JSON_VALID(`" + column + "`)";
         execute(
                 connection,
-                "ALTER TABLE `" + table + "` ADD CONSTRAINT `chk_" + table + "_" + column
+                "ALTER TABLE `" + table + "` ADD CONSTRAINT `" + constraintName
                         + "` CHECK (" + condition + ")"
         );
+    }
+
+    private boolean constraintExists(
+            Connection connection,
+            String constraintName
+    ) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                        + "WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = ?"
+        )) {
+            statement.setString(1, constraintName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt(1) > 0;
+            }
+        }
     }
 
     private void execute(Connection connection, String sql) throws Exception {

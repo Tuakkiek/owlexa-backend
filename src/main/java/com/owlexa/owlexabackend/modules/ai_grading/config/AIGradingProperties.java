@@ -14,10 +14,10 @@ public class AIGradingProperties {
 
     private boolean enabled = true;
     private AIModelProvider provider = AIModelProvider.OPENAI;
-    private String baseUrl = "https://api.openai.com";
+    private String baseUrl = "https://api.deepseek.com";
     private String apiKey = "";
-    private String model = "gpt-5.6-sol";
+    private String model = "deepseek-chat";
     private BigDecimal temperature;
-    private int maxTokens = 4000;
-    private int timeoutMs = 60000;
+    private int maxTokens = 8000;
+    private int timeoutMs = 120000;
 }

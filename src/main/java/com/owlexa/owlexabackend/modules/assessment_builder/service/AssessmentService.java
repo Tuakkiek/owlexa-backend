@@ -12,7 +12,6 @@ import com.owlexa.owlexabackend.modules.assessment_builder.entity.Assessment;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItem;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentItemOption;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentStatus;
-import com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentType;
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.assessment_builder.mapper.AssessmentMapper;
 import com.owlexa.owlexabackend.modules.assessment_builder.repository.AssessmentRepository;
@@ -68,7 +67,6 @@ public class AssessmentService {
     @Transactional(readOnly = true)
     public Page<AssessmentListResponse> findAll(
             String search,
-            AssessmentType type,
             AssessmentStatus status,
             Pageable pageable
     ) {
@@ -76,7 +74,7 @@ public class AssessmentService {
         Long centerId = requiredCurrentCenterId();
 
         return assessmentRepository.findAll(
-                        AssessmentSpecifications.search(centerId, search, type, status),
+                        AssessmentSpecifications.search(centerId, search, status),
                         pageable
                 )
                 .map(assessmentMapper::toListResponse);
@@ -101,7 +99,6 @@ public class AssessmentService {
 
         Assessment assessment = Assessment.builder()
                 .center(center)
-                .type(request.getType())
                 .status(AssessmentStatus.DRAFT)
                 .title(request.getTitle().trim())
                 .description(normalizeOptionalText(request.getDescription()))
@@ -115,7 +112,7 @@ public class AssessmentService {
         assessment.setContentJson(richTextDocumentService.serialize(content));
         assessment.setDescription(toDescriptionSummary(content));
 
-        replaceItems(assessment, request.getItems(), centerId);
+        replaceBlocksAndItems(assessment, request.getBlocks(), request.getItems(), request.getContent(), centerId);
 
         Assessment saved = assessmentRepository.save(assessment);
         fileReferenceService.syncReferences(
@@ -135,7 +132,7 @@ public class AssessmentService {
         validateAssessmentRequest(request);
 
         Assessment assessment = findActiveAssessment(assessmentId, centerId);
-        assessment.setType(request.getType());
+
         assessment.setTitle(request.getTitle().trim());
         assessment.setAudioFile(resolveAudioFile(request.getAudioFileId(), centerId));
         assessment.setPlaybackMode(resolvePlaybackMode(request.getPlaybackMode()));
@@ -144,7 +141,7 @@ public class AssessmentService {
         assessment.setDescription(toDescriptionSummary(content));
         assessment.setUpdatedBy(currentUser);
 
-        replaceItems(assessment, request.getItems(), centerId);
+        replaceBlocksAndItems(assessment, request.getBlocks(), request.getItems(), request.getContent(), centerId);
 
         Assessment saved = assessmentRepository.save(assessment);
         fileReferenceService.syncReferences(
@@ -163,6 +160,7 @@ public class AssessmentService {
         Long centerId = requiredCurrentCenterId();
 
         Assessment assessment = findActiveAssessment(assessmentId, centerId);
+
         if (assessment.getStatus() != AssessmentStatus.DRAFT) {
             throw new BadRequestException("Only draft assessments can be published");
         }
@@ -227,9 +225,6 @@ public class AssessmentService {
     }
 
     private void validateAssessmentRequest(AssessmentRequest request) {
-        if (request.getType() == null) {
-            throw new BadRequestException("Assessment type is required");
-        }
         validateContentHasText(request.getTitle(), "Assessment title is required");
         validateItems(request.getItems());
     }
@@ -264,18 +259,106 @@ public class AssessmentService {
         }
     }
 
-    private void replaceItems(Assessment assessment, List<AssessmentItemRequest> itemRequests, Long centerId) {
+    private void replaceBlocksAndItems(
+            Assessment assessment,
+            List<com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentBlockRequest> blockRequests,
+            List<AssessmentItemRequest> itemRequests,
+            JsonNode fallbackContent,
+            Long centerId
+    ) {
+        assessment.getBlocks().clear();
         assessment.getItems().clear();
 
-        if (itemRequests == null || itemRequests.isEmpty()) {
-            return;
+        List<com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock> blocks = new ArrayList<>();
+        if (blockRequests != null && !blockRequests.isEmpty()) {
+            int pos = 0;
+            for (com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentBlockRequest req : blockRequests) {
+                JsonNode normalized = richTextDocumentService.normalize(req.getContent(), null);
+                com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock block =
+                        com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock.builder()
+                                .assessment(assessment)
+                                .position(req.getPosition() != null ? req.getPosition() : pos++)
+                                .title(req.getTitle() != null ? req.getTitle().trim() : null)
+                                .contentJson(richTextDocumentService.serialize(normalized))
+                                .build();
+                blocks.add(block);
+            }
+        } else {
+            JsonNode normalized = richTextDocumentService.normalize(fallbackContent, null);
+            com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock block =
+                    com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock.builder()
+                            .assessment(assessment)
+                            .position(0)
+                            .title("Nội dung chính")
+                            .contentJson(richTextDocumentService.serialize(normalized))
+                            .build();
+            blocks.add(block);
+        }
+        assessment.getBlocks().addAll(blocks);
+
+        Set<Long> seenQuestionIds = new HashSet<>();
+        int currentDisplayOrder = 1;
+
+        for (com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock block : blocks) {
+            JsonNode blockDoc = richTextDocumentService.deserialize(block.getContentJson());
+            List<ExtractedQuestionNode> extracted = new ArrayList<>();
+            extractQuestionNodes(blockDoc, extracted);
+
+            for (ExtractedQuestionNode eq : extracted) {
+                if (!seenQuestionIds.add(eq.questionId())) {
+                    throw new BadRequestException("Assessment cannot contain duplicate questions (Question ID: " + eq.questionId() + ")");
+                }
+                Question question = questionRepository
+                        .findByIdAndCenter_IdAndDeletedAtIsNull(eq.questionId(), centerId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + eq.questionId()));
+
+                validateQuestionSnapshotSource(question, assessment.getAudioFile() != null);
+                BigDecimal points = eq.points() != null ? eq.points() : question.getPoints();
+                AssessmentItem item = assessmentMapper.toItemSnapshot(question, points, currentDisplayOrder++);
+                item.setAssessment(assessment);
+                item.setBlock(block);
+                assessment.getItems().add(item);
+            }
         }
 
-        itemRequests.stream()
-                .sorted(Comparator.comparing(AssessmentItemRequest::getDisplayOrder))
-                .map(itemRequest -> toAssessmentItem(assessment, itemRequest, centerId))
-                .forEach(assessment.getItems()::add);
+        if (assessment.getItems().isEmpty() && itemRequests != null && !itemRequests.isEmpty()) {
+            com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock firstBlock = blocks.get(0);
+            for (AssessmentItemRequest itemRequest : itemRequests) {
+                Question question = questionRepository
+                        .findByIdAndCenter_IdAndDeletedAtIsNull(itemRequest.getQuestionId(), centerId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + itemRequest.getQuestionId()));
+                validateQuestionSnapshotSource(question, assessment.getAudioFile() != null);
+                BigDecimal points = itemRequest.getPoints() != null ? itemRequest.getPoints() : question.getPoints();
+                AssessmentItem item = assessmentMapper.toItemSnapshot(question, points, itemRequest.getDisplayOrder());
+                item.setAssessment(assessment);
+                item.setBlock(firstBlock);
+                assessment.getItems().add(item);
+            }
+        }
     }
+
+    private void extractQuestionNodes(JsonNode node, List<ExtractedQuestionNode> extracted) {
+        if (node == null || !node.isObject()) return;
+        String type = node.path("type").asText(null);
+        if ("assessmentQuestion".equals(type)) {
+            JsonNode attrs = node.path("attrs");
+            if (attrs.has("questionId") && attrs.get("questionId").isNumber()) {
+                Long qId = attrs.get("questionId").asLong();
+                BigDecimal points = attrs.has("points") && attrs.get("points").isNumber()
+                        ? BigDecimal.valueOf(attrs.get("points").asDouble())
+                        : null;
+                extracted.add(new ExtractedQuestionNode(qId, points));
+            }
+        }
+        JsonNode content = node.path("content");
+        if (content.isArray()) {
+            for (JsonNode child : content) {
+                extractQuestionNodes(child, extracted);
+            }
+        }
+    }
+
+    private record ExtractedQuestionNode(Long questionId, BigDecimal points) {}
 
     private AssessmentItem toAssessmentItem(
             Assessment assessment,
@@ -369,6 +452,8 @@ public class AssessmentService {
         return assessmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(assessmentId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Assessment not found with id: " + assessmentId));
     }
+
+
 
     private User requireTeacherInCurrentCenter() {
         User currentUser = authorizationService.getCurrentUser();

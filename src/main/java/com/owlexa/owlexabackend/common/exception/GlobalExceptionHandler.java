@@ -1,9 +1,13 @@
 package com.owlexa.owlexabackend.common.exception;
+
+import com.owlexa.owlexabackend.modules.assessment_builder.exception.AssessmentDocumentIntegrityException;
+import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -25,7 +29,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
-                "Yêu cầu định dạng JSON không hợp lệ",
+                "Yeu cau dinh dang JSON khong hop le",
                 null
         ));
     }
@@ -39,7 +43,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
-                "Dữ liệu gửi lên không hợp lệ",
+                "Du lieu gui len khong hop le",
                 errors
         ));
     }
@@ -52,6 +56,41 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 null
         ));
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", ex.getCode());
+        body.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", "OPTIMISTIC_LOCK_CONFLICT");
+        body.put("message", "Assessment has been modified; refresh before saving");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(OptimisticLockException.class)
+    public ResponseEntity<Map<String, Object>> handleJpaOptimisticLock(OptimisticLockException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", "OPTIMISTIC_LOCK_CONFLICT");
+        body.put("message", "Assessment has been modified; refresh before saving");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(AssessmentDocumentIntegrityException.class)
+    public ResponseEntity<Map<String, Object>> handleAssessmentDocumentIntegrity(
+            AssessmentDocumentIntegrityException ex
+    ) {
+        log.error("[500] AssessmentDocumentIntegrityException thrown: {}", ex.getMessage(), ex);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("code", "ASSESSMENT_DOCUMENT_INTEGRITY_ERROR");
+        body.put("message", "Assessment document data is inconsistent");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -95,7 +134,7 @@ public class GlobalExceptionHandler {
         log.warn("Tenancy violation attempt: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorBody(
                 403,
-                "Không tìm thấy dữ liệu",
+                "Khong tim thay du lieu",
                 null
         ));
     }
@@ -115,7 +154,7 @@ public class GlobalExceptionHandler {
         log.warn("Authentication failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody(
                 401,
-                "Yêu cầu xác thực tài khoản",
+                "Yeu cau xac thuc tai khoan",
                 null
         ));
     }
@@ -123,9 +162,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex) {
         log.error("[409] DataIntegrityViolationException thrown: {}", ex.getMessage(), ex);
+        if (containsMessage(ex, "uk_teacher_reviews_submission_attempt_id")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(
+                    409,
+                    "Phieu cham cho luot nop nay da ton tai. Vui long tai lai trang.",
+                    null
+            ));
+        }
+        if (containsMessage(ex, "Duplicate entry")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(
+                    409,
+                    "Du lieu da ton tai hoac thao tac vua duoc xu ly truoc do.",
+                    null
+            ));
+        }
         return ResponseEntity.status(HttpStatus.CONFLICT).body(errorBody(
                 409,
-                "Lỗi ràng buộc dữ liệu: Không thể xóa hoặc sửa đổi vì dữ liệu này đang được liên kết bởi các bản ghi khác.",
+                "Loi rang buoc du lieu: Khong the xoa hoac sua doi vi du lieu nay dang duoc lien ket boi cac ban ghi khac.",
                 null
         ));
     }
@@ -136,7 +189,7 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception [traceId={}]: ", traceId, ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(
                 500,
-                "Lỗi hệ thống nội bộ",
+                "Loi he thong noi bo",
                 java.util.Map.of("traceId", traceId)
         ));
     }
@@ -146,7 +199,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", 400);
-        body.put("message", "Kiểm tra dữ liệu giáo viên hàng loạt thất bại");
+        body.put("message", "Kiem tra du lieu giao vien hang loat that bai");
         body.put("errors", ex.getErrors());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
@@ -157,12 +210,11 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", 400);
-        body.put("message", "Kiểm tra dữ liệu học sinh hàng loạt thất bại");
+        body.put("message", "Kiem tra du lieu hoc sinh hang loat that bai");
         body.put("errors", ex.getErrors());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
-
 
     private Map<String, Object> errorBody(int status, String message, Map<String, String> errors) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -173,5 +225,17 @@ public class GlobalExceptionHandler {
             body.put("errors", errors);
         }
         return body;
+    }
+
+    private boolean containsMessage(Throwable throwable, String needle) {
+        Throwable current = throwable;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains(needle)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }
