@@ -32,7 +32,7 @@ public class TeacherConflictValidator implements ScheduleValidator {
         if (!overlaps.isEmpty()) {
             throw new BusinessRuleException(
                     "TEACHER_CONFLICT",
-                    String.format("Teacher %s is already teaching another class during this time.",
+                    String.format("Giáo viên %s đã có lớp khác vào thời gian này.",
                             context.getTeacher().getFullName())
             );
         }

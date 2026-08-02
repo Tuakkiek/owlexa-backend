@@ -54,7 +54,7 @@ public class ScheduleValidatorsTest {
 
         assertThatThrownBy(() -> validator.validate(context))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("status is PLANNED or ACTIVE")
+                .hasMessageContaining("trạng thái dự kiến hoặc đang học")
                 .extracting("code")
                 .isEqualTo("CLASS_FINISHED");
     }
@@ -69,7 +69,7 @@ public class ScheduleValidatorsTest {
 
         assertThatThrownBy(() -> validator.validate(context))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Start time must be before end time")
+                .hasMessageContaining("Giờ bắt đầu phải trước giờ kết thúc")
                 .extracting("code")
                 .isEqualTo("INVALID_TIME_RANGE");
     }
@@ -99,7 +99,7 @@ public class ScheduleValidatorsTest {
 
         assertThatThrownBy(() -> roomConflictValidator.validate(context))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Room Room 101 is already occupied on Monday from 09:00 to 11:00.")
+                .hasMessageContaining("Phòng Room 101 đã có lịch vào Thứ Hai từ 09:00 đến 11:00.")
                 .extracting("code")
                 .isEqualTo("ROOM_CONFLICT");
     }
@@ -129,7 +129,7 @@ public class ScheduleValidatorsTest {
 
         assertThatThrownBy(() -> teacherConflictValidator.validate(context))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Teacher David Nguyen is already teaching another class during this time.")
+                .hasMessageContaining("Giáo viên David Nguyen đã có lớp khác vào thời gian này.")
                 .extracting("code")
                 .isEqualTo("TEACHER_CONFLICT");
     }
@@ -167,7 +167,7 @@ public class ScheduleValidatorsTest {
 
         assertThatThrownBy(() -> studentConflictValidator.validate(context))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Student John Smith already has another class during this time.")
+                .hasMessageContaining("Học viên John Smith đã có lớp khác vào thời gian này.")
                 .extracting("code")
                 .isEqualTo("STUDENT_CONFLICT");
     }

@@ -29,7 +29,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
-                "Yeu cau dinh dang JSON khong hop le",
+                "Yêu cầu định dạng JSON không hợp lệ",
                 null
         ));
     }
@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorBody(
                 400,
-                "Du lieu gui len khong hop le",
+                "Dữ liệu gửi lên không hợp lệ",
                 errors
         ));
     }
@@ -189,7 +189,7 @@ public class GlobalExceptionHandler {
         log.error("Unhandled exception [traceId={}]: ", traceId, ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorBody(
                 500,
-                "Loi he thong noi bo",
+                "Lỗi hệ thống nội bộ",
                 java.util.Map.of("traceId", traceId)
         ));
     }

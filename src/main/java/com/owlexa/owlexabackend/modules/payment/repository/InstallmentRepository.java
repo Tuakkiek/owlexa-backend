@@ -16,6 +16,8 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
 
     List<Installment> findAllByFeeRecord_IdOrderByDueDateAsc(Long feeRecordId);
 
+    void deleteByFeeRecord_Clazz_IdAndCenter_Id(Long classId, Long centerId);
+
     @Query("SELECT i FROM Installment i WHERE i.feeRecord = :feeRecord AND i.status IN :statuses ORDER BY i.dueDate ASC")
     List<Installment> findOldestUnpaid(@Param("feeRecord") FeeRecord feeRecord,
                                         @Param("statuses") List<InstallmentStatus> statuses);

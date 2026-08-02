@@ -2,19 +2,31 @@ package com.owlexa.owlexabackend.modules.class_management.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
+import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
+import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentTargetRepository;
+import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
 import com.owlexa.owlexabackend.modules.class_management.dto.request.ClassRequest;
 import com.owlexa.owlexabackend.modules.class_management.dto.response.ClassResponse;
 import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.course.repository.CourseRepository;
+import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
+import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
+import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudentsResponse;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -35,6 +47,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +68,16 @@ class ClassServiceTest {
     @Mock private ScheduleRepository scheduleRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private CourseRepository courseRepository;
+    @Mock private ScheduleEventRepository scheduleEventRepository;
+    @Mock private ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
+    @Mock private AttendanceRepository attendanceRepository;
+    @Mock private FeeRecordRepository feeRecordRepository;
+    @Mock private PaymentRepository paymentRepository;
+    @Mock private InstallmentRepository installmentRepository;
+    @Mock private DiscountRepository discountRepository;
+    @Mock private StudentDocumentRepository studentDocumentRepository;
+    @Mock private AssignmentRecipientRepository assignmentRecipientRepository;
+    @Mock private AssignmentTargetRepository assignmentTargetRepository;
 
     private ClassService service;
 
@@ -71,7 +94,10 @@ class ClassServiceTest {
     void setUp() {
         service = new ClassService(
                 classRepository, centerRepository, userRepository, membershipRepository,
-                scheduleRepository, classEnrollmentRepository, courseRepository
+                scheduleRepository, classEnrollmentRepository, courseRepository,
+                scheduleEventRepository, scheduleRecurringRuleRepository, attendanceRepository,
+                feeRecordRepository, paymentRepository, installmentRepository, discountRepository,
+                studentDocumentRepository, assignmentRecipientRepository, assignmentTargetRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
@@ -104,7 +130,6 @@ class ClassServiceTest {
         clazz.setId(id);
         clazz.setName(name);
         clazz.setCenter(buildCenter(centerId));
-        clazz.setMaxStudents(20);
         clazz.setMonthlyFee(1500000.0);
         clazz.setStatus(status);
         return clazz;
@@ -132,7 +157,6 @@ class ClassServiceTest {
         return ClassRequest.builder()
                 .name("VSTEP B1 Morning")
                 .courseId(COURSE_ID)
-                .maxStudent(20)
                 .monthlyFee(1500000.0)
                 .build();
     }
@@ -157,6 +181,28 @@ class ClassServiceTest {
         assertThat(response.getCenterId()).isEqualTo(CENTER_ID);
         assertThat(response.getStatus()).isEqualTo(ClassStatus.PLANNED);
         assertThat(response.getIsActive()).isFalse();
+    }
+
+    @Test
+    @DisplayName("create: ignores manual end date from request")
+    void create_whenRequestHasEndDate_shouldIgnoreEndDate() {
+        when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter(CENTER_ID)));
+        when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID)));
+        when(classRepository.existsByNameAndCenter_Id("VSTEP B1 Morning", CENTER_ID)).thenReturn(false);
+        when(classRepository.save(any(Class.class))).thenAnswer(invocation -> {
+            Class c = invocation.getArgument(0);
+            c.setId(CLASS_ID);
+            return c;
+        });
+
+        ClassRequest request = buildCreateRequest();
+        request.setStartDate(LocalDate.of(2026, 8, 1));
+        request.setEndDate(LocalDate.of(2026, 8, 31));
+
+        ClassResponse response = service.create(request);
+
+        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+        assertThat(response.getEndDate()).isNull();
     }
 
     @Test
@@ -362,6 +408,9 @@ class ClassServiceTest {
     @DisplayName("update: giữ nguyên tên (case-insensitive) → OK, không check duplicate")
     void update_whenKeepingSameName_caseInsensitive_shouldNotThrowDuplicate() {
         Class existing = buildClass(CLASS_ID, CENTER_ID, "VSTEP B1 Morning", ClassStatus.ACTIVE);
+        existing.setStartDate(LocalDate.of(2026, 8, 1));
+        existing.setEndDate(LocalDate.of(2026, 9, 30));
+        existing.setTeacherUser(buildTeacher(TEACHER_ID, CENTER_ID));
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(buildCourse(COURSE_ID)));
         when(classRepository.save(any(Class.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -369,13 +418,17 @@ class ClassServiceTest {
         ClassRequest req = ClassRequest.builder()
                 .name("vstep b1 morning")
                 .courseId(COURSE_ID)
-                .maxStudent(25)
+                .endDate(LocalDate.of(2026, 10, 31))
                 .monthlyFee(2000000.0)
                 .build();
 
         ClassResponse response = service.update(CLASS_ID, req);
 
         assertThat(response.getName()).isEqualTo("vstep b1 morning");
+        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 8, 1));
+        assertThat(response.getEndDate()).isEqualTo(LocalDate.of(2026, 9, 30));
+        assertThat(response.getTeacherUserId()).isEqualTo(TEACHER_ID);
+        assertThat(response.getTeacherName()).isEqualTo("Teacher " + TEACHER_ID);
     }
 
     @Test
@@ -396,7 +449,29 @@ class ClassServiceTest {
 
         service.delete(CLASS_ID);
 
+        org.mockito.Mockito.verify(paymentRepository).deleteByFeeRecord_Clazz_IdAndFeeRecord_Center_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(installmentRepository).deleteByFeeRecord_Clazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(discountRepository).deleteByFeeRecord_Clazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(feeRecordRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(classEnrollmentRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(scheduleEventRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(scheduleRecurringRuleRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
+        org.mockito.Mockito.verify(scheduleRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
         org.mockito.Mockito.verify(classRepository).delete(existing);
+    }
+
+    @Test
+    @DisplayName("delete: class da co hoc phi duoc ghi nhan -> BusinessRuleException")
+    void delete_whenClassHasSettledFees_shouldThrowBusinessRule() {
+        Class existing = buildClass(CLASS_ID, CENTER_ID, "Class A", ClassStatus.ACTIVE);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
+        when(feeRecordRepository.countSettledRecordsByClass(CLASS_ID, CENTER_ID)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.delete(CLASS_ID))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("hoc phi");
+
+        org.mockito.Mockito.verify(classRepository, org.mockito.Mockito.never()).delete(any(Class.class));
     }
 
     @Test

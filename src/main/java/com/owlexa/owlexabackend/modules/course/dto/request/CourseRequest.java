@@ -13,21 +13,23 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CourseRequest {
 
-    @NotBlank(message = "Mã khóa học không được để trống")
+    @NotBlank(message = "Course code is required")
     private String code;
 
-    @NotBlank(message = "Tên khóa học không được để trống")
+    @NotBlank(message = "Course name is required")
     private String name;
 
     private String description;
 
     private Integer defaultDuration;
 
-    @Min(value = 0, message = "Học phí hàng tháng mặc định không được âm")
+    @Min(value = 1, message = "Default session count must be at least 1")
+    private Integer defaultSessionCount;
+
+    @Min(value = 0, message = "Default monthly fee cannot be negative")
     private Double defaultMonthlyFee;
 
-    @Min(value = 1, message = "Sĩ số tối đa mặc định phải ít nhất là 1")
-    private Integer defaultMaxStudents;
+    private Long defaultTeacherUserId;
 
     private Boolean isActive;
 }

@@ -43,11 +43,14 @@ public class Course {
     @Column(name = "default_duration")
     private Integer defaultDuration;
 
+    @Column(name = "default_session_count")
+    private Integer defaultSessionCount;
+
     @Column(name = "default_monthly_fee")
     private Double defaultMonthlyFee;
 
-    @Column(name = "default_max_students")
-    private Integer defaultMaxStudents;
+    @Column(name = "default_teacher_user_id")
+    private Long defaultTeacherUserId;
 
     @Column(name = "is_active", nullable = false)
     @Builder.Default

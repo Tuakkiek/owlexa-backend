@@ -5,11 +5,20 @@ import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.course.repository.CourseRepository;
 import com.owlexa.owlexabackend.modules.student.dto.response.StudentResponse;
 import com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudentsResponse;
+import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
+import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentTargetRepository;
+import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
+import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
+import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
+import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
@@ -22,7 +31,9 @@ import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -44,6 +55,16 @@ public class ClassService {
     private final ScheduleRepository scheduleRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final CourseRepository courseRepository;
+    private final ScheduleEventRepository scheduleEventRepository;
+    private final ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final FeeRecordRepository feeRecordRepository;
+    private final PaymentRepository paymentRepository;
+    private final InstallmentRepository installmentRepository;
+    private final DiscountRepository discountRepository;
+    private final StudentDocumentRepository studentDocumentRepository;
+    private final AssignmentRecipientRepository assignmentRecipientRepository;
+    private final AssignmentTargetRepository assignmentTargetRepository;
 
     // Create
     @Transactional
@@ -66,14 +87,15 @@ public class ClassService {
                     .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + request.getCourseId()));
         }
 
-        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : (course != null ? course.getDefaultMaxStudents() : 30);
         Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : (course != null ? course.getDefaultMonthlyFee() : 0.0);
+        User teacher = resolveTeacher(request.getTeacherUserId() != null ? request.getTeacherUserId() : (course != null ? course.getDefaultTeacherUserId() : null), centerId);
 
         Class newClass = Class.builder()
                 .name(request.getName().trim())
                 .course(course)
+                .teacherUser(teacher)
+                .startDate(request.getStartDate())
                 .status(ClassStatus.PLANNED)
-                .maxStudents(maxStudents)
                 .monthlyFee(monthlyFee)
                 .center(center)
                 .build();
@@ -250,9 +272,13 @@ public class ClassService {
         existingClass.setCourse(course);
 
         existingClass.setName(newName);
-        Integer maxStudents = request.getMaxStudent() != null ? request.getMaxStudent() : (course != null ? course.getDefaultMaxStudents() : 30);
+        if (request.getTeacherUserId() != null) {
+            existingClass.setTeacherUser(resolveTeacher(request.getTeacherUserId(), centerId));
+        }
+        if (request.getStartDate() != null) {
+            existingClass.setStartDate(request.getStartDate());
+        }
         Double monthlyFee = request.getMonthlyFee() != null ? request.getMonthlyFee() : (course != null ? course.getDefaultMonthlyFee() : 0.0);
-        existingClass.setMaxStudents(maxStudents);
         existingClass.setMonthlyFee(monthlyFee);
         if (request.getStatus() != null) {
             existingClass.setStatus(request.getStatus());
@@ -278,7 +304,55 @@ public class ClassService {
             throw new TenancyViolationException("Class " + classId + " belongs to another center");
         }
 
+        assertClassCanBeDeleted(classId, centerId);
+        deleteClassDraftData(classId, centerId);
         classRepository.delete(existingClass);
+    }
+
+    private void assertClassCanBeDeleted(Long classId, Long centerId) {
+        List<String> blockers = new ArrayList<>();
+
+        long settledFeeRecords = feeRecordRepository.countSettledRecordsByClass(classId, centerId);
+        long activePayments = paymentRepository.countByFeeRecord_Clazz_IdAndFeeRecord_Center_IdAndStatus(
+                classId,
+                centerId,
+                TransactionStatus.ACTIVE
+        );
+        if (settledFeeRecords > 0 || activePayments > 0) {
+            blockers.add("da co hoc phi duoc ghi nhan");
+        }
+
+        long attendanceCount = attendanceRepository.countByClassId(classId, centerId);
+        if (attendanceCount > 0) {
+            blockers.add("da co diem danh");
+        }
+
+        long documentCount = studentDocumentRepository.countByClazz_IdAndCenter_Id(classId, centerId);
+        if (documentCount > 0) {
+            blockers.add("da co tai lieu hoc vien");
+        }
+
+        long assignmentCount =
+                assignmentTargetRepository.countByClazz_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(classId, centerId)
+                        + assignmentRecipientRepository.countByClazz_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(classId, centerId);
+        if (assignmentCount > 0) {
+            blockers.add("da co bai tap/kiem tra gan voi lop");
+        }
+
+        if (!blockers.isEmpty()) {
+            throw new BusinessRuleException("Khong the xoa lop hoc vi " + String.join(", ", blockers) + ".");
+        }
+    }
+
+    private void deleteClassDraftData(Long classId, Long centerId) {
+        paymentRepository.deleteByFeeRecord_Clazz_IdAndFeeRecord_Center_Id(classId, centerId);
+        installmentRepository.deleteByFeeRecord_Clazz_IdAndCenter_Id(classId, centerId);
+        discountRepository.deleteByFeeRecord_Clazz_IdAndCenter_Id(classId, centerId);
+        feeRecordRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
+        classEnrollmentRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
+        scheduleEventRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
+        scheduleRecurringRuleRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
+        scheduleRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
     }
 
     // Helper function
@@ -296,7 +370,6 @@ public class ClassService {
         return ClassResponse.builder()
                 .id(clazz.getId())
                 .name(clazz.getName())
-                .maxStudents(clazz.getMaxStudents())
                 .monthFee(clazz.getMonthlyFee())
                 .status(clazz.getStatus())
                 .isActive(clazz.getIsActive())
@@ -304,6 +377,10 @@ public class ClassService {
                 .courseId(clazz.getCourse() != null ? clazz.getCourse().getId() : null)
                 .courseName(clazz.getCourse() != null ? clazz.getCourse().getName() : null)
                 .courseCode(clazz.getCourse() != null ? clazz.getCourse().getCode() : null)
+                .startDate(clazz.getStartDate())
+                .endDate(clazz.getEndDate())
+                .teacherUserId(clazz.getTeacherUser() != null ? clazz.getTeacherUser().getId() : null)
+                .teacherName(clazz.getTeacherUser() != null ? clazz.getTeacherUser().getFullName() : null)
                 .studentCount(studentCount)
                 .scheduleCount(clazz.getSchedules() != null ? (long) clazz.getSchedules().size() : 0L)
                 .teachers(teachers)
@@ -328,6 +405,23 @@ public class ClassService {
         clazz.setStatus(newStatus);
         clazz = classRepository.save(clazz);
         return toResponse(clazz);
+    }
+    private User resolveTeacher(Long teacherUserId, Long centerId) {
+        if (teacherUserId == null) {
+            return null;
+        }
+        User teacher = userRepository.findById(teacherUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found with id: " + teacherUserId));
+        if (teacher.getRole() != Role.TEACHER) {
+            throw new BadRequestException("User is not a TEACHER");
+        }
+        boolean teacherInCenter = membershipRepository
+                .findByUser_IdAndCenter_IdAndUserRole(teacherUserId, centerId, Role.TEACHER)
+                .isPresent();
+        if (!teacherInCenter) {
+            throw new BadRequestException("Teacher is not member of this center");
+        }
+        return teacher;
     }
     // Get current user
     private User getCurrentUser() {

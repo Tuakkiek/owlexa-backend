@@ -9,10 +9,10 @@ public class TimeRangeValidator implements ScheduleValidator {
     @Override
     public void validate(ScheduleValidationContext context) {
         if (context.getStartTime() == null || context.getEndTime() == null) {
-            throw new BusinessRuleException("INVALID_TIME_RANGE", "Start time and end time are required.");
+            throw new BusinessRuleException("INVALID_TIME_RANGE", "Vui lòng nhập giờ bắt đầu và giờ kết thúc.");
         }
         if (!context.getStartTime().isBefore(context.getEndTime())) {
-            throw new BusinessRuleException("INVALID_TIME_RANGE", "Start time must be before end time.");
+            throw new BusinessRuleException("INVALID_TIME_RANGE", "Giờ bắt đầu phải trước giờ kết thúc.");
         }
     }
 }
