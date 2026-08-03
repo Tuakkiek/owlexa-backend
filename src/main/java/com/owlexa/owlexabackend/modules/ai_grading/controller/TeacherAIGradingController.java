@@ -4,6 +4,7 @@ import com.owlexa.owlexabackend.modules.ai_grading.dto.response.AIGradingJobSumm
 import com.owlexa.owlexabackend.modules.ai_grading.dto.response.AIGradingResultResponse;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('ESSAY_GRADE')")
 public class TeacherAIGradingController {
 
     private final AIGradingService aiGradingService;

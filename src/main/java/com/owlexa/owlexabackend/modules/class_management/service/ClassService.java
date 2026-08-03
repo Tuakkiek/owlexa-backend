@@ -11,6 +11,8 @@ import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceReposito
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
@@ -42,6 +44,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import com.owlexa.owlexabackend.modules.user.entity.Membership;
 @Service
@@ -149,12 +152,7 @@ public class ClassService {
             throw new org.springframework.security.access.AccessDeniedException("Only TEACHER can access their own classes");
         }
 
-        List<Long> classIds = scheduleRepository
-                .findAllByTeacherUser_IdAndCenter_Id(currentUser.getId(), centerId)
-                .stream()
-                .map(s -> s.getClazz().getId())
-                .distinct()
-                .toList();
+        List<Long> classIds = findTeacherClassIdsFromEvents(currentUser.getId(), centerId);
 
         return classIds.stream()
                 .map(id -> classRepository.findById(id).orElse(null))
@@ -172,12 +170,7 @@ public class ClassService {
             throw new AccessDeniedException("Only TEACHER can access their own classes");
         }
 
-        List<Long> classIds = scheduleRepository
-                .findAllByTeacherUser_IdAndCenter_Id(currentUser.getId(), centerId)
-                .stream()
-                .map(schedule -> schedule.getClazz().getId())
-                .distinct()
-                .toList();
+        List<Long> classIds = findTeacherClassIdsFromEvents(currentUser.getId(), centerId);
 
         return classIds.stream()
                 .map(classId -> {
@@ -243,6 +236,24 @@ public class ClassService {
                             .build();
                 })
                 .toList();
+    }
+
+    private List<Long> findTeacherClassIdsFromEvents(Long teacherUserId, Long centerId) {
+        if (scheduleEventRepository == null) {
+            return List.of();
+        }
+
+        return scheduleEventRepository
+                .findAllByTeacherUser_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(teacherUserId, centerId)
+                .stream()
+                .filter(event -> event.getClazz() != null)
+                .filter(event -> event.getStatus() != ScheduleEventStatus.CANCELLED)
+                .map(ScheduleEvent::getClazz)
+                .map(Class::getId)
+                .collect(java.util.stream.Collectors.collectingAndThen(
+                        java.util.stream.Collectors.toCollection(LinkedHashSet::new),
+                        ArrayList::new
+                ));
     }
     // Update
     @Transactional

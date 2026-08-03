@@ -15,6 +15,8 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -36,6 +38,9 @@ public class StudentDocumentService {
     private final CenterRepository centerRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
+    private final ScheduleEventRepository scheduleEventRepository;
+
+    // ── Student: view own documents ──────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<StudentDocumentResponse> findMyDocuments() {
@@ -54,36 +59,18 @@ public class StudentDocumentService {
                 .toList();
     }
 
+    // ── Owner: create document for class ─────────────────────────────────────
+
     @Transactional
     public StudentDocumentResponse createForClass(Long classId, StudentDocumentRequest request) {
         User currentUser = requireCurrentUser(Role.OWNER);
         Long centerId = requiredCurrentCenterId();
         assertCenterMembership(currentUser, centerId);
 
-        if (request.getTitle() == null || request.getTitle().isBlank()
-                || request.getUrl() == null || request.getUrl().isBlank()
-                || request.getType() == null) {
-            throw new BadRequestException("Document title, type and url are required");
-        }
-
-        Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
-        if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
-        }
-        Center center = centerRepository.findById(centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
-
-        StudentDocument document = StudentDocument.builder()
-                .title(request.getTitle().trim())
-                .documentType(request.getType())
-                .fileUrl(request.getUrl().trim())
-                .clazz(clazz)
-                .center(center)
-                .build();
-
-        return toResponse(studentDocumentRepository.save(document));
+        return doCreateForClass(classId, request, currentUser, centerId);
     }
+
+    // ── Owner: view class documents ──────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<StudentDocumentResponse> findClassDocuments(Long classId) {
@@ -103,6 +90,66 @@ public class StudentDocumentService {
                 .toList();
     }
 
+    // ── Teacher: create document for own class ───────────────────────────────
+
+    @Transactional
+    public StudentDocumentResponse createForClassAsTeacher(Long classId, StudentDocumentRequest request) {
+        User currentUser = requireCurrentUser(Role.TEACHER);
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+        assertTeacherTeachesClass(currentUser, classId, centerId);
+
+        return doCreateForClass(classId, request, currentUser, centerId);
+    }
+
+    // ── Teacher: view own class documents ────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<StudentDocumentResponse> findClassDocumentsAsTeacher(Long classId) {
+        User currentUser = requireCurrentUser(Role.TEACHER);
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+        assertTeacherTeachesClass(currentUser, classId, centerId);
+
+        return studentDocumentRepository.findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(classId, centerId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // ── Shared create logic ──────────────────────────────────────────────────
+
+    private StudentDocumentResponse doCreateForClass(Long classId, StudentDocumentRequest request,
+                                                     User currentUser, Long centerId) {
+        if (request.getTitle() == null || request.getTitle().isBlank()
+                || request.getUrl() == null || request.getUrl().isBlank()
+                || request.getType() == null) {
+            throw new BadRequestException("Document title, type and url are required");
+        }
+
+        Class clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+        if (!clazz.getCenter().getId().equals(centerId)) {
+            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+        }
+        Center center = centerRepository.findById(centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
+
+        StudentDocument document = StudentDocument.builder()
+                .title(request.getTitle().trim())
+                .documentType(request.getType())
+                .fileUrl(request.getUrl().trim())
+                .description(request.getDescription() != null ? request.getDescription().trim() : null)
+                .clazz(clazz)
+                .center(center)
+                .uploaderUser(currentUser)
+                .build();
+
+        return toResponse(studentDocumentRepository.save(document));
+    }
+
+    // ── Mapping ──────────────────────────────────────────────────────────────
+
     private StudentDocumentResponse toResponse(StudentDocument document) {
         return StudentDocumentResponse.builder()
                 .id(document.getId())
@@ -112,7 +159,22 @@ public class StudentDocumentService {
                 .url(document.getFileUrl())
                 .classId(document.getClazzId())
                 .className(document.getClazz() != null ? document.getClazz().getName() : null)
+                .uploaderName(document.getUploaderUser() != null ? document.getUploaderUser().getFullName() : null)
+                .description(document.getDescription())
                 .build();
+    }
+
+    // ── Security helpers ─────────────────────────────────────────────────────
+
+    private void assertTeacherTeachesClass(User teacher, Long classId, Long centerId) {
+        boolean teaches = scheduleEventRepository
+                .findAllByTeacherUser_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(teacher.getId(), centerId)
+                .stream()
+                .filter(event -> event.getStatus() != ScheduleEventStatus.CANCELLED)
+                .anyMatch(event -> event.getClazz() != null && event.getClazz().getId().equals(classId));
+        if (!teaches) {
+            throw new AccessDeniedException("Teacher is not assigned to teach class " + classId);
+        }
     }
 
     private User requireCurrentUser(Role role) {

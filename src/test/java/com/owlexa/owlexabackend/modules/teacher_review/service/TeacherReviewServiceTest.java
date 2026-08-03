@@ -38,6 +38,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -85,6 +86,7 @@ class TeacherReviewServiceTest {
     @Mock private AuthorizationService authorizationService;
     @Mock private MembershipRepository membershipRepository;
     @Mock private SubmissionMapper submissionMapper;
+    @Mock private EntityManager entityManager;
 
     private TeacherReviewService service;
 
@@ -115,7 +117,8 @@ class TeacherReviewServiceTest {
                 authorizationService,
                 membershipRepository,
                 new TeacherReviewMapper(),
-                submissionMapper
+                submissionMapper,
+                entityManager
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);

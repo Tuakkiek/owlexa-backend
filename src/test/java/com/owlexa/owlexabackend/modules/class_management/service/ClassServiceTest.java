@@ -23,6 +23,8 @@ import com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudent
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
@@ -284,14 +286,17 @@ class ClassServiceTest {
         teacher.setRole(Role.TEACHER);
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
 
-        Schedule s1 = new Schedule();
+        ScheduleEvent s1 = new ScheduleEvent();
         s1.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE));
-        Schedule s2 = new Schedule();
+        s1.setStatus(ScheduleEventStatus.SCHEDULED);
+        ScheduleEvent s2 = new ScheduleEvent();
         s2.setClazz(buildClass(2L, CENTER_ID, "Class B", ClassStatus.ACTIVE));
-        Schedule s3 = new Schedule();
+        s2.setStatus(ScheduleEventStatus.SCHEDULED);
+        ScheduleEvent s3 = new ScheduleEvent();
         s3.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE));
+        s3.setStatus(ScheduleEventStatus.SCHEDULED);
 
-        when(scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID))
+        when(scheduleEventRepository.findAllByTeacherUser_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(TEACHER_ID, CENTER_ID))
                 .thenReturn(List.of(s1, s2, s3));
         when(classRepository.findById(1L)).thenReturn(Optional.of(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE)));
         when(classRepository.findById(2L)).thenReturn(Optional.of(buildClass(2L, CENTER_ID, "Class B", ClassStatus.ACTIVE)));
@@ -322,9 +327,10 @@ class ClassServiceTest {
         teacher.setRole(Role.TEACHER);
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
 
-        Schedule s = new Schedule();
+        ScheduleEvent s = new ScheduleEvent();
         s.setClazz(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE));
-        when(scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID))
+        s.setStatus(ScheduleEventStatus.SCHEDULED);
+        when(scheduleEventRepository.findAllByTeacherUser_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(TEACHER_ID, CENTER_ID))
                 .thenReturn(List.of(s));
         when(classRepository.findById(1L)).thenReturn(Optional.of(buildClass(1L, CENTER_ID, "Class A", ClassStatus.ACTIVE)));
 
