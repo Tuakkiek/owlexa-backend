@@ -2,10 +2,23 @@ package com.owlexa.owlexabackend.modules.room.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventType;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleRecurringRule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.room.dto.request.RoomRequest;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDependencyDto;
 import com.owlexa.owlexabackend.modules.room.dto.response.RoomResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
 import com.owlexa.owlexabackend.modules.room.entity.Room;
 import com.owlexa.owlexabackend.modules.room.repository.RoomRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
@@ -20,15 +33,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
-import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
-import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
-import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
-import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
-import com.owlexa.owlexabackend.modules.room.dto.response.RoomDependencyDto;
-
+import java.time.DayOfWeek;
 import java.util.List;
-
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -39,7 +46,8 @@ public class RoomService {
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
     private final ScheduleRepository scheduleRepository;
-
+    private final ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
+    private final ScheduleEventRepository scheduleEventRepository;
 
     @Transactional
     public RoomResponse create(RoomRequest request) {
@@ -128,10 +136,10 @@ public class RoomService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phòng học với ID: " + roomId + " tại trung tâm này"));
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
 
-        if (scheduleRepository.existsByRoom_IdAndCenter_Id(roomId, centerId)) {
-            throw new BusinessRuleException("ROOM_IN_USE", "Phòng học " + room.getName() + " đang được sử dụng trong lịch học, không thể xóa.");
+        if (isRoomInUse(roomId, centerId)) {
+            throw new BusinessRuleException("ROOM_IN_USE", "Phong hoc " + room.getName() + " dang duoc su dung trong lich hoc, khong the xoa.");
         }
 
         roomRepository.delete(room);
@@ -143,22 +151,10 @@ public class RoomService {
         Long centerId = requiredCurrentCenterId();
         assertCenterMembership(currentUser, centerId);
 
-        Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
+        roomRepository.findByIdAndCenter_Id(roomId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
 
-        List<Schedule> schedules = scheduleRepository.findAllByRoom_IdAndCenter_Id(roomId, centerId);
-
-        return schedules.stream()
-                .map(s -> RoomScheduleSummaryResponse.builder()
-                        .id(s.getId())
-                        .dayOfWeek(s.getDayOfWeek().name())
-                        .startTime(s.getStartTime().toString())
-                        .endTime(s.getEndTime().toString())
-                        .className(s.getClazz().getName())
-                        .teacherName(s.getTeacherUser() != null ? s.getTeacherUser().getFullName() : "No teacher assigned")
-                        .type(s.getType().name())
-                        .build())
-                .toList();
+        return findRoomUsageSummaries(roomId, centerId);
     }
 
     @Transactional(readOnly = true)
@@ -170,19 +166,12 @@ public class RoomService {
         Room room = roomRepository.findByIdAndCenter_Id(roomId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
 
-        List<Schedule> schedules = scheduleRepository.findAllByRoom_IdAndCenter_Id(roomId, centerId);
-        boolean canDelete = schedules.isEmpty();
+        List<RoomDependencyDto> dependencies = findRoomBlockingDependencies(roomId, centerId);
+        boolean canDelete = dependencies.isEmpty();
 
-        List<RoomDependencyDto> dependencies = schedules.stream()
-                .map(s -> RoomDependencyDto.builder()
-                        .className(s.getClazz().getName())
-                        .teacherName(s.getTeacherUser() != null ? s.getTeacherUser().getFullName() : "No teacher assigned")
-                        .dayOfWeek(s.getDayOfWeek().name())
-                        .timeRange(s.getStartTime().toString() + "–" + s.getEndTime().toString())
-                        .build())
-                .toList();
-
-        String message = canDelete ? "Room can be deleted." : "Room " + room.getName() + " cannot be deleted because it is already used by existing schedules.";
+        String message = canDelete
+                ? "Room can be deleted."
+                : "Room " + room.getName() + " cannot be deleted because it is already used by schedules.";
 
         return RoomDeleteValidationResponse.builder()
                 .canDelete(canDelete)
@@ -191,7 +180,28 @@ public class RoomService {
                 .build();
     }
 
+    private List<RoomDependencyDto> findRoomBlockingDependencies(Long roomId, Long centerId) {
+        List<RoomDependencyDto> visibleScheduleDependencies = findRoomUsageSummaries(roomId, centerId).stream()
+                .map(s -> RoomDependencyDto.builder()
+                        .className(s.getClassName())
+                        .teacherName(s.getTeacherName())
+                        .source(s.getSource())
+                        .dayOfWeek(s.getEventDate() != null ? s.getEventDate() : s.getDayOfWeek())
+                        .timeRange(s.getStartTime() + " - " + s.getEndTime())
+                        .build())
+                .toList();
+        List<RoomDependencyDto> ruleDependencies = scheduleRecurringRuleRepository.findAllByRoom_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(roomId, centerId).stream()
+                .filter(rule -> !Boolean.FALSE.equals(rule.getIsActive()))
+                .flatMap(rule -> toRuleDependencies(rule).stream())
+                .toList();
+        return Stream.of(visibleScheduleDependencies, ruleDependencies)
+                .flatMap(List::stream)
+                .toList();
+    }
+
     private RoomResponse toResponse(Room room) {
+        Long centerId = room.getCenter().getId();
+        long usageCount = countRoomUsage(room.getId(), centerId);
         return RoomResponse.builder()
                 .id(room.getId())
                 .code(room.getCode())
@@ -199,10 +209,118 @@ public class RoomService {
                 .capacity(room.getCapacity())
                 .description(room.getDescription())
                 .isActive(room.getIsActive())
-                .centerId(room.getCenter().getId())
+                .isInUse(usageCount > 0)
+                .usageCount(usageCount)
+                .centerId(centerId)
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
                 .build();
+    }
+
+    private List<RoomScheduleSummaryResponse> findRoomUsageSummaries(Long roomId, Long centerId) {
+        List<RoomScheduleSummaryResponse> legacySchedules = scheduleRepository.findAllByRoom_IdAndCenter_Id(roomId, centerId).stream()
+                .map(this::toLegacyScheduleSummary)
+                .toList();
+        List<ScheduleEvent> roomEvents = scheduleEventRepository.findAllByRoom_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(roomId, centerId);
+        List<RoomScheduleSummaryResponse> events = roomEvents.stream()
+                .filter(event -> event.getStatus() != ScheduleEventStatus.CANCELLED)
+                .map(this::toEventSummary)
+                .toList();
+
+        return Stream.of(legacySchedules, events)
+                .flatMap(List::stream)
+                .sorted(this::compareSummaries)
+                .toList();
+    }
+
+    private int compareSummaries(RoomScheduleSummaryResponse left, RoomScheduleSummaryResponse right) {
+        String leftDate = left.getEventDate() != null ? left.getEventDate() : "";
+        String rightDate = right.getEventDate() != null ? right.getEventDate() : "";
+        int dateCompare = leftDate.compareTo(rightDate);
+        if (dateCompare != 0) {
+            return dateCompare;
+        }
+        int dayCompare = left.getDayOfWeek().compareTo(right.getDayOfWeek());
+        if (dayCompare != 0) {
+            return dayCompare;
+        }
+        return left.getStartTime().compareTo(right.getStartTime());
+    }
+
+    private RoomScheduleSummaryResponse toLegacyScheduleSummary(Schedule schedule) {
+        return RoomScheduleSummaryResponse.builder()
+                .id(schedule.getId())
+                .source("LEGACY")
+                .dayOfWeek(schedule.getDayOfWeek().name())
+                .startTime(schedule.getStartTime().toString())
+                .endTime(schedule.getEndTime().toString())
+                .className(schedule.getClazz().getName())
+                .teacherName(schedule.getTeacherUser() != null ? schedule.getTeacherUser().getFullName() : "Chua phan cong")
+                .type(schedule.getType().name())
+                .build();
+    }
+
+    private List<RoomDependencyDto> toRuleDependencies(ScheduleRecurringRule rule) {
+        return parseDays(rule.getDaysOfWeek()).stream()
+                .map(DayOfWeek::of)
+                .map(day -> RoomDependencyDto.builder()
+                        .source("RULE")
+                        .className(rule.getClazz().getName())
+                        .teacherName(rule.getTeacherUser() != null ? rule.getTeacherUser().getFullName() : "Chua phan cong")
+                        .dayOfWeek(day.name())
+                        .timeRange(rule.getStartTime() + " - " + rule.getEndTime())
+                        .build())
+                .toList();
+    }
+
+    private RoomScheduleSummaryResponse toEventSummary(ScheduleEvent event) {
+        return RoomScheduleSummaryResponse.builder()
+                .id(event.getId())
+                .source("EVENT")
+                .eventDate(event.getEventDate().toString())
+                .dayOfWeek(event.getEventDate().getDayOfWeek().name())
+                .startTime(event.getStartTime().toString())
+                .endTime(event.getEndTime().toString())
+                .className(event.getClazz().getName())
+                .teacherName(event.getTeacherUser() != null ? event.getTeacherUser().getFullName() : "Chua phan cong")
+                .type(toScheduleType(event).name())
+                .build();
+    }
+
+    private ScheduleType toScheduleType(ScheduleEvent event) {
+        if (event.getStatus() == ScheduleEventStatus.CANCELLED) {
+            return ScheduleType.CANCELLED;
+        }
+        if (event.getEventType() == ScheduleEventType.EXAM) {
+            return ScheduleType.EXAM;
+        }
+        if (event.getEventType() == ScheduleEventType.ONLINE_LESSON) {
+            return ScheduleType.ONLINE_CLASS;
+        }
+        return ScheduleType.THEORY_CLASS;
+    }
+
+    private List<Integer> parseDays(String daysCsv) {
+        if (daysCsv == null || daysCsv.isBlank()) {
+            return List.of();
+        }
+        return Stream.of(daysCsv.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(Integer::parseInt)
+                .filter(value -> value >= 1 && value <= 7)
+                .sorted()
+                .toList();
+    }
+
+    private boolean isRoomInUse(Long roomId, Long centerId) {
+        return scheduleRepository.existsByRoom_IdAndCenter_Id(roomId, centerId)
+                || scheduleRecurringRuleRepository.existsByRoom_IdAndCenter_Id(roomId, centerId)
+                || scheduleEventRepository.existsByRoom_IdAndCenter_Id(roomId, centerId);
+    }
+
+    private long countRoomUsage(Long roomId, Long centerId) {
+        return findRoomUsageSummaries(roomId, centerId).size();
     }
 
     private User getCurrentUser() {

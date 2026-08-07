@@ -11,4 +11,6 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
     List<Discount> findAllByFeeRecordOrderByCreatedAtDesc(FeeRecord feeRecord);
 
     List<Discount> findAllByFeeRecord_Id(Long feeRecordId);
+
+    void deleteByFeeRecord_Clazz_IdAndCenter_Id(Long classId, Long centerId);
 }

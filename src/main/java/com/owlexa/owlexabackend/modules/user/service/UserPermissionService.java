@@ -202,6 +202,7 @@ public class UserPermissionService {
         // ALLOW and INHERIT both mean "enabled" — no record needed
 
         permissionResolver.evictCache(userId);
+        sessionRepository.deactivateAllByUserIdWithReason(userId, "PERMISSION_CHANGED");
         return buildEffectivePermission(permission, user,
                 "DENY".equalsIgnoreCase(type) || "DISABLED".equalsIgnoreCase(type));
     }
@@ -217,6 +218,7 @@ public class UserPermissionService {
         }
         userPermissionRepository.deleteByUser_Id(userId);
         permissionResolver.evictCache(userId);
+        sessionRepository.deactivateAllByUserIdWithReason(userId, "PERMISSION_CHANGED");
     }
 
     // ═══════════════════════════════════════════════════════════════

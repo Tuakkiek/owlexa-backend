@@ -7,4 +7,5 @@ public class StudentDocumentRequest {
     private String title;
     private DocumentType type;
     private String url;
+    private String description;
 }

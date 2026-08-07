@@ -33,8 +33,12 @@ public class StudentDocument implements TenantAware {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_user_id", nullable = false)
+    @JoinColumn(name = "student_user_id")
     private User studentUser;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploader_user_id")
+    private User uploaderUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "center_id", nullable = false)

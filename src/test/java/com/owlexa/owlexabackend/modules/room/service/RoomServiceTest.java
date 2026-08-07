@@ -1,10 +1,24 @@
 package com.owlexa.owlexabackend.modules.room.service;
 
 import com.owlexa.owlexabackend.common.context.TenantContext;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventType;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleRecurringRule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.room.dto.request.RoomRequest;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomDependencyDto;
 import com.owlexa.owlexabackend.modules.room.dto.response.RoomResponse;
+import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
 import com.owlexa.owlexabackend.modules.room.entity.Room;
 import com.owlexa.owlexabackend.modules.room.repository.RoomRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
@@ -24,18 +38,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
-import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
-import com.owlexa.owlexabackend.modules.room.dto.response.RoomDeleteValidationResponse;
-import com.owlexa.owlexabackend.modules.room.dto.response.RoomScheduleSummaryResponse;
-import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
-import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
-import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import java.time.DayOfWeek;
-import java.time.LocalTime;
-
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,6 +58,8 @@ class RoomServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private ScheduleRepository scheduleRepository;
+    @Mock private ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
+    @Mock private ScheduleEventRepository scheduleEventRepository;
 
     private RoomService service;
 
@@ -61,7 +70,15 @@ class RoomServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RoomService(roomRepository, centerRepository, userRepository, membershipRepository, scheduleRepository);
+        service = new RoomService(
+                roomRepository,
+                centerRepository,
+                userRepository,
+                membershipRepository,
+                scheduleRepository,
+                scheduleRecurringRuleRepository,
+                scheduleEventRepository
+        );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
         SecurityContextHolder.getContext().setAuthentication(
@@ -82,62 +99,37 @@ class RoomServiceTest {
         SecurityContextHolder.clearContext();
     }
 
-    private Center buildCenter(Long id) {
-        Center center = new Center();
-        center.setId(id);
-        return center;
-    }
-
-    private Room buildRoom(Long id, Long centerId, String code, String name) {
-        Center center = new Center();
-        center.setId(centerId);
-        Room room = new Room();
-        room.setId(id);
-        room.setCode(code);
-        room.setName(name);
-        room.setCenter(center);
-        room.setIsActive(true);
-        return room;
-    }
-
-    private RoomRequest buildCreateRequest() {
-        return RoomRequest.builder()
-                .code("P201")
-                .name("Phòng 201")
-                .capacity(30)
-                .build();
-    }
-
     @Test
-    @DisplayName("create: valid request → creates room")
+    @DisplayName("create: valid request creates room")
     void create_whenValid_shouldCreateRoom() {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter(CENTER_ID)));
         when(roomRepository.existsByCodeAndCenter_Id("P201", CENTER_ID)).thenReturn(false);
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> {
-            Room r = invocation.getArgument(0);
-            r.setId(ROOM_ID);
-            return r;
+            Room room = invocation.getArgument(0);
+            room.setId(ROOM_ID);
+            return room;
         });
 
-        RoomResponse response = service.create(buildCreateRequest());
+        RoomResponse response = service.create(buildRequest());
 
         assertThat(response.getId()).isEqualTo(ROOM_ID);
         assertThat(response.getCode()).isEqualTo("P201");
-        assertThat(response.getName()).isEqualTo("Phòng 201");
         assertThat(response.getCenterId()).isEqualTo(CENTER_ID);
+        assertThat(response.getUsageCount()).isZero();
+        assertThat(response.getIsInUse()).isFalse();
     }
 
     @Test
-    @DisplayName("create: duplicate code in center → DuplicateResourceException")
+    @DisplayName("create: duplicate code throws")
     void create_whenDuplicateCode_shouldThrowDuplicate() {
         when(roomRepository.existsByCodeAndCenter_Id("P201", CENTER_ID)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(buildCreateRequest()))
+        assertThatThrownBy(() -> service.create(buildRequest()))
                 .isInstanceOf(DuplicateResourceException.class);
     }
 
     @Test
-    @DisplayName("create: not OWNER → AccessDeniedException")
+    @DisplayName("create: non owner throws")
     void create_whenNotOwner_shouldThrowAccessDenied() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(
@@ -145,31 +137,42 @@ class RoomServiceTest {
         );
         User teacher = new User();
         teacher.setId(2L);
+        teacher.setPhoneNumber("0900000002");
         teacher.setRole(Role.TEACHER);
         when(userRepository.findByPhoneNumber("0900000002")).thenReturn(Optional.of(teacher));
 
-        assertThatThrownBy(() -> service.create(buildCreateRequest()))
+        assertThatThrownBy(() -> service.create(buildRequest()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("findAll: returns active rooms in center")
-    void findAll_shouldReturnActiveRooms() {
-        when(roomRepository.findAllByCenter_IdAndIsActiveTrue(CENTER_ID))
-                .thenReturn(List.of(buildRoom(1L, CENTER_ID, "P201", "Phòng 201"),
-                        buildRoom(2L, CENTER_ID, "P202", "Phòng 202")));
+    @DisplayName("findAll: returns active rooms with usage status")
+    void findAll_shouldReturnActiveRoomsWithUsageStatus() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201");
+        when(roomRepository.findAllByCenter_IdAndIsActiveTrue(CENTER_ID)).thenReturn(List.of(room));
+        when(scheduleEventRepository.findAllByRoom_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(ROOM_ID, CENTER_ID))
+                .thenReturn(List.of(ScheduleEvent.builder()
+                        .id(700L)
+                        .clazz(Class.builder().name("VSTEP B1").build())
+                        .eventDate(LocalDate.of(2026, 8, 10))
+                        .startTime(LocalTime.of(19, 45))
+                        .endTime(LocalTime.of(21, 15))
+                        .eventType(ScheduleEventType.LESSON)
+                        .status(ScheduleEventStatus.SCHEDULED)
+                        .build()));
 
         List<RoomResponse> response = service.findAll();
 
-        assertThat(response).hasSize(2);
-        assertThat(response.get(0).getCenterId()).isEqualTo(CENTER_ID);
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).getIsInUse()).isTrue();
+        assertThat(response.get(0).getUsageCount()).isEqualTo(1L);
     }
 
     @Test
-    @DisplayName("findById: room exists in center → returns room")
+    @DisplayName("findById: room exists in center")
     void findById_whenExists_shouldReturnRoom() {
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID))
-                .thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201")));
+                .thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201")));
 
         RoomResponse response = service.findById(ROOM_ID);
 
@@ -178,35 +181,33 @@ class RoomServiceTest {
     }
 
     @Test
-    @DisplayName("update: valid → updates room")
+    @DisplayName("update: valid request updates room")
     void update_whenValid_shouldUpdateRoom() {
-        Room existing = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+        Room existing = buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201");
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(existing));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        RoomRequest req = RoomRequest.builder()
+        RoomResponse response = service.update(ROOM_ID, RoomRequest.builder()
                 .code("P201")
-                .name("Phòng 201 Updated")
+                .name("Room 201 Updated")
                 .capacity(35)
-                .build();
+                .build());
 
-        RoomResponse response = service.update(ROOM_ID, req);
-
-        assertThat(response.getName()).isEqualTo("Phòng 201 Updated");
+        assertThat(response.getName()).isEqualTo("Room 201 Updated");
         assertThat(response.getCapacity()).isEqualTo(35);
     }
 
     @Test
-    @DisplayName("delete: room exists → deletes")
-    void delete_whenExists_shouldDelete() {
+    @DisplayName("delete: unused room deletes")
+    void delete_whenUnused_shouldDelete() {
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID))
-                .thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201")));
+                .thenReturn(Optional.of(buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201")));
 
         service.delete(ROOM_ID);
     }
 
     @Test
-    @DisplayName("delete: room not found → ResourceNotFoundException")
+    @DisplayName("delete: missing room throws")
     void delete_whenNotFound_shouldThrowResourceNotFound() {
         when(roomRepository.findByIdAndCenter_Id(999L, CENTER_ID)).thenReturn(Optional.empty());
 
@@ -215,70 +216,148 @@ class RoomServiceTest {
     }
 
     @Test
-    @DisplayName("getScheduleSummary: returns scheduled details")
-    void getScheduleSummary_shouldReturnSchedules() {
-        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+    @DisplayName("schedule summary includes only visible legacy schedules and generated events")
+    void getScheduleSummary_shouldReturnVisibleUsageSources() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201");
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
 
         Class clazz = Class.builder().name("IELTS 6.5").build();
-        User teacher = new User();
-        teacher.setFullName("David Nguyen");
-        Schedule schedule = Schedule.builder()
-                .id(500L)
+        User teacher = buildTeacher();
+        when(scheduleRepository.findAllByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID))
+                .thenReturn(List.of(Schedule.builder()
+                        .id(500L)
+                        .clazz(clazz)
+                        .teacherUser(teacher)
+                        .dayOfWeek(DayOfWeek.MONDAY)
+                        .startTime(LocalTime.of(8, 0))
+                        .endTime(LocalTime.of(10, 0))
+                        .type(ScheduleType.THEORY_CLASS)
+                        .build()));
+        when(scheduleEventRepository.findAllByRoom_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(ROOM_ID, CENTER_ID))
+                .thenReturn(List.of(ScheduleEvent.builder()
+                        .id(700L)
+                        .clazz(clazz)
+                        .teacherUser(teacher)
+                        .eventDate(LocalDate.of(2026, 8, 10))
+                        .startTime(LocalTime.of(8, 0))
+                        .endTime(LocalTime.of(9, 30))
+                        .eventType(ScheduleEventType.EXAM)
+                        .status(ScheduleEventStatus.SCHEDULED)
+                        .build()));
+
+        List<RoomScheduleSummaryResponse> summary = service.getScheduleSummary(ROOM_ID);
+
+        assertThat(summary).hasSize(2);
+        assertThat(summary).extracting(RoomScheduleSummaryResponse::getSource)
+                .containsExactly("LEGACY", "EVENT");
+        assertThat(summary).extracting(RoomScheduleSummaryResponse::getClassName)
+                .containsOnly("IELTS 6.5");
+        assertThat(summary).extracting(RoomScheduleSummaryResponse::getTeacherName)
+                .containsOnly("David Nguyen");
+    }
+
+    @Test
+    @DisplayName("schedule summary always hides recurring rules")
+    void getScheduleSummary_whenRoomHasRule_shouldHideRuleSource() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201");
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+
+        Class clazz = Class.builder().name("TOEIC 650+ T8-2026").build();
+        User teacher = buildTeacher();
+        ScheduleRecurringRule rule = ScheduleRecurringRule.builder()
+                .id(600L)
                 .clazz(clazz)
                 .teacherUser(teacher)
-                .dayOfWeek(DayOfWeek.MONDAY)
-                .startTime(LocalTime.of(8, 0))
-                .endTime(LocalTime.of(10, 0))
+                .daysOfWeek("1")
+                .startTime(LocalTime.of(19, 45))
+                .endTime(LocalTime.of(21, 15))
                 .type(ScheduleType.THEORY_CLASS)
+                .isActive(true)
                 .build();
-
-        when(scheduleRepository.findAllByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(List.of(schedule));
+        when(scheduleEventRepository.findAllByRoom_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(ROOM_ID, CENTER_ID))
+                .thenReturn(List.of(ScheduleEvent.builder()
+                        .id(700L)
+                        .clazz(clazz)
+                        .recurringRule(rule)
+                        .teacherUser(teacher)
+                        .eventDate(LocalDate.of(2026, 7, 27))
+                        .startTime(LocalTime.of(19, 45))
+                        .endTime(LocalTime.of(21, 15))
+                        .eventType(ScheduleEventType.LESSON)
+                        .status(ScheduleEventStatus.SCHEDULED)
+                        .build()));
 
         List<RoomScheduleSummaryResponse> summary = service.getScheduleSummary(ROOM_ID);
 
         assertThat(summary).hasSize(1);
-        assertThat(summary.get(0).getClassName()).isEqualTo("IELTS 6.5");
-        assertThat(summary.get(0).getTeacherName()).isEqualTo("David Nguyen");
+        assertThat(summary.get(0).getSource()).isEqualTo("EVENT");
+        assertThat(summary.get(0).getEventDate()).isEqualTo("2026-07-27");
     }
 
     @Test
-    @DisplayName("validateDelete: when room has schedules → returns cannot delete with details")
-    void validateDelete_whenHasSchedules_shouldReturnCannotDelete() {
-        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+    @DisplayName("validateDelete: recurring rule usage blocks delete")
+    void validateDelete_whenHasScheduleRules_shouldReturnCannotDelete() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201");
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
-
-        Class clazz = Class.builder().name("IELTS 6.5").build();
-        User teacher = new User();
-        teacher.setFullName("David Nguyen");
-        Schedule schedule = Schedule.builder()
-                .id(500L)
-                .clazz(clazz)
-                .teacherUser(teacher)
-                .dayOfWeek(DayOfWeek.MONDAY)
-                .startTime(LocalTime.of(8, 0))
-                .endTime(LocalTime.of(10, 0))
-                .type(ScheduleType.THEORY_CLASS)
-                .build();
-
-        when(scheduleRepository.findAllByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(List.of(schedule));
+        when(scheduleRecurringRuleRepository.findAllByRoom_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(ROOM_ID, CENTER_ID))
+                .thenReturn(List.of(ScheduleRecurringRule.builder()
+                        .id(600L)
+                        .clazz(Class.builder().name("VSTEP B1").build())
+                        .daysOfWeek("1,3,5")
+                        .startTime(LocalTime.of(19, 45))
+                        .endTime(LocalTime.of(21, 15))
+                        .type(ScheduleType.THEORY_CLASS)
+                        .build()));
 
         RoomDeleteValidationResponse validation = service.validateDelete(ROOM_ID);
 
         assertThat(validation.isCanDelete()).isFalse();
-        assertThat(validation.getDependencies()).hasSize(1);
-        assertThat(validation.getDependencies().get(0).getClassName()).isEqualTo("IELTS 6.5");
+        assertThat(validation.getDependencies()).hasSize(3);
+        assertThat(validation.getDependencies()).extracting(RoomDependencyDto::getSource)
+                .containsOnly("RULE");
     }
 
     @Test
-    @DisplayName("delete: when room has schedules → throws BusinessRuleException ROOM_IN_USE")
-    void delete_whenHasSchedules_shouldThrowBusinessRuleException() {
-        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Phòng 201");
+    @DisplayName("delete: rule usage throws")
+    void delete_whenHasScheduleRules_shouldThrowBusinessRuleException() {
+        Room room = buildRoom(ROOM_ID, CENTER_ID, "P201", "Room 201");
         when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
-        when(scheduleRepository.existsByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(true);
+        when(scheduleRecurringRuleRepository.existsByRoom_IdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(true);
 
         assertThatThrownBy(() -> service.delete(ROOM_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("đang được sử dụng trong lịch học");
+                .hasMessageContaining("dang duoc su dung trong lich hoc");
+    }
+
+    private Center buildCenter(Long id) {
+        Center center = new Center();
+        center.setId(id);
+        return center;
+    }
+
+    private Room buildRoom(Long id, Long centerId, String code, String name) {
+        Room room = new Room();
+        room.setId(id);
+        room.setCode(code);
+        room.setName(name);
+        room.setCapacity(30);
+        room.setCenter(buildCenter(centerId));
+        room.setIsActive(true);
+        return room;
+    }
+
+    private RoomRequest buildRequest() {
+        return RoomRequest.builder()
+                .code("P201")
+                .name("Room 201")
+                .capacity(30)
+                .build();
+    }
+
+    private User buildTeacher() {
+        User teacher = new User();
+        teacher.setFullName("David Nguyen");
+        teacher.setRole(Role.TEACHER);
+        return teacher;
     }
 }

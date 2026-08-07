@@ -6,6 +6,7 @@ import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.document.dto.request.StudentDocumentRequest;
 import com.owlexa.owlexabackend.modules.document.dto.response.StudentDocumentResponse;
 import com.owlexa.owlexabackend.modules.document.entity.DocumentType;
@@ -49,6 +50,7 @@ class StudentDocumentServiceTest {
     @Mock private CenterRepository centerRepository;
     @Mock private UserRepository userRepository;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private ScheduleEventRepository scheduleEventRepository;
 
     private StudentDocumentService service;
 
@@ -65,7 +67,7 @@ class StudentDocumentServiceTest {
     void setUp() {
         service = new StudentDocumentService(
                 studentDocumentRepository, classEnrollmentRepository, classRepository,
-                centerRepository, userRepository, membershipRepository
+                centerRepository, userRepository, membershipRepository, scheduleEventRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 

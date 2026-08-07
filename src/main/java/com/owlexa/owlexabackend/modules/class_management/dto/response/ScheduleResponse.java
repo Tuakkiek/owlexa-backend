@@ -5,7 +5,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 
 @Data
@@ -32,5 +34,9 @@ public class ScheduleResponse {
     private LocalTime endTime;
 
     private ScheduleType type;
+    private LocalDate eventDate;
+    private Integer lessonNumber;
+    private ScheduleEventStatus eventStatus;
+    private String source;
     private Instant createdAt;
 }

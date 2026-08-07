@@ -7,5 +7,7 @@ import java.util.List;
 public interface StudentDocumentRepository extends JpaRepository<StudentDocument, Long> {
     List<StudentDocument> findAllByClazz_IdAndCenter_IdOrderByCreatedAtDesc(Long clazzId, Long centerId);
 
+    long countByClazz_IdAndCenter_Id(Long clazzId, Long centerId);
+
     void deleteByCenter_Id(Long centerId);
 }

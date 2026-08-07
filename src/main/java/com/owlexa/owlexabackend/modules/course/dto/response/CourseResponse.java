@@ -18,8 +18,9 @@ public class CourseResponse {
     private String name;
     private String description;
     private Integer defaultDuration;
+    private Integer defaultSessionCount;
     private Double defaultMonthlyFee;
-    private Integer defaultMaxStudents;
+    private Long defaultTeacherUserId;
     private Boolean isActive;
     private Instant createdAt;
     private Instant updatedAt;

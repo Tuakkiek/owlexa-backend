@@ -26,4 +26,6 @@ public interface AssignmentRecipientRepository extends JpaRepository<AssignmentR
             Long centerId,
             Pageable pageable
     );
+
+    long countByClazz_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(Long classId, Long centerId);
 }

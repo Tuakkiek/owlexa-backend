@@ -16,6 +16,7 @@ import org.hibernate.annotations.ParamDef;
 import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,8 +46,15 @@ public class Class implements TenantAware {
     @JoinColumn(name = "course_id")
     private Course course;
 
-    @Column(name = "max_students")
-    private Integer maxStudents;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "teacher_user_id")
+    private User teacherUser;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
 
     @Column(columnDefinition = "TEXT")
     private String description;

@@ -17,6 +17,7 @@ public class AttendanceResponse {
 
     private Long id;
     private Long scheduleId;
+    private Long scheduleEventId;
     private Long classId;
     private Long centerId;
 

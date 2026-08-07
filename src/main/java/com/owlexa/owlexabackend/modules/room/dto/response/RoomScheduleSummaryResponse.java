@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @Builder
 public class RoomScheduleSummaryResponse {
     private Long id;
+    private String source;
+    private String eventDate;
     private String dayOfWeek;
     private String startTime;
     private String endTime;

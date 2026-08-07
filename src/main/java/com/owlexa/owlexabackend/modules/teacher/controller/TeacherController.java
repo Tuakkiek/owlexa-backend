@@ -7,6 +7,7 @@ import com.owlexa.owlexabackend.modules.teacher.service.TeacherService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,23 +21,27 @@ public class TeacherController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_ASSIGN')")
     public TeacherResponse create(@Valid @RequestBody TeacherRequest request) {
         return teacherService.create(request);
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('TEACHER_VIEW')")
     public List<TeacherResponse> findAll() {
         return teacherService.findAll();
     }
 
     @PostMapping("/bulk")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_ASSIGN')")
     public List<BulkTeacherResult> bulkCreate(@RequestBody BulkTeacherRequest request) {
         return teacherService.bulkCreate(request);
     }
 
     // Update
     @PutMapping("/{teacherId}")
+    @PreAuthorize("hasAuthority('TEACHER_ASSIGN')")
     public TeacherResponse update(
             @PathVariable Long teacherId,
             @Valid @RequestBody TeacherRequest request
@@ -46,6 +51,7 @@ public class TeacherController {
 
     @DeleteMapping("/{teacherId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEACHER_ASSIGN')")
     public void delete(@PathVariable Long teacherId) {
         teacherService.delete(teacherId);
     }

@@ -50,6 +50,25 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     long countByCenter_IdAndStatus(Long centerId, FeeStatus status);
 
+    long countByClazz_IdAndCenter_Id(Long classId, Long centerId);
+
+    @Query("""
+            SELECT COUNT(fr) FROM FeeRecord fr
+            WHERE fr.clazz.id = :classId
+              AND fr.center.id = :centerId
+              AND (
+                fr.status IN (com.owlexa.owlexabackend.modules.payment.entity.FeeStatus.PAID,
+                              com.owlexa.owlexabackend.modules.payment.entity.FeeStatus.PARTIAL)
+                OR COALESCE(fr.paidAmount, 0) > 0
+              )
+            """)
+    long countSettledRecordsByClass(
+            @Param("classId") Long classId,
+            @Param("centerId") Long centerId
+    );
+
+    void deleteByClazz_IdAndCenter_Id(Long classId, Long centerId);
+
     void deleteByCenter_Id(Long centerId);
 
     @Query("SELECT COALESCE(SUM(fr.amount - COALESCE(fr.paidAmount, 0)), 0) FROM FeeRecord fr WHERE fr.center.id = :centerId AND fr.status = :status")

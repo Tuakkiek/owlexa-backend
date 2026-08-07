@@ -29,6 +29,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.service.AuthorizationService;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -70,6 +71,7 @@ public class TeacherReviewService {
     private final MembershipRepository membershipRepository;
     private final TeacherReviewMapper teacherReviewMapper;
     private final SubmissionMapper submissionMapper;
+    private final EntityManager entityManager;
 
     @Transactional
     public TeacherReviewDetailResponse createOrGetReview(Long submissionAttemptId) {
@@ -96,6 +98,7 @@ public class TeacherReviewService {
                         submissionAttemptId,
                         centerId
                 );
+                entityManager.clear();
                 return teacherReviewRepository
                         .findDetailBySubmissionAttemptIdAndCenterId(submissionAttemptId, centerId)
                         .map(teacherReviewMapper::toDetailResponse)

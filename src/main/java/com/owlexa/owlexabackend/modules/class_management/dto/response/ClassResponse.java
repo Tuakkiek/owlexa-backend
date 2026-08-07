@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.util.List;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
@@ -15,7 +16,6 @@ public class ClassResponse {
 
     private Long id;
     private String name;
-    private Integer maxStudents;
     private Double monthFee;
     private ClassStatus status;
     private Boolean isActive;
@@ -24,6 +24,11 @@ public class ClassResponse {
     private Long courseId;
     private String courseName;
     private String courseCode;
+
+    private LocalDate startDate;
+    private LocalDate endDate;
+    private Long teacherUserId;
+    private String teacherName;
 
     private Long studentCount;
     private Long scheduleCount;

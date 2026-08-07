@@ -13,6 +13,7 @@ import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -49,6 +50,7 @@ class AttendanceServiceTest {
 
     @Mock private AttendanceRepository attendanceRepository;
     @Mock private ScheduleRepository scheduleRepository;
+    @Mock private ScheduleEventRepository scheduleEventRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private UserRepository userRepository;
@@ -70,7 +72,7 @@ class AttendanceServiceTest {
     @BeforeEach
     void setUp() {
         service = new AttendanceService(
-                attendanceRepository, scheduleRepository, classEnrollmentRepository,
+                attendanceRepository, scheduleRepository, scheduleEventRepository, classEnrollmentRepository,
                 membershipRepository, userRepository, feeRecordRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);

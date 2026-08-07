@@ -53,8 +53,9 @@ public class CourseService {
                 .name(request.getName().trim())
                 .description(request.getDescription())
                 .defaultDuration(request.getDefaultDuration())
+                .defaultSessionCount(request.getDefaultSessionCount())
                 .defaultMonthlyFee(request.getDefaultMonthlyFee())
-                .defaultMaxStudents(request.getDefaultMaxStudents())
+                .defaultTeacherUserId(request.getDefaultTeacherUserId())
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .build();
 
@@ -99,8 +100,9 @@ public class CourseService {
         course.setName(request.getName().trim());
         course.setDescription(request.getDescription());
         course.setDefaultDuration(request.getDefaultDuration());
+        course.setDefaultSessionCount(request.getDefaultSessionCount());
         course.setDefaultMonthlyFee(request.getDefaultMonthlyFee());
-        course.setDefaultMaxStudents(request.getDefaultMaxStudents());
+        course.setDefaultTeacherUserId(request.getDefaultTeacherUserId());
         if (request.getIsActive() != null) {
             course.setIsActive(request.getIsActive());
         }
@@ -264,8 +266,9 @@ public class CourseService {
                 .name(course.getName())
                 .description(course.getDescription())
                 .defaultDuration(course.getDefaultDuration())
+                .defaultSessionCount(course.getDefaultSessionCount())
                 .defaultMonthlyFee(course.getDefaultMonthlyFee())
-                .defaultMaxStudents(course.getDefaultMaxStudents())
+                .defaultTeacherUserId(course.getDefaultTeacherUserId())
                 .isActive(course.getIsActive())
                 .createdAt(course.getCreatedAt())
                 .updatedAt(course.getUpdatedAt())
