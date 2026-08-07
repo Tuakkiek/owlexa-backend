@@ -5,6 +5,7 @@ import com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherSalaryRespon
 import com.owlexa.owlexabackend.modules.teacher.service.TeacherSalaryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,11 +38,13 @@ public class TeacherSalaryController {
     private final TeacherSalaryService teacherSalaryService;
 
     @GetMapping
+    @PreAuthorize("hasAuthority('SALARY_VIEW')")
     public TeacherSalaryResponse get(@PathVariable Long teacherId) {
         return teacherSalaryService.get(teacherId);
     }
 
     @PutMapping
+    @PreAuthorize("hasAuthority('SALARY_CALCULATE')")
     public TeacherSalaryResponse upsert(
             @PathVariable Long teacherId,
             @Valid @RequestBody TeacherSalaryRequest request
@@ -50,6 +53,7 @@ public class TeacherSalaryController {
     }
 
     @DeleteMapping
+    @PreAuthorize("hasAuthority('SALARY_CALCULATE')")
     public TeacherSalaryResponse clear(@PathVariable Long teacherId) {
         return teacherSalaryService.clear(teacherId);
     }

@@ -100,6 +100,20 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
 
     boolean existsByRoom_IdAndCenter_Id(Long roomId, Long centerId);
 
+    @Query("""
+            SELECT MIN(s.room.capacity) FROM Schedule s
+            WHERE s.clazz.id = :classId
+              AND s.center.id = :centerId
+              AND s.room IS NOT NULL
+              AND s.room.capacity IS NOT NULL
+            """)
+    Integer findMinRoomCapacityByClass(
+            @Param("classId") Long classId,
+            @Param("centerId") Long centerId
+    );
+
+    void deleteByClazz_IdAndCenter_Id(Long classId, Long centerId);
+
     void deleteByCenter_Id(Long centerId);
 }
 

@@ -12,7 +12,7 @@ public class ClassLifecycleValidator implements ScheduleValidator {
         if (context.getClazz().getStatus() == ClassStatus.FINISHED) {
             throw new BusinessRuleException(
                     "CLASS_FINISHED",
-                    "Schedules can only be added or modified when the class status is PLANNED or ACTIVE."
+                    "Chỉ có thể thêm hoặc chỉnh sửa lịch khi lớp đang ở trạng thái dự kiến hoặc đang học."
             );
         }
     }

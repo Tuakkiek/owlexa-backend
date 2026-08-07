@@ -71,9 +71,12 @@ public class TeacherService {
     @Transactional
     public TeacherResponse create(TeacherRequest request) {
         LOGGER.info("=== TeacherService.create() START ===");
-        LOGGER.info("  request.fullName    = '{}'", request.getFullName());
-        LOGGER.info("  request.phoneNumber = '{}'", request.getPhoneNumber());
-        LOGGER.info("  request.email       = '{}'", request.getEmail());
+        String phoneNumber = request.getPhoneNumber().trim();
+        String email = normalizeOptionalEmail(request.getEmail());
+        String fullName = request.getFullName().trim();
+        LOGGER.info("  request.fullName    = '{}'", fullName);
+        LOGGER.info("  request.phoneNumber = '{}'", phoneNumber);
+        LOGGER.info("  request.email       = '{}'", email);
 
         LOGGER.info("[STEP 1] getCurrentUser()...");
         User currentUser = getCurrentUser();
@@ -93,14 +96,16 @@ public class TeacherService {
         LOGGER.info("  PASSED");
 
         LOGGER.info("[STEP 5] Email uniqueness check...");
-        LOGGER.info("  request.email = '{}'", request.getEmail());
-        LOGGER.info("  email != null? {}", request.getEmail() != null);
-        LOGGER.info("  email.isBlank()? {}", request.getEmail() != null && request.getEmail().isBlank());
-        if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            boolean emailExists = userRepository.existsByEmail(request.getEmail());
-            LOGGER.info("  existsByEmail('{}') = {}", request.getEmail(), emailExists);
-            if (emailExists) {
-                LOGGER.error("  >>> THROWING DuplicateResourceException: Email '{}' already exists", request.getEmail());
+        LOGGER.info("  email = '{}'", email);
+        LOGGER.info("  email != null? {}", email != null);
+        if (email != null) {
+            var userWithEmail = userRepository.findByEmail(email);
+            boolean emailBelongsToAnotherUser = userWithEmail
+                    .map(user -> !phoneNumber.equals(user.getPhoneNumber()))
+                    .orElse(false);
+            LOGGER.info("  findByEmail('{}').isPresent() = {}", email, userWithEmail.isPresent());
+            if (emailBelongsToAnotherUser) {
+                LOGGER.error("  >>> THROWING DuplicateResourceException: Email '{}' already exists", email);
                 throw new DuplicateResourceException("Email đã tồn tại.");
             }
             LOGGER.info("  PASSED: email is unique");
@@ -112,8 +117,8 @@ public class TeacherService {
         String temporaryPassword = null;
 
         LOGGER.info("[STEP 6] Phone lookup...");
-        LOGGER.info("  findByPhoneNumber('{}')...", request.getPhoneNumber());
-        var existingUser = userRepository.findByPhoneNumber(request.getPhoneNumber());
+        LOGGER.info("  findByPhoneNumber('{}')...", phoneNumber);
+        var existingUser = userRepository.findByPhoneNumber(phoneNumber);
         LOGGER.info("  existingUser.isPresent() = {}", existingUser.isPresent());
         if (existingUser.isPresent()) {
             teacherUser = existingUser.get();
@@ -139,9 +144,9 @@ public class TeacherService {
             LOGGER.info("  generated temporaryPassword (length={})", temporaryPassword.length());
 
             teacherUser = new User();
-            teacherUser.setPhoneNumber(request.getPhoneNumber());
-            teacherUser.setEmail(request.getEmail());
-            teacherUser.setFullName(request.getFullName());
+            teacherUser.setPhoneNumber(phoneNumber);
+            teacherUser.setEmail(email);
+            teacherUser.setFullName(fullName);
             teacherUser.setRole(Role.TEACHER);
             teacherUser.setPassword(passwordEncoder.encode(temporaryPassword));
             LOGGER.info("  saving new user...");
@@ -385,6 +390,7 @@ public class TeacherService {
                 .userId(user.getId())
                 .fullName(user.getFullName())
                 .phoneNumber(user.getPhoneNumber())
+                .email(user.getEmail())
                 .centerId(centerId)
                 .temporaryPassword(temporaryPassword);
 

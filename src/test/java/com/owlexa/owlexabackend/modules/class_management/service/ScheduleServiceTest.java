@@ -6,12 +6,24 @@ import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
+import com.owlexa.owlexabackend.modules.class_management.dto.request.ScheduleEventRequest;
 import com.owlexa.owlexabackend.modules.class_management.dto.request.ScheduleRequest;
+import com.owlexa.owlexabackend.modules.class_management.dto.request.ScheduleRuleRequest;
+import com.owlexa.owlexabackend.modules.class_management.dto.response.ScheduleEventResponse;
 import com.owlexa.owlexabackend.modules.class_management.dto.response.ScheduleResponse;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventType;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleRecurringRule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleRepeatType;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
+import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.room.entity.Room;
 import com.owlexa.owlexabackend.modules.room.repository.RoomRepository;
@@ -32,6 +44,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +62,8 @@ class ScheduleServiceTest {
     @Mock private ClassRepository classRepository;
     @Mock private MembershipRepository membershipRepository;
     @Mock private ScheduleRepository scheduleRepository;
+    @Mock private ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
+    @Mock private ScheduleEventRepository scheduleEventRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private RoomRepository roomRepository;
 
@@ -75,7 +90,8 @@ class ScheduleServiceTest {
 
         service = new ScheduleService(
                 userRepository, classRepository, membershipRepository,
-                scheduleRepository, classEnrollmentRepository, roomRepository,
+                scheduleRepository, scheduleRecurringRuleRepository, scheduleEventRepository,
+                classEnrollmentRepository, roomRepository,
                 classLifecycleValidator, timeRangeValidator, roomConflictValidator,
                 teacherConflictValidator, studentConflictValidator
         );
@@ -106,6 +122,18 @@ class ScheduleServiceTest {
         clazz.setId(CLASS_ID);
         clazz.setName("Class A");
         clazz.setCenter(center);
+        return clazz;
+    }
+
+    private Class buildClassWithCourse(Long centerId, int sessionCount) {
+        Class clazz = buildClass(centerId);
+        Course course = new Course();
+        course.setId(300L);
+        course.setCode("VSTEP-B1");
+        course.setName("VSTEP B1");
+        course.setDefaultSessionCount(sessionCount);
+        clazz.setCourse(course);
+        clazz.setTeacherUser(buildTeacher(SCHEDULE_TEACHER_ID));
         return clazz;
     }
 
@@ -146,6 +174,25 @@ class ScheduleServiceTest {
         return schedule;
     }
 
+    private ScheduleEvent buildScheduleEvent(Long centerId) {
+        Center center = new Center();
+        center.setId(centerId);
+        ScheduleEvent event = new ScheduleEvent();
+        event.setId(SCHEDULE_ID);
+        event.setCenter(center);
+        event.setClazz(buildClass(centerId));
+        event.setTeacherUser(buildTeacher(SCHEDULE_TEACHER_ID));
+        event.setRoom(buildRoom(ROOM_ID, centerId));
+        event.setEventDate(LocalDate.of(2026, 8, 3));
+        event.setStartTime(LocalTime.of(8, 0));
+        event.setEndTime(LocalTime.of(10, 0));
+        event.setLessonNumber(1);
+        event.setEventType(ScheduleEventType.LESSON);
+        event.setStatus(ScheduleEventStatus.SCHEDULED);
+        event.setTitle("Class A");
+        return event;
+    }
+
     private ScheduleRequest buildCreateRequest() {
         return ScheduleRequest.builder()
                 .teacherUserId(SCHEDULE_TEACHER_ID)
@@ -184,6 +231,288 @@ class ScheduleServiceTest {
 
     @Test
     @DisplayName("updateType: schedule type THEORY_CLASS → set CANCELLED")
+    void createRule_shouldCalculateEndDateFromCourseSessionCount() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 4);
+        Room room = buildRoom(ROOM_ID, CENTER_ID);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+        when(userRepository.findById(SCHEDULE_TEACHER_ID)).thenReturn(Optional.of(buildTeacher(SCHEDULE_TEACHER_ID)));
+        when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
+                .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
+        when(scheduleRecurringRuleRepository.save(any(ScheduleRecurringRule.class))).thenAnswer(invocation -> {
+            ScheduleRecurringRule rule = invocation.getArgument(0);
+            rule.setId(700L);
+            return rule;
+        });
+        when(scheduleEventRepository.findAllByRecurringRule_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(700L, CENTER_ID))
+                .thenReturn(List.of());
+
+        var response = service.createRule(CLASS_ID, ScheduleRuleRequest.builder()
+                .teacherUserId(SCHEDULE_TEACHER_ID)
+                .roomId(ROOM_ID)
+                .daysOfWeek(List.of(1, 3, 5))
+                .startDate(LocalDate.of(2026, 8, 3))
+                .startTime(LocalTime.of(19, 45))
+                .endTime(LocalTime.of(21, 15))
+                .type(ScheduleType.THEORY_CLASS)
+                .build());
+
+        assertThat(response.getStartDate()).isEqualTo(LocalDate.of(2026, 8, 3));
+        assertThat(response.getEndDate()).isEqualTo(LocalDate.of(2026, 8, 10));
+    }
+
+    @Test
+    @DisplayName("createRule: active recurring rule with same teacher and time should conflict")
+    void createRule_whenTeacherHasActiveRule_shouldThrowBusinessRule() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 4);
+        Class otherClazz = buildClassWithCourse(CENTER_ID, 4);
+        otherClazz.setId(60L);
+        Room room = buildRoom(ROOM_ID, CENTER_ID);
+        ScheduleRecurringRule existingRule = ScheduleRecurringRule.builder()
+                .id(701L)
+                .center(clazz.getCenter())
+                .clazz(otherClazz)
+                .teacherUser(buildTeacher(SCHEDULE_TEACHER_ID))
+                .room(buildRoom(11L, CENTER_ID))
+                .repeatType(ScheduleRepeatType.WEEKLY)
+                .daysOfWeek("1")
+                .startDate(LocalDate.of(2026, 8, 3))
+                .endDate(LocalDate.of(2026, 8, 31))
+                .startTime(LocalTime.of(19, 30))
+                .endTime(LocalTime.of(21, 0))
+                .type(ScheduleType.THEORY_CLASS)
+                .isActive(true)
+                .build();
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+        when(userRepository.findById(SCHEDULE_TEACHER_ID)).thenReturn(Optional.of(buildTeacher(SCHEDULE_TEACHER_ID)));
+        when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(SCHEDULE_TEACHER_ID, CENTER_ID, Role.TEACHER))
+                .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
+        when(scheduleRecurringRuleRepository.findAllByCenter_IdAndIsActiveTrue(CENTER_ID))
+                .thenReturn(List.of(existingRule));
+
+        assertThatThrownBy(() -> service.createRule(CLASS_ID, ScheduleRuleRequest.builder()
+                .teacherUserId(SCHEDULE_TEACHER_ID)
+                .roomId(ROOM_ID)
+                .daysOfWeek(List.of(1))
+                .startDate(LocalDate.of(2026, 8, 3))
+                .startTime(LocalTime.of(19, 45))
+                .endTime(LocalTime.of(21, 15))
+                .type(ScheduleType.THEORY_CLASS)
+                .build()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Giáo viên");
+    }
+
+    @Test
+    @DisplayName("generateEvents: stop at course session count")
+    void generateEvents_shouldStopAtCourseSessionCount() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 3);
+        Room room = buildRoom(ROOM_ID, CENTER_ID);
+        ScheduleRecurringRule rule = ScheduleRecurringRule.builder()
+                .id(700L)
+                .center(clazz.getCenter())
+                .clazz(clazz)
+                .teacherUser(buildTeacher(SCHEDULE_TEACHER_ID))
+                .room(room)
+                .repeatType(ScheduleRepeatType.WEEKLY)
+                .daysOfWeek("1,3,5")
+                .startDate(LocalDate.of(2026, 8, 3))
+                .endDate(LocalDate.of(2026, 8, 7))
+                .startTime(LocalTime.of(19, 45))
+                .endTime(LocalTime.of(21, 15))
+                .type(ScheduleType.THEORY_CLASS)
+                .isActive(true)
+                .build();
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(scheduleRecurringRuleRepository.findById(700L)).thenReturn(Optional.of(rule));
+        when(scheduleEventRepository.existsByRecurringRule_IdAndEventDateAndCenter_Id(700L, LocalDate.of(2026, 8, 3), CENTER_ID)).thenReturn(false);
+        when(scheduleEventRepository.existsByRecurringRule_IdAndEventDateAndCenter_Id(700L, LocalDate.of(2026, 8, 5), CENTER_ID)).thenReturn(false);
+        when(scheduleEventRepository.existsByRecurringRule_IdAndEventDateAndCenter_Id(700L, LocalDate.of(2026, 8, 7), CENTER_ID)).thenReturn(false);
+        when(scheduleEventRepository.save(any(ScheduleEvent.class))).thenAnswer(invocation -> {
+            ScheduleEvent event = invocation.getArgument(0);
+            event.setId(1000L + event.getLessonNumber());
+            return event;
+        });
+
+        List<ScheduleEventResponse> responses = service.generateEvents(CLASS_ID, 700L);
+
+        assertThat(responses).hasSize(3);
+        assertThat(responses).extracting(ScheduleEventResponse::getLessonNumber).containsExactly(1, 2, 3);
+        assertThat(responses).extracting(ScheduleEventResponse::getEventDate)
+                .containsExactly(LocalDate.of(2026, 8, 3), LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 7));
+    }
+
+    @Test
+    @DisplayName("createEvent: one-off event overrides generated lesson")
+    void createEvent_whenOverlappingGeneratedLesson_shouldOverrideLesson() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 24);
+        Room room = buildRoom(ROOM_ID, CENTER_ID);
+        ScheduleRecurringRule rule = ScheduleRecurringRule.builder()
+                .id(700L)
+                .center(clazz.getCenter())
+                .clazz(clazz)
+                .build();
+        ScheduleEvent existingLesson = buildScheduleEvent(CENTER_ID);
+        existingLesson.setRecurringRule(rule);
+        existingLesson.setClazz(clazz);
+        existingLesson.setRoom(room);
+        existingLesson.setLessonNumber(24);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(scheduleEventRepository.findOverlappingClassEvents(
+                CENTER_ID,
+                CLASS_ID,
+                LocalDate.of(2026, 8, 3),
+                LocalTime.of(8, 0),
+                LocalTime.of(10, 0),
+                ScheduleEventStatus.CANCELLED,
+                null
+        )).thenReturn(List.of(existingLesson));
+        when(scheduleEventRepository.save(any(ScheduleEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ScheduleEventResponse response = service.createEvent(CLASS_ID, ScheduleEventRequest.builder()
+                .eventDate(LocalDate.of(2026, 8, 3))
+                .startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(10, 0))
+                .eventType(ScheduleEventType.EXAM)
+                .title("Kiem tra cuoi khoa")
+                .build());
+
+        assertThat(response.getId()).isEqualTo(SCHEDULE_ID);
+        assertThat(response.getRecurringRuleId()).isEqualTo(700L);
+        assertThat(response.getLessonNumber()).isEqualTo(24);
+        assertThat(response.getEventType()).isEqualTo(ScheduleEventType.EXAM);
+        assertThat(response.getTitle()).isEqualTo("Kiem tra cuoi khoa");
+    }
+
+    @Test
+    @DisplayName("createEvent: different class using same room and time should conflict")
+    void createEvent_whenRoomIsBookedByAnotherEvent_shouldThrowBusinessRule() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 24);
+        Room room = buildRoom(ROOM_ID, CENTER_ID);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+        when(scheduleEventRepository.findOverlappingRoomEvents(
+                CENTER_ID,
+                ROOM_ID,
+                LocalDate.of(2026, 8, 3),
+                LocalTime.of(8, 0),
+                LocalTime.of(10, 0),
+                ScheduleEventStatus.CANCELLED,
+                null
+        )).thenReturn(List.of(buildScheduleEvent(CENTER_ID)));
+
+        assertThatThrownBy(() -> service.createEvent(CLASS_ID, ScheduleEventRequest.builder()
+                .roomId(ROOM_ID)
+                .eventDate(LocalDate.of(2026, 8, 3))
+                .startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(10, 0))
+                .eventType(ScheduleEventType.EXAM)
+                .build()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Phòng");
+    }
+
+    @Test
+    @DisplayName("createEvent: teacher teaching another class at same time should conflict")
+    void createEvent_whenTeacherIsTeachingAnotherEvent_shouldThrowBusinessRule() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 24);
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(scheduleEventRepository.findOverlappingTeacherEvents(
+                CENTER_ID,
+                SCHEDULE_TEACHER_ID,
+                LocalDate.of(2026, 8, 3),
+                LocalTime.of(8, 0),
+                LocalTime.of(10, 0),
+                ScheduleEventStatus.CANCELLED,
+                null
+        )).thenReturn(List.of(buildScheduleEvent(CENTER_ID)));
+
+        assertThatThrownBy(() -> service.createEvent(CLASS_ID, ScheduleEventRequest.builder()
+                .eventDate(LocalDate.of(2026, 8, 3))
+                .startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(10, 0))
+                .eventType(ScheduleEventType.EXAM)
+                .build()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Giáo viên");
+    }
+
+    @Test
+    @DisplayName("updateEvent: edits only one event and keeps conflict validation")
+    void updateEvent_whenValid_shouldUpdateSingleEvent() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 24);
+        ScheduleEvent event = buildScheduleEvent(CENTER_ID);
+        event.setClazz(clazz);
+        User replacementTeacher = buildTeacher(201L);
+        Room replacementRoom = buildRoom(11L, CENTER_ID);
+
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(scheduleEventRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(event));
+        when(userRepository.findById(201L)).thenReturn(Optional.of(replacementTeacher));
+        when(membershipRepository.findByUser_IdAndCenter_IdAndUserRole(201L, CENTER_ID, Role.TEACHER))
+                .thenReturn(Optional.of(new com.owlexa.owlexabackend.modules.user.entity.Membership()));
+        when(roomRepository.findByIdAndCenter_Id(11L, CENTER_ID)).thenReturn(Optional.of(replacementRoom));
+        when(scheduleRepository.findAllByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID)).thenReturn(List.of());
+        when(scheduleEventRepository.findOverlappingClassEvents(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+        when(scheduleEventRepository.findOverlappingRoomEvents(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+        when(scheduleEventRepository.findOverlappingTeacherEvents(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+        when(scheduleRecurringRuleRepository.findAllByCenter_IdAndIsActiveTrue(CENTER_ID)).thenReturn(List.of());
+        when(classEnrollmentRepository.findAllByClazz_IdAndStatusIn(any(), any())).thenReturn(List.of());
+        when(scheduleEventRepository.save(any(ScheduleEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ScheduleEventResponse response = service.updateEvent(CLASS_ID, SCHEDULE_ID, ScheduleEventRequest.builder()
+                .teacherUserId(201L)
+                .roomId(11L)
+                .eventDate(LocalDate.of(2026, 8, 4))
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 30))
+                .eventType(ScheduleEventType.EXAM)
+                .status(ScheduleEventStatus.MOVED)
+                .title("Doi lich dot xuat")
+                .note("Doi giao vien va phong")
+                .build());
+
+        assertThat(response.getId()).isEqualTo(SCHEDULE_ID);
+        assertThat(response.getTeacherUserId()).isEqualTo(201L);
+        assertThat(response.getRoomId()).isEqualTo(11L);
+        assertThat(response.getEventDate()).isEqualTo(LocalDate.of(2026, 8, 4));
+        assertThat(response.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(response.getEndTime()).isEqualTo(LocalTime.of(10, 30));
+        assertThat(response.getEventType()).isEqualTo(ScheduleEventType.EXAM);
+        assertThat(response.getStatus()).isEqualTo(ScheduleEventStatus.MOVED);
+    }
+
+    @Test
+    @DisplayName("updateEvent: room conflict should block single-event edit")
+    void updateEvent_whenRoomConflict_shouldThrowBusinessRule() {
+        Class clazz = buildClassWithCourse(CENTER_ID, 24);
+        ScheduleEvent event = buildScheduleEvent(CENTER_ID);
+        event.setClazz(clazz);
+        Room room = buildRoom(ROOM_ID, CENTER_ID);
+
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(scheduleEventRepository.findById(SCHEDULE_ID)).thenReturn(Optional.of(event));
+        when(roomRepository.findByIdAndCenter_Id(ROOM_ID, CENTER_ID)).thenReturn(Optional.of(room));
+        when(scheduleRepository.findAllByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID)).thenReturn(List.of());
+        when(scheduleEventRepository.findOverlappingClassEvents(any(), any(), any(), any(), any(), any(), any())).thenReturn(List.of());
+        when(scheduleEventRepository.findOverlappingRoomEvents(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(List.of(buildScheduleEvent(CENTER_ID)));
+
+        assertThatThrownBy(() -> service.updateEvent(CLASS_ID, SCHEDULE_ID, ScheduleEventRequest.builder()
+                .roomId(ROOM_ID)
+                .eventDate(LocalDate.of(2026, 8, 4))
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 30))
+                .eventType(ScheduleEventType.LESSON)
+                .status(ScheduleEventStatus.SCHEDULED)
+                .build()))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Phòng");
+    }
+
+    @Test
+    @DisplayName("updateType: schedule type THEORY_CLASS -> set CANCELLED")
     void updateType_shouldUpdateType() {
         Schedule existing = buildSchedule(CENTER_ID);
         existing.setType(com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.THEORY_CLASS);
@@ -217,7 +546,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a TEACHER");
+                .hasMessageContaining("không phải là giáo viên");
     }
 
     @Test
@@ -231,7 +560,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not member of this center");
+                .hasMessageContaining("không thuộc trung tâm hiện tại");
     }
 
     @Test
@@ -254,7 +583,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.create(CLASS_ID, bad))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Start time must be before end time")
+                .hasMessageContaining("Giờ bắt đầu phải trước giờ kết thúc")
                 .extracting("code")
                 .isEqualTo("INVALID_TIME_RANGE");
     }
@@ -281,24 +610,26 @@ class ScheduleServiceTest {
     void findAllByClass_shouldReturnSchedules() {
         Class clazz = buildClass(CENTER_ID);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        when(scheduleRepository.findAllByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID))
-                .thenReturn(List.of(buildSchedule(CENTER_ID), buildSchedule(CENTER_ID)));
+        when(scheduleEventRepository.findAllByClazz_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(CLASS_ID, CENTER_ID))
+                .thenReturn(List.of(buildScheduleEvent(CENTER_ID), buildScheduleEvent(CENTER_ID)));
 
         List<ScheduleResponse> response = service.findAllByClass(CLASS_ID);
 
         assertThat(response).hasSize(2);
+        assertThat(response).allSatisfy(schedule -> assertThat(schedule.getSource()).isEqualTo("EVENT"));
     }
 
     @Test
     @DisplayName("findAllByTeacher: trả về tất cả schedule của teacher")
     void findAllByTeacher_shouldReturnSchedules() {
         when(userRepository.findById(SCHEDULE_TEACHER_ID)).thenReturn(Optional.of(buildTeacher(SCHEDULE_TEACHER_ID)));
-        when(scheduleRepository.findAllByTeacherUser_IdAndCenter_Id(SCHEDULE_TEACHER_ID, CENTER_ID))
-                .thenReturn(List.of(buildSchedule(CENTER_ID)));
+        when(scheduleEventRepository.findAllByTeacherUser_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(SCHEDULE_TEACHER_ID, CENTER_ID))
+                .thenReturn(List.of(buildScheduleEvent(CENTER_ID)));
 
         List<ScheduleResponse> response = service.findAllByTeacher(SCHEDULE_TEACHER_ID);
 
         assertThat(response).hasSize(1);
+        assertThat(response.get(0).getSource()).isEqualTo("EVENT");
     }
 
     @Test
@@ -348,7 +679,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.update(CLASS_ID, SCHEDULE_ID, buildCreateRequest()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("not a member of this center");
+                .hasMessageContaining("không thuộc trung tâm hiện tại");
     }
 
     @Test
@@ -419,7 +750,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Teacher Teacher 200 is already teaching another class during this time.");
+                .hasMessageContaining("Giáo viên Teacher 200 đã có lớp khác vào thời gian này.");
     }
 
     @Test
@@ -440,7 +771,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.create(CLASS_ID, buildCreateRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Room Room 10 is already occupied on Monday from 08:00 to 10:00.");
+                .hasMessageContaining("Phòng Room 10 đã có lịch vào Thứ Hai từ 08:00 đến 10:00.");
     }
 
     @Test
@@ -461,7 +792,7 @@ class ScheduleServiceTest {
 
         assertThatThrownBy(() -> service.update(CLASS_ID, SCHEDULE_ID, buildCreateRequest()))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("Teacher Teacher 200 is already teaching another class during this time.");
+                .hasMessageContaining("Giáo viên Teacher 200 đã có lớp khác vào thời gian này.");
     }
 
     @Test

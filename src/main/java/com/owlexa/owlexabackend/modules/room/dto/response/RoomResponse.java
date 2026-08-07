@@ -19,6 +19,8 @@ public class RoomResponse {
     private Integer capacity;
     private String description;
     private Boolean isActive;
+    private Boolean isInUse;
+    private Long usageCount;
     private Long centerId;
     private Instant createdAt;
     private Instant updatedAt;

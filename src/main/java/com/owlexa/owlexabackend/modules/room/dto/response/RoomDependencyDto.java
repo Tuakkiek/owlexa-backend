@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class RoomDependencyDto {
     private String className;
     private String teacherName;
+    private String source;
     private String dayOfWeek;
     private String timeRange;
 }

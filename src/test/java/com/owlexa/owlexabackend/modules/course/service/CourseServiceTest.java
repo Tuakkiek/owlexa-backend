@@ -88,7 +88,6 @@ class CourseServiceTest {
                 .code("VSTEP-B1")
                 .name("VSTEP B1")
                 .defaultMonthlyFee(1500000.0)
-                .defaultMaxStudents(20)
                 .build();
     }
 

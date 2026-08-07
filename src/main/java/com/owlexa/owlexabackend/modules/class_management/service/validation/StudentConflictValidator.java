@@ -43,7 +43,7 @@ public class StudentConflictValidator implements ScheduleValidator {
             if (!overlaps.isEmpty()) {
                 throw new BusinessRuleException(
                         "STUDENT_CONFLICT",
-                        String.format("Student %s already has another class during this time.",
+                        String.format("Học viên %s đã có lớp khác vào thời gian này.",
                                 enrollment.getStudentUser().getFullName())
                 );
             }

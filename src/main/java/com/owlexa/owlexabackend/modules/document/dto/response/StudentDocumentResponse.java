@@ -15,4 +15,6 @@ public class StudentDocumentResponse {
     private String url;
     private Long classId;
     private String className;
+    private String uploaderName;
+    private String description;
 }

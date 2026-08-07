@@ -1,11 +1,14 @@
 package com.owlexa.owlexabackend.modules.class_management.dto.request;
+
+import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
@@ -13,16 +16,19 @@ import lombok.NoArgsConstructor;
 @Builder
 public class ClassRequest {
 
-    @NotBlank(message = "Tên lớp học không được để trống")
+    @NotBlank(message = "Class name is required")
     private String name;
 
     private Long courseId;
 
-    @Min(value = 1, message = "Sĩ số tối đa phải ít nhất là 1")
-    private Integer maxStudent;
+    private LocalDate startDate;
 
-    @Min(value = 0, message = "Học phí hàng tháng không được âm")
+    private LocalDate endDate;
+
+    private Long teacherUserId;
+
+    @Min(value = 0, message = "Monthly fee cannot be negative")
     private Double monthlyFee;
 
-    private com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus status;
+    private ClassStatus status;
 }

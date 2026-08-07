@@ -24,6 +24,10 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
 
     List<Payment> findAllByStatusAndExpiresAtBefore(TransactionStatus status, Instant expiresAt);
 
+    long countByFeeRecord_Clazz_IdAndFeeRecord_Center_IdAndStatus(Long classId, Long centerId, TransactionStatus status);
+
+    void deleteByFeeRecord_Clazz_IdAndFeeRecord_Center_Id(Long classId, Long centerId);
+
     // ── Idempotency & duplicate prevention ──────────────────────────────
 
     Optional<Payment> findByIdempotencyKey(String idempotencyKey);

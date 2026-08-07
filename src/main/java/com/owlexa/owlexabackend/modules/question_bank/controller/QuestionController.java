@@ -33,7 +33,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher/questions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('TEACHER')")
+@PreAuthorize("hasAuthority('TEST_VIEW')")
 public class QuestionController {
 
     private final QuestionService questionService;

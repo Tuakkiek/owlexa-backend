@@ -18,10 +18,14 @@ public class StudentDocumentController {
 
     private final StudentDocumentService studentDocumentService;
 
+    // ── Student: own documents ───────────────────────────────────────────────
+
     @GetMapping("/student/documents")
     public List<StudentDocumentResponse> findMyDocuments() {
         return studentDocumentService.findMyDocuments();
     }
+
+    // ── Owner: class documents ───────────────────────────────────────────────
 
     @GetMapping("/owner/classes/{classId}/documents")
     @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
@@ -36,5 +40,22 @@ public class StudentDocumentController {
             @RequestBody StudentDocumentRequest request
     ) {
         return studentDocumentService.createForClass(classId, request);
+    }
+
+    // ── Teacher: class documents ─────────────────────────────────────────────
+
+    @GetMapping("/teacher/classes/{classId}/documents")
+    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
+    public List<StudentDocumentResponse> findClassDocumentsAsTeacher(@PathVariable Long classId) {
+        return studentDocumentService.findClassDocumentsAsTeacher(classId);
+    }
+
+    @PostMapping("/teacher/classes/{classId}/documents")
+    @PreAuthorize("hasAuthority('DOCUMENT_UPLOAD')")
+    public StudentDocumentResponse createForClassAsTeacher(
+            @PathVariable Long classId,
+            @RequestBody StudentDocumentRequest request
+    ) {
+        return studentDocumentService.createForClassAsTeacher(classId, request);
     }
 }

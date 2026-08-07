@@ -17,7 +17,9 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,9 +30,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +48,8 @@ public class EnrollmentService {
     private final MembershipRepository membershipRepository;
     private final FeeRecordRepository feeRecordRepository;
     private final ScheduleRepository scheduleRepository;
+    private final ScheduleEventRepository scheduleEventRepository;
+    private final ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
 
     @Value("${app.enrollment.fee-grace-days:7}")
     private int feeGraceDays;
@@ -57,7 +65,7 @@ public class EnrollmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+            throw new TenancyViolationException("Lớp học này không thuộc trung tâm hiện tại.");
         }
 
         if (clazz.getStatus() != com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE) {
@@ -92,9 +100,11 @@ public class EnrollmentService {
                     long activeCount = classEnrollmentRepository.countByClazz_IdAndStatusIn(
                             classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
                     );
-                    if (activeCount >= clazz.getMaxStudents()) {
-                        throw new BusinessRuleException("Lớp học đã đầy sĩ số");
+                    if (activeCount >= resolveCapacityLimit(clazz, centerId)) {
+                        throw new BusinessRuleException("Lớp học đã đạt sức chứa phòng học");
                     }
+
+                    validateStudentScheduleConflicts(clazz, student, centerId);
 
                     // Restore: set status to ACTIVE, update enrolled-by user
                     enrollment.setStatus(EnrollmentStatus.ACTIVE);
@@ -113,9 +123,11 @@ public class EnrollmentService {
                 classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
         );
 
-        if (pendingOrActiveCount >= clazz.getMaxStudents()) {
-            throw new BusinessRuleException("Lớp học đã đầy sĩ số");
+        if (pendingOrActiveCount >= resolveCapacityLimit(clazz, centerId)) {
+            throw new BusinessRuleException("Lớp học đã đạt sức chứa phòng học");
         }
+
+        validateStudentScheduleConflicts(clazz, student, centerId);
 
         // Check student schedule conflicts
         List<com.owlexa.owlexabackend.modules.class_management.entity.Schedule> classSchedules =
@@ -158,10 +170,10 @@ public class EnrollmentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+            throw new TenancyViolationException("Lớp học này không thuộc trung tâm hiện tại.");
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository
@@ -194,7 +206,7 @@ public class EnrollmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+            throw new TenancyViolationException("Lớp học này không thuộc trung tâm hiện tại.");
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository
@@ -219,10 +231,10 @@ public class EnrollmentService {
         assertCenterMembership(currentUser, centerId);
 
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+            throw new TenancyViolationException("Lớp học này không thuộc trung tâm hiện tại.");
         }
 
         return classEnrollmentRepository.findAllByClazz_IdAndStatusIn(
@@ -245,10 +257,10 @@ public class EnrollmentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
 
         if (!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+            throw new TenancyViolationException("Lớp học này không thuộc trung tâm hiện tại.");
         }
 
         return classEnrollmentRepository.findAllByClazz_IdAndStatusIn(
@@ -266,15 +278,15 @@ public class EnrollmentService {
         assertOwnerAndCenterMembership(currentUser, centerId);
 
         Class clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + classId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lớp học với ID: " + classId));
         if(!clazz.getCenter().getId().equals(centerId)) {
-            throw new TenancyViolationException("Class " + classId + " belongs to another center");
+            throw new TenancyViolationException("Lớp học này không thuộc trung tâm hiện tại.");
         }
 
         ClassEnrollment enrollment = classEnrollmentRepository
                 .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Enrollment not found for studentId: " + studentUserId
+                        "Không tìm thấy ghi danh của học viên ID: " + studentUserId
                 ));
         if (enrollment.getStatus() == EnrollmentStatus.DROPPED) {
             return;
@@ -299,12 +311,12 @@ public class EnrollmentService {
         ClassEnrollment enrollment = classEnrollmentRepository
                 .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Enrollment not found for studentId: " + studentUserId
+                        "Không tìm thấy ghi danh của học viên ID: " + studentUserId
                 ));
 
         if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
             throw new BusinessRuleException(
-                    "Only ACTIVE enrollments can be suspended. Current status: " + enrollment.getStatus()
+                    "Chỉ có thể tạm ngưng ghi danh đang hoạt động. Trạng thái hiện tại: " + enrollment.getStatus()
             );
         }
 
@@ -327,17 +339,129 @@ public class EnrollmentService {
         ClassEnrollment enrollment = classEnrollmentRepository
                 .findByClazz_IdAndStudentUser_Id(classId, studentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Enrollment not found for studentId: " + studentUserId
+                        "Không tìm thấy ghi danh của học viên ID: " + studentUserId
                 ));
 
         if (enrollment.getStatus() != EnrollmentStatus.SUSPENDED) {
             throw new BusinessRuleException(
-                    "Only SUSPENDED enrollments can be reactivated. Current status: " + enrollment.getStatus()
+                    "Chỉ có thể kích hoạt lại ghi danh đang tạm ngưng. Trạng thái hiện tại: " + enrollment.getStatus()
             );
         }
 
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
         classEnrollmentRepository.save(enrollment);
+    }
+
+    private int resolveCapacityLimit(Class clazz, Long centerId) {
+        Integer eventRoomCapacity = scheduleEventRepository.findMinRoomCapacityByClass(clazz.getId(), centerId);
+        Integer ruleRoomCapacity = scheduleRecurringRuleRepository.findMinRoomCapacityByClass(clazz.getId(), centerId);
+        Integer legacyRoomCapacity = scheduleRepository.findMinRoomCapacityByClass(clazz.getId(), centerId);
+
+        return List.of(eventRoomCapacity, ruleRoomCapacity, legacyRoomCapacity).stream()
+                .filter(value -> value != null && value > 0)
+                .min(Integer::compareTo)
+                .orElse(Integer.MAX_VALUE);
+    }
+
+    private void validateStudentScheduleConflicts(Class clazz, User student, Long centerId) {
+        Long classId = clazz.getId();
+
+        var classEvents = scheduleEventRepository.findAllByClazz_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(classId, centerId);
+        for (var event : classEvents) {
+            if (event.getStatus() == com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus.CANCELLED) {
+                continue;
+            }
+            assertNoLegacyStudentConflict(student, event.getEventDate().getDayOfWeek(), event.getStartTime(), event.getEndTime(), centerId);
+            if (!scheduleEventRepository.findOverlappingStudentEvents(
+                    centerId,
+                    student.getId(),
+                    event.getEventDate(),
+                    event.getStartTime(),
+                    event.getEndTime(),
+                    com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus.CANCELLED,
+                    event.getId()
+            ).isEmpty()) {
+                throwStudentConflict(student);
+            }
+            assertNoRuleStudentConflict(student, event.getEventDate().getDayOfWeek(), event.getStartTime(), event.getEndTime(), centerId, classId);
+        }
+
+        var classRules = scheduleRecurringRuleRepository.findAllByClazz_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(classId, centerId);
+        for (var rule : classRules) {
+            if (!Boolean.TRUE.equals(rule.getIsActive())) {
+                continue;
+            }
+            for (Integer day : parseDays(rule.getDaysOfWeek())) {
+                DayOfWeek dayOfWeek = DayOfWeek.of(day);
+                assertNoLegacyStudentConflict(student, dayOfWeek, rule.getStartTime(), rule.getEndTime(), centerId);
+                assertNoRuleStudentConflict(student, dayOfWeek, rule.getStartTime(), rule.getEndTime(), centerId, classId);
+            }
+        }
+    }
+
+    private void assertNoLegacyStudentConflict(
+            User student,
+            DayOfWeek dayOfWeek,
+            LocalTime startTime,
+            LocalTime endTime,
+            Long centerId
+    ) {
+        if (!scheduleRepository.findOverlappingStudentSchedules(student.getId(), dayOfWeek, startTime, endTime, centerId, null).isEmpty()) {
+            throwStudentConflict(student);
+        }
+    }
+
+    private void assertNoRuleStudentConflict(
+            User student,
+            DayOfWeek dayOfWeek,
+            LocalTime startTime,
+            LocalTime endTime,
+            Long centerId,
+            Long targetClassId
+    ) {
+        Set<Long> enrolledClassIds = classEnrollmentRepository
+                .findAllByStudentUser_IdAndCenter_IdAndStatusIn(
+                        student.getId(),
+                        centerId,
+                        List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.PENDING, EnrollmentStatus.SUSPENDED))
+                .stream()
+                .map(enrollment -> enrollment.getClazz().getId())
+                .filter(enrolledClassId -> !enrolledClassId.equals(targetClassId))
+                .collect(Collectors.toSet());
+
+        if (enrolledClassIds.isEmpty()) {
+            return;
+        }
+
+        for (var rule : scheduleRecurringRuleRepository.findAllByCenter_IdAndIsActiveTrue(centerId)) {
+            if (!enrolledClassIds.contains(rule.getClazz().getId())) {
+                continue;
+            }
+            if (parseDays(rule.getDaysOfWeek()).contains(dayOfWeek.getValue())
+                    && startTime.isBefore(rule.getEndTime())
+                    && endTime.isAfter(rule.getStartTime())) {
+                throwStudentConflict(student);
+            }
+        }
+    }
+
+    private Set<Integer> parseDays(String csv) {
+        if (csv == null || csv.isBlank()) {
+            return Set.of();
+        }
+        return java.util.Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(Integer::valueOf)
+                .collect(Collectors.toSet());
+    }
+
+    private void throwStudentConflict(User student) {
+        throw new BusinessRuleException(
+                "STUDENT_CONFLICT",
+                String.format("Há»c sinh %s Ä‘Ã£ cÃ³ lá»‹ch há»c lá»›p khÃ¡c vÃ o thá»i gian nÃ y.",
+                        student.getFullName())
+        );
     }
 
     // Helper: auto-generate FeeRecord when enrollment becomes ACTIVE
@@ -391,14 +515,14 @@ public class EnrollmentService {
         String phoneNumber = authentication.getName();
 
         return userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new ResourceNotFoundException("Current User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng hiện tại."));
     }
 
     private Long requiredCurrentCenterId() {
         Long centerId = TenantContext.getCurrentTenantId();
 
         if (centerId == null) {
-            throw new BadRequestException("Tenant context not resolved. Ensure the user has an active membership.");
+            throw new BadRequestException("Không xác định được trung tâm hiện tại. Vui lòng kiểm tra quyền truy cập.");
         }
 
         return centerId;
@@ -406,7 +530,7 @@ public class EnrollmentService {
 
     private void assertOwnerAndCenterMembership(User currentUser, Long centerId) {
         if (currentUser.getRole() != Role.OWNER) {
-            throw new AccessDeniedException("Only OWNER can manage enrollments");
+            throw new AccessDeniedException("Chỉ chủ trung tâm mới có thể quản lý ghi danh.");
         }
 
         assertCenterMembership(currentUser, centerId);
@@ -416,7 +540,7 @@ public class EnrollmentService {
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
 
         if (!hasMembership) {
-            throw new AccessDeniedException("User is not a member of this center");
+            throw new AccessDeniedException("Người dùng không thuộc trung tâm hiện tại.");
         }
     }
 }

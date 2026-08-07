@@ -105,7 +105,7 @@ class TeacherServiceTest {
     @DisplayName("create: teacher mới (chưa tồn tại) → tạo User + Membership, trả về password tạm")
     void create_whenNewTeacher_shouldCreateUserAndMembership() {
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.empty());
-        when(userRepository.existsByEmail("teacher@example.com")).thenReturn(false);
+        when(userRepository.findByEmail("teacher@example.com")).thenReturn(Optional.empty());
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter()));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
@@ -131,7 +131,7 @@ class TeacherServiceTest {
         existingTeacher.setRole(Role.TEACHER);
 
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(existingTeacher));
-        when(userRepository.existsByEmail("teacher@example.com")).thenReturn(false);
+        when(userRepository.findByEmail("teacher@example.com")).thenReturn(Optional.empty());
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter()));
         when(membershipRepository.existsByUser_IdAndCenter_Id(50L, CENTER_ID)).thenReturn(true);
 
@@ -150,7 +150,7 @@ class TeacherServiceTest {
         existingStudent.setRole(Role.STUDENT);
 
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(existingStudent));
-        when(userRepository.existsByEmail("teacher@example.com")).thenReturn(false);
+        when(userRepository.findByEmail("teacher@example.com")).thenReturn(Optional.empty());
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter()));
 
         assertThatThrownBy(() -> service.create(buildRequest()))
@@ -161,7 +161,10 @@ class TeacherServiceTest {
     @Test
     @DisplayName("create: email đã tồn tại → DuplicateResourceException")
     void create_whenEmailAlreadyExists_shouldThrowDuplicate() {
-        when(userRepository.existsByEmail("teacher@example.com")).thenReturn(true);
+        User userWithEmail = new User();
+        userWithEmail.setId(51L);
+        userWithEmail.setPhoneNumber("0900000099");
+        when(userRepository.findByEmail("teacher@example.com")).thenReturn(Optional.of(userWithEmail));
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(buildCenter()));
 
         assertThatThrownBy(() -> service.create(buildRequest()))

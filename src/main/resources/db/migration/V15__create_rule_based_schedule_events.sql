@@ -1,0 +1,72 @@
+CREATE TABLE `schedule_recurring_rules` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `center_id` bigint NOT NULL,
+  `class_id` bigint NOT NULL,
+  `room_id` bigint DEFAULT NULL,
+  `teacher_user_id` bigint DEFAULT NULL,
+  `repeat_type` enum('WEEKLY') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `days_of_week` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `type` enum('EXAM','ONLINE_CLASS','THEORY_CLASS') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `is_active` bit(1) NOT NULL DEFAULT b'1',
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_schedule_recurring_rules_center_id` (`center_id`),
+  KEY `idx_schedule_recurring_rules_class_id` (`class_id`),
+  KEY `idx_schedule_recurring_rules_room_id` (`room_id`),
+  KEY `idx_schedule_recurring_rules_teacher_user_id` (`teacher_user_id`),
+  CONSTRAINT `fk_schedule_recurring_rules_center_id` FOREIGN KEY (`center_id`) REFERENCES `centers` (`id`),
+  CONSTRAINT `fk_schedule_recurring_rules_class_id` FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`),
+  CONSTRAINT `fk_schedule_recurring_rules_room_id` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`id`),
+  CONSTRAINT `fk_schedule_recurring_rules_teacher_user_id` FOREIGN KEY (`teacher_user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `courses`
+  ADD COLUMN `default_session_count` int DEFAULT NULL AFTER `default_duration`,
+  ADD COLUMN `default_teacher_user_id` bigint DEFAULT NULL AFTER `default_max_students`,
+  ADD COLUMN `default_room_id` bigint DEFAULT NULL AFTER `default_teacher_user_id`,
+  ADD KEY `idx_courses_default_teacher_user_id` (`default_teacher_user_id`),
+  ADD KEY `idx_courses_default_room_id` (`default_room_id`),
+  ADD CONSTRAINT `fk_courses_default_teacher_user_id` FOREIGN KEY (`default_teacher_user_id`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `fk_courses_default_room_id` FOREIGN KEY (`default_room_id`) REFERENCES `rooms` (`id`);
+
+ALTER TABLE `classes`
+  ADD COLUMN `start_date` date DEFAULT NULL AFTER `description`,
+  ADD COLUMN `end_date` date DEFAULT NULL AFTER `start_date`,
+  ADD COLUMN `teacher_user_id` bigint DEFAULT NULL AFTER `course_id`,
+  ADD KEY `idx_classes_teacher_user_id` (`teacher_user_id`),
+  ADD CONSTRAINT `fk_classes_teacher_user_id` FOREIGN KEY (`teacher_user_id`) REFERENCES `users` (`id`);
+
+CREATE TABLE `schedule_events` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `center_id` bigint NOT NULL,
+  `class_id` bigint NOT NULL,
+  `recurring_rule_id` bigint DEFAULT NULL,
+  `room_id` bigint DEFAULT NULL,
+  `teacher_user_id` bigint DEFAULT NULL,
+  `event_date` date NOT NULL,
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `lesson_number` int DEFAULT NULL,
+  `event_type` enum('EXAM','LESSON','ONLINE_LESSON','PRACTICE') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('CANCELLED','MOVED','SCHEDULED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `note` text COLLATE utf8mb4_unicode_ci,
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_schedule_events_center_date` (`center_id`, `event_date`),
+  KEY `idx_schedule_events_class_date` (`class_id`, `event_date`),
+  KEY `idx_schedule_events_rule_id` (`recurring_rule_id`),
+  KEY `idx_schedule_events_room_id` (`room_id`),
+  KEY `idx_schedule_events_teacher_user_id` (`teacher_user_id`),
+  CONSTRAINT `fk_schedule_events_center_id` FOREIGN KEY (`center_id`) REFERENCES `centers` (`id`),
+  CONSTRAINT `fk_schedule_events_class_id` FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`),
+  CONSTRAINT `fk_schedule_events_rule_id` FOREIGN KEY (`recurring_rule_id`) REFERENCES `schedule_recurring_rules` (`id`),
+  CONSTRAINT `fk_schedule_events_room_id` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`id`),
+  CONSTRAINT `fk_schedule_events_teacher_user_id` FOREIGN KEY (`teacher_user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

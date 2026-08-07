@@ -27,20 +27,11 @@ public class AssessmentDocumentContentValidator {
             "orderedList",
             "listItem",
             "hardBreak",
-            "image",
-            "audio",
-            "video",
-            "pdfAttachment",
-            "fileAttachment",
             "assessmentQuestion",
-            "table",
-            "tableRow",
-            "tableHeader",
-            "tableCell",
             "taskList",
             "taskItem"
     );
-    private static final Set<String> ALLOWED_MARK_TYPES = Set.of("bold", "italic", "underline", "strike", "link", "highlight", "textStyle", "color");
+    private static final Set<String> ALLOWED_MARK_TYPES = Set.of("bold", "italic", "underline", "link", "highlight", "textStyle", "color");
     private static final Set<String> ALLOWED_TEXT_ALIGN_VALUES = Set.of("left", "center", "right", "justify");
     private static final Set<String> ALLOWED_TARGET_VALUES = Set.of("_self", "_blank");
 
@@ -157,8 +148,8 @@ public class AssessmentDocumentContentValidator {
             default -> Set.of();
         };
         for (String attributeName : attrs.propertyNames()) {
-            if (!allowedAttributes.isEmpty() && !allowedAttributes.contains(attributeName)) {
-                // allow open attributes for unknown extra tiptap plugins
+            if (!allowedAttributes.contains(attributeName)) {
+                throw new BadRequestException("Block " + blockIndex + " " + path + ".attrs." + attributeName + " is not supported");
             }
         }
 

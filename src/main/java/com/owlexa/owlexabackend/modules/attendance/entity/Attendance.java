@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.attendance.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
@@ -37,8 +38,12 @@ public class Attendance implements TenantAware {
     private User studentUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "schedule_id", nullable = false)
+    @JoinColumn(name = "schedule_id")
     private com.owlexa.owlexabackend.modules.class_management.entity.Schedule schedule;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "schedule_event_id")
+    private ScheduleEvent scheduleEvent;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "center_id", nullable = false)

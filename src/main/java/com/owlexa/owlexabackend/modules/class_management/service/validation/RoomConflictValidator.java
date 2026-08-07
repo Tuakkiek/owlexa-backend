@@ -38,14 +38,21 @@ public class RoomConflictValidator implements ScheduleValidator {
             String endStr = conflict.getEndTime().format(TIME_FORMATTER);
             throw new BusinessRuleException(
                     "ROOM_CONFLICT",
-                    String.format("Room %s is already occupied on %s from %s to %s.",
+                    String.format("Phòng %s đã có lịch vào %s từ %s đến %s.",
                             context.getRoom().getName(), dayName, startStr, endStr)
             );
         }
     }
 
     private String formatDayOfWeek(java.time.DayOfWeek day) {
-        String name = day.name();
-        return name.substring(0, 1).toUpperCase() + name.substring(1).toLowerCase();
+        return switch (day) {
+            case MONDAY -> "Thứ Hai";
+            case TUESDAY -> "Thứ Ba";
+            case WEDNESDAY -> "Thứ Tư";
+            case THURSDAY -> "Thứ Năm";
+            case FRIDAY -> "Thứ Sáu";
+            case SATURDAY -> "Thứ Bảy";
+            case SUNDAY -> "Chủ Nhật";
+        };
     }
 }
