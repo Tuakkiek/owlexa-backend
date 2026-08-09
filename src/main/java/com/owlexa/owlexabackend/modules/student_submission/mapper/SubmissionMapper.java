@@ -45,6 +45,7 @@ public class SubmissionMapper {
                 .startedAt(attempt.getStartedAt())
                 .lastSavedAt(attempt.getLastSavedAt())
                 .submittedAt(attempt.getSubmittedAt())
+                .expiresAt(attempt.getExpiresAt())
                 .autoScore(attempt.getAutoScore())
                 .displayedScore(attempt.getAutoScore())
                 .maxScore(attempt.getMaxScore())
@@ -59,6 +60,8 @@ public class SubmissionMapper {
         boolean allowReview = assignment.getAllowReview() == null || assignment.getAllowReview();
         boolean hasPassword = assignment.getAccessPassword() != null && !assignment.getAccessPassword().isBlank();
 
+        boolean isReviewing = attempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS;
+
         return StudentAttemptDetailResponse.builder()
                 .id(attempt.getId())
                 .assignmentId(assignment.getId())
@@ -71,11 +74,16 @@ public class SubmissionMapper {
                 .startedAt(attempt.getStartedAt())
                 .lastSavedAt(attempt.getLastSavedAt())
                 .submittedAt(attempt.getSubmittedAt())
+                .expiresAt(attempt.getExpiresAt())
+                .audioPositionSeconds(attempt.getAudioPositionSeconds())
+                .audioCompleted(attempt.getAudioCompleted())
                 .autoScore(showScore ? attempt.getAutoScore() : null)
                 .maxScore(showScore ? attempt.getMaxScore() : null)
                 .audioFile(toFileResponse(assignment.getAudioFile()))
                 .playbackMode(assignment.getPlaybackMode())
-                .items(toStudentItemResponses(assignment.getItems()))
+                .items(isReviewing && showScore
+                        ? toStudentReviewItemResponses(assignment.getItems())
+                        : toStudentItemResponses(assignment.getItems()))
                 .answers((allowReview || attempt.getStatus() == SubmissionAttemptStatus.IN_PROGRESS) ? toAnswerResponses(attempt.getAnswers()) : List.of())
                 .blocks(toBlockResponses(assignment.getBlocks()))
                 .showScore(showScore)
@@ -139,6 +147,7 @@ public class SubmissionMapper {
                 .startedAt(attempt.getStartedAt())
                 .lastSavedAt(attempt.getLastSavedAt())
                 .submittedAt(attempt.getSubmittedAt())
+                .expiresAt(attempt.getExpiresAt())
                 .autoScore(attempt.getAutoScore())
                 .maxScore(attempt.getMaxScore())
                 .items(toItemResponses(assignment.getItems()))
@@ -179,6 +188,7 @@ public class SubmissionMapper {
     private StudentAttemptItemResponse toStudentItemResponse(AssignmentItem item) {
         return StudentAttemptItemResponse.builder()
                 .assignmentItemId(item.getId())
+                .questionId(item.getAssessmentItem() == null || item.getAssessmentItem().getQuestion() == null ? null : item.getAssessmentItem().getQuestion().getId())
                 .questionType(item.getQuestionType())
                 .title(item.getTitle())
                 .content(richTextDocumentService.deserialize(item.getContentJson()))
@@ -192,6 +202,7 @@ public class SubmissionMapper {
     private SubmissionAttemptItemResponse toItemResponse(AssignmentItem item) {
         return SubmissionAttemptItemResponse.builder()
                 .assignmentItemId(item.getId())
+                .questionId(item.getAssessmentItem() == null || item.getAssessmentItem().getQuestion() == null ? null : item.getAssessmentItem().getQuestion().getId())
                 .questionType(item.getQuestionType())
                 .title(item.getTitle())
                 .content(richTextDocumentService.deserialize(item.getContentJson()))
@@ -215,6 +226,39 @@ public class SubmissionMapper {
                         .displayOrder(option.getDisplayOrder())
                         .build())
                 .toList();
+    }
+
+    private List<SubmissionAttemptItemOptionResponse> toOptionResponsesWithCorrect(List<AssignmentItemOption> options) {
+        return options.stream()
+                .sorted(Comparator.comparing(AssignmentItemOption::getDisplayOrder))
+                .map(option -> SubmissionAttemptItemOptionResponse.builder()
+                        .assignmentItemOptionId(option.getId())
+                        .content(option.getContent())
+                        .displayOrder(option.getDisplayOrder())
+                        .isCorrect(option.getIsCorrect())
+                        .build())
+                .toList();
+    }
+
+    private List<StudentAttemptItemResponse> toStudentReviewItemResponses(List<AssignmentItem> items) {
+        return items.stream()
+                .sorted(Comparator.comparing(AssignmentItem::getDisplayOrder))
+                .map(this::toStudentReviewItemResponse)
+                .toList();
+    }
+
+    private StudentAttemptItemResponse toStudentReviewItemResponse(AssignmentItem item) {
+        return StudentAttemptItemResponse.builder()
+                .assignmentItemId(item.getId())
+                .questionId(item.getAssessmentItem() == null || item.getAssessmentItem().getQuestion() == null ? null : item.getAssessmentItem().getQuestion().getId())
+                .questionType(item.getQuestionType())
+                .title(item.getTitle())
+                .content(richTextDocumentService.deserialize(item.getContentJson()))
+                .difficulty(item.getDifficulty())
+                .points(item.getPoints())
+                .displayOrder(item.getDisplayOrder())
+                .options(toOptionResponsesWithCorrect(item.getOptions()))
+                .build();
     }
 
     private List<SubmissionAnswerResponse> toAnswerResponses(List<SubmissionAnswer> answers) {

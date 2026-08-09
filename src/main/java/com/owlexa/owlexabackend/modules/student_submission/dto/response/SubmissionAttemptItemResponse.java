@@ -18,6 +18,7 @@ import tools.jackson.databind.JsonNode;
 public class SubmissionAttemptItemResponse {
 
     private Long assignmentItemId;
+    private Long questionId;
     private QuestionType questionType;
     private String title;
     private JsonNode content;

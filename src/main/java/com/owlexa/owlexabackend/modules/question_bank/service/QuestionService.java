@@ -322,10 +322,6 @@ public class QuestionService {
         if (correctCount == 0) {
             throw new BadRequestException("Câu hỏi trắc nghiệm phải có ít nhất 1 đáp án đúng");
         }
-
-        request.getOptions().forEach(option ->
-                validatePlainText(option.getContent(), "Nội dung lựa chọn không được để trống")
-        );
     }
 
     private void validatePoints(QuestionRequest request) {
@@ -376,7 +372,7 @@ public class QuestionService {
                 .sorted(Comparator.comparing(QuestionOptionRequest::getDisplayOrder))
                 .map(optionRequest -> QuestionOption.builder()
                         .question(question)
-                        .content(optionRequest.getContent().trim())
+                        .content(optionRequest.getContent() != null ? optionRequest.getContent().trim() : "")
                         .isCorrect(optionRequest.getIsCorrect())
                         .displayOrder(optionRequest.getDisplayOrder())
                         .build())

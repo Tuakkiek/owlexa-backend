@@ -6,7 +6,9 @@ import com.owlexa.owlexabackend.modules.auth.dto.request.RegisterOwnerRequest;
 import com.owlexa.owlexabackend.modules.auth.dto.request.RegisterStudentRequest;
 import com.owlexa.owlexabackend.modules.auth.dto.response.AuthResponse;
 import com.owlexa.owlexabackend.modules.auth.dto.response.SessionResponse;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.DeviceType;
+import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.Permission;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -14,6 +16,7 @@ import com.owlexa.owlexabackend.modules.user.entity.UserSession;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.PermissionRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -28,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -57,6 +61,9 @@ class AuthServiceTest {
 
     @Mock
     private MembershipRepository membershipRepository;
+
+    @Mock
+    private CenterRepository centerRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -90,50 +97,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void registerStudent_shouldCreateStudentAccount() {
-        RegisterStudentRequest request = new RegisterStudentRequest();
-        request.setPhoneNumber("0901234567");
-        request.setEmail("student@example.com");
-        request.setFullName("Nguyen Van A");
-        request.setPassword("123456");
-
-        HttpServletRequest httpRequest = createMockRequest();
-
-        when(userRepository.existsByPhoneNumber("0901234567")).thenReturn(false);
-        when(userRepository.existsByEmail("student@example.com")).thenReturn(false);
-        when(passwordEncoder.encode("123456")).thenReturn("encoded-password");
-        when(jwtUtil.generateRefreshToken(eq("0901234567"), anyString())).thenReturn("refresh-token");
-        when(jwtUtil.generateAccessToken(eq("0901234567"), eq("STUDENT"), anyString())).thenReturn("access-token");
-        when(jwtUtil.hashToken("refresh-token")).thenReturn("hashed-refresh-token");
-
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
-            User user = invocation.getArgument(0);
-            user.setId(1L);
-            return user;
-        });
-
-        lenient().when(membershipRepository.findAllByUser_Id(1L)).thenReturn(List.of());
-
-        AuthService.LoginResult result = authService.registerStudent(request, httpRequest);
-        AuthResponse response = result.getAuthResponse();
-
-        assertThat(response.getPhoneNumber()).isEqualTo("0901234567");
-        assertThat(response.getEmail()).isEqualTo("student@example.com");
-        assertThat(response.getFullName()).isEqualTo("Nguyen Van A");
-        assertThat(response.getRoleName()).isEqualTo(Role.STUDENT.name());
-        assertThat(response.getAccessToken()).isEqualTo("access-token");
-        assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
-
-        ArgumentCaptor<UserSession> sessionCaptor = ArgumentCaptor.forClass(UserSession.class);
-        verify(sessionRepository).save(sessionCaptor.capture());
-        UserSession savedSession = sessionCaptor.getValue();
-        assertThat(savedSession.getUser().getId()).isEqualTo(1L);
-        assertThat(savedSession.getRefreshTokenHash()).isEqualTo("hashed-refresh-token");
-        assertThat(savedSession.isActive()).isTrue();
-    }
-
-    @Test
-    void registerStudent_whenPhoneNumberExists_shouldThrowDuplicateException() {
+    void registerStudent_shouldThrowAccessDeniedException() {
         RegisterStudentRequest request = new RegisterStudentRequest();
         request.setPhoneNumber("0901234567");
         request.setEmail("student@example.com");
@@ -142,27 +106,28 @@ class AuthServiceTest {
 
         HttpServletRequest httpRequest = org.mockito.Mockito.mock(HttpServletRequest.class);
 
-        when(userRepository.existsByPhoneNumber("0901234567")).thenReturn(true);
-
         assertThatThrownBy(() -> authService.registerStudent(request, httpRequest))
-                .isInstanceOf(DuplicateResourceException.class)
-                .hasMessageContaining("phoneNumber");
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Học viên không thể tự đăng ký");
 
         verify(userRepository, never()).save(any(User.class));
     }
 
     @Test
-    void registerOwner_shouldCreateOwnerAccount() {
+    void registerOwner_shouldCreateOwnerAccountAndCenter() {
         RegisterOwnerRequest request = new RegisterOwnerRequest();
         request.setPhoneNumber("0901234568");
         request.setEmail("owner@example.com");
         request.setFullName("Nguyen Van B");
         request.setPassword("123456");
+        request.setCenterName("Owlexa HCM");
+        request.setSubdomain("owlexa-hcm");
 
         HttpServletRequest httpRequest = createMockRequest();
 
         when(userRepository.existsByPhoneNumber("0901234568")).thenReturn(false);
         when(userRepository.existsByEmail("owner@example.com")).thenReturn(false);
+        when(centerRepository.existsBySubdomain("owlexa-hcm")).thenReturn(false);
         when(passwordEncoder.encode("123456")).thenReturn("encoded-password");
         when(jwtUtil.generateRefreshToken(eq("0901234568"), anyString())).thenReturn("refresh-token");
         when(jwtUtil.generateAccessToken(eq("0901234568"), eq("OWNER"), anyString())).thenReturn("access-token");
@@ -174,7 +139,20 @@ class AuthServiceTest {
             return user;
         });
 
-        lenient().when(membershipRepository.findAllByUser_Id(2L)).thenReturn(List.of());
+        Center createdCenter = new Center();
+        createdCenter.setId(100L);
+        createdCenter.setName("Owlexa HCM");
+        createdCenter.setSubdomain("owlexa-hcm");
+
+        when(centerRepository.save(any(Center.class))).thenAnswer(invocation -> {
+            Center center = invocation.getArgument(0);
+            center.setId(100L);
+            return center;
+        });
+
+        Membership membership = new Membership();
+        membership.setCenter(createdCenter);
+        lenient().when(membershipRepository.findAllByUser_Id(2L)).thenReturn(List.of(membership));
 
         AuthService.LoginResult result = authService.registerOwner(request, httpRequest);
         AuthResponse response = result.getAuthResponse();
@@ -186,10 +164,14 @@ class AuthServiceTest {
         assertThat(response.getAccessToken()).isEqualTo("access-token");
         assertThat(result.getRefreshToken()).isEqualTo("refresh-token");
 
+        verify(centerRepository).save(any(Center.class));
+        verify(membershipRepository).save(any(Membership.class));
+
         ArgumentCaptor<UserSession> sessionCaptor = ArgumentCaptor.forClass(UserSession.class);
         verify(sessionRepository).save(sessionCaptor.capture());
         UserSession savedSession = sessionCaptor.getValue();
         assertThat(savedSession.getUser().getId()).isEqualTo(2L);
+        assertThat(savedSession.getCenter().getId()).isEqualTo(100L);
         assertThat(savedSession.getRefreshTokenHash()).isEqualTo("hashed-refresh-token");
     }
 

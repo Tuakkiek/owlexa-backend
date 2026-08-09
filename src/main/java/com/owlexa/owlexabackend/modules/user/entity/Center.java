@@ -15,8 +15,6 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "centers")
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
-@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
 @EntityListeners(TenantEntityListener.class)
 @Data
 @NoArgsConstructor

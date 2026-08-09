@@ -50,7 +50,7 @@ public class BankTransferQrService {
                 ? payment.getSepayRef()
                 : "PAY" + String.format("%06d", payment.getId());
         BigDecimal amount = payment.getAmount();
-        String transferContent = paymentCode + " thanh toan hoc phi";
+        String transferContent = paymentCode;
 
         // Generate VietQR image API URL — this URL returns a PNG image
         // that Vietnamese banking apps can scan directly.

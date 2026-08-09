@@ -1,6 +1,8 @@
 package com.owlexa.owlexabackend.modules.payment.controller;
+import com.owlexa.owlexabackend.modules.payment.dto.request.UpdateDueDateRequest;
 import com.owlexa.owlexabackend.modules.payment.dto.response.FeeRecordResponse;
 import com.owlexa.owlexabackend.modules.payment.service.FeeRecordService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -28,5 +30,18 @@ public class FeeRecordController {
     @PreAuthorize("hasAnyAuthority('FEE_VIEW', 'PAYMENT_VIEW')")
     public List<FeeRecordResponse> findAllPending() {
         return feeRecordService.findAllPending();
+    }
+
+    @GetMapping({"/owner/classes/{classId}/fee-records", "/cashier/classes/{classId}/fee-records"})
+    @PreAuthorize("hasAnyAuthority('FEE_VIEW', 'PAYMENT_VIEW')")
+    public List<FeeRecordResponse> findByClass(@PathVariable Long classId) {
+        return feeRecordService.findByClass(classId);
+    }
+
+    @PutMapping({"/owner/classes/{classId}/fee-records/due-date", "/cashier/classes/{classId}/fee-records/due-date"})
+    @PreAuthorize("hasAnyAuthority('FEE_GENERATE', 'PAYMENT_COLLECT')")
+    public List<FeeRecordResponse> updateClassFeeDueDate(@PathVariable Long classId,
+                                                          @Valid @RequestBody UpdateDueDateRequest request) {
+        return feeRecordService.updateClassFeeDueDate(classId, request);
     }
 }

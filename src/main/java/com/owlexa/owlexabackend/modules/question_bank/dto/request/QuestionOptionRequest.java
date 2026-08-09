@@ -14,7 +14,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class QuestionOptionRequest {
 
-    @NotBlank(message = "Nội dung lựa chọn không được để trống")
     private String content;
 
     @NotNull(message = "Trạng thái đáp án đúng không được để trống")

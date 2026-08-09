@@ -36,6 +36,7 @@ public class TeacherAttemptDetailResponse {
     private Instant startedAt;
     private Instant lastSavedAt;
     private Instant submittedAt;
+    private Instant expiresAt;
     private BigDecimal autoScore;
     private BigDecimal maxScore;
     private List<SubmissionAttemptItemResponse> items;

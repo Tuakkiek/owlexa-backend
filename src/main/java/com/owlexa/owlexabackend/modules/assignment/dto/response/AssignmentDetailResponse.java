@@ -27,6 +27,7 @@ public class AssignmentDetailResponse {
     private Instant openAt;
     private Instant dueAt;
     private Integer attemptLimit;
+    private Integer timeLimitMinutes;
     private Boolean showScore;
     private Boolean allowReview;
     private String accessPassword;

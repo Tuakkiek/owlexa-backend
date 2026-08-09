@@ -21,6 +21,7 @@ public class StudentAttemptSummaryResponse {
     private Instant startedAt;
     private Instant lastSavedAt;
     private Instant submittedAt;
+    private Instant expiresAt;
     private BigDecimal autoScore;
     private BigDecimal aiScore;
     private BigDecimal displayedScore;

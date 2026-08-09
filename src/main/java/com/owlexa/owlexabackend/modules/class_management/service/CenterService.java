@@ -5,6 +5,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
@@ -54,6 +55,12 @@ public class CenterService {
 
         if (owner.getRole() != Role.OWNER) {
             throw new AccessDeniedException("Only OWNER can create center");
+        }
+
+        if (!centerRepository.findAllByOwner_Id(owner.getId()).isEmpty()) {
+            throw new BadRequestException(
+                    "Chủ sở hữu đã có trung tâm. Mỗi tài khoản Chủ sở hữu chỉ được quản lý 1 trung tâm."
+            );
         }
 
         Center center = new Center();
@@ -149,14 +156,7 @@ public class CenterService {
 
         assertOwnerOfCenter(currentUser, center);
 
-        attendanceRepository.deleteByCenter_Id(id);
-        classEnrollmentRepository.deleteByCenter_Id(id);
-        feeRecordRepository.deleteByCenter_Id(id);
-        scheduleRepository.deleteByCenter_Id(id);
-        classRepository.deleteByCenter_Id(id);
-        membershipRepository.deleteByCenter_Id(id);
-
-        centerRepository.delete(center);
+        throw new BadRequestException("Không thể xóa trung tâm duy nhất của chủ sở hữu.");
     }
     // HELPER
     // Assert owner of center

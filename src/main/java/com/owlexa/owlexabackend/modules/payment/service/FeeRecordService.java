@@ -1,16 +1,18 @@
 package com.owlexa.owlexabackend.modules.payment.service;
-import com.owlexa.owlexabackend.modules.payment.dto.response.FeeRecordResponse;
-import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
-import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
-import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
-import com.owlexa.owlexabackend.modules.user.entity.Role;
-import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
-import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
-import com.owlexa.owlexabackend.common.context.TenantContext;
+import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
+import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
+import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.payment.dto.request.UpdateDueDateRequest;
+import com.owlexa.owlexabackend.modules.payment.dto.response.FeeRecordResponse;
+import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
+import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -70,6 +72,40 @@ public class FeeRecordService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FeeRecordResponse> findByClass(Long classId) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertCanViewFees(currentUser, centerId);
+
+        return feeRecordRepository
+                .findAllByCenter_IdAndClazz_IdOrderByCreatedAtDesc(centerId, classId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional
+    public List<FeeRecordResponse> updateClassFeeDueDate(Long classId, UpdateDueDateRequest request) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+
+        assertCanViewFees(currentUser, centerId);
+
+        List<FeeRecord> records = feeRecordRepository
+                .findAllByCenter_IdAndClazz_IdOrderByCreatedAtDesc(centerId, classId);
+
+        for (FeeRecord record : records) {
+            // Cập nhật hạn đóng học phí cho tất cả bản ghi chưa thu đủ
+            if (record.getStatus() != FeeStatus.PAID) {
+                record.setDueDate(request.getDueDate());
+            }
+        }
+        List<FeeRecord> saved = feeRecordRepository.saveAll(records);
+        return saved.stream().map(this::toResponse).toList();
     }
 
     private FeeRecordResponse toResponse(FeeRecord feeRecord) {

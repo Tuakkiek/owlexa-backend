@@ -61,6 +61,15 @@ public class SubmissionAttempt {
     @Column(name = "submitted_at")
     private Instant submittedAt;
 
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    @Column(name = "audio_position_seconds")
+    private Integer audioPositionSeconds;
+
+    @Column(name = "audio_completed")
+    private Boolean audioCompleted;
+
     @Column(name = "auto_score", precision = 8, scale = 2)
     private BigDecimal autoScore;
 
