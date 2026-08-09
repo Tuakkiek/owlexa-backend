@@ -50,6 +50,14 @@ public class StudentSubmissionController {
         return submissionService.saveAnswers(attemptId, request);
     }
 
+    @PutMapping("/submission-attempts/{attemptId}/audio-progress")
+    public StudentAttemptDetailResponse saveAudioProgress(
+            @PathVariable Long attemptId,
+            @Valid @RequestBody com.owlexa.owlexabackend.modules.student_submission.dto.request.AudioProgressUpdateRequest request
+    ) {
+        return submissionService.saveAudioProgress(attemptId, request);
+    }
+
     @PostMapping("/submission-attempts/{attemptId}/submit")
     public StudentAttemptDetailResponse submitAttempt(@PathVariable Long attemptId) {
         return submissionService.submitAttemptWithAutoGrading(attemptId);

@@ -30,6 +30,9 @@ public class StudentAttemptDetailResponse {
     private Instant startedAt;
     private Instant lastSavedAt;
     private Instant submittedAt;
+    private Instant expiresAt;
+    private Integer audioPositionSeconds;
+    private Boolean audioCompleted;
     private BigDecimal autoScore;
     private BigDecimal maxScore;
     private FileResponse audioFile;

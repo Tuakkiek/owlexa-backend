@@ -20,4 +20,9 @@ public class RegisterOwnerRequest {
 
     @NotBlank(message = "fullName is required")
     private String fullName;
+
+    @NotBlank(message = "centerName is required")
+    private String centerName;
+
+    private String subdomain;
 }

@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +27,8 @@ public interface SubmissionAttemptRepository extends JpaRepository<SubmissionAtt
 
     long countByAssignmentRecipient_Id(Long assignmentRecipientId);
 
+    long countByAssignmentRecipient_Assignment_Id(Long assignmentId);
+
     Optional<SubmissionAttempt> findByIdAndAssignmentRecipient_StudentUser_IdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
             Long id,
             Long studentUserId,
@@ -41,5 +44,10 @@ public interface SubmissionAttemptRepository extends JpaRepository<SubmissionAtt
             Long assignmentId,
             Long centerId,
             Pageable pageable
+    );
+
+    List<SubmissionAttempt> findAllByStatusAndExpiresAtLessThanEqual(
+            SubmissionAttemptStatus status,
+            Instant expiresAt
     );
 }

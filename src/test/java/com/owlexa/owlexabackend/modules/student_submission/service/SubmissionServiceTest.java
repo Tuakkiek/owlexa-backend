@@ -484,6 +484,170 @@ class SubmissionServiceTest {
                 .isInstanceOf(BadRequestException.class);
     }
 
+    // ── Phase 1: Deadline Enforcement Tests ──────────────────────────────────
+
+    @Test
+    @DisplayName("deadline: save succeeds when now < dueAt")
+    void saveAnswers_whenBeforeDeadline_shouldSucceed() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudentAttemptDetailResponse response = service.saveAnswers(
+                ATTEMPT_ID,
+                SaveSubmissionAnswersRequest.builder()
+                        .answers(List.of(mcAnswerRequest(MC_ITEM_ID, List.of(CORRECT_OPTION_ID))))
+                        .build()
+        );
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.IN_PROGRESS);
+        assertThat(attempt.getLastSavedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("deadline: save rejected when now >= dueAt — attempt finalized")
+    void saveAnswers_whenPastDeadline_shouldRejectAndFinalize() {
+        Assignment assignment = activeAssignment(null, Instant.now().minusSeconds(60), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> service.saveAnswers(
+                ATTEMPT_ID,
+                SaveSubmissionAnswersRequest.builder()
+                        .answers(List.of(mcAnswerRequest(MC_ITEM_ID, List.of(CORRECT_OPTION_ID))))
+                        .build()
+        )).isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("hết hạn");
+
+        assertThat(attempt.getStatus()).isEqualTo(SubmissionAttemptStatus.AUTO_SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("deadline: manual submit after deadline returns auto-submitted — no new answers accepted")
+    void submitAttempt_whenPastDeadline_shouldAutoSubmitWithoutNewAnswers() {
+        Assignment assignment = activeAssignment(null, Instant.now().minusSeconds(60), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        attempt.getAnswers().add(answer(attempt, mcItem(assignment), CORRECT_OPTION_ID));
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudentAttemptDetailResponse response = service.submitAttempt(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.AUTO_SUBMITTED);
+        assertThat(attempt.getActiveAttemptKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("deadline: auto-submitted attempt is not editable")
+    void saveAnswers_whenAutoSubmitted_shouldThrowBadRequest() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.AUTO_SUBMITTED, 1);
+        whenStudentAttemptFound(attempt);
+
+        assertThatThrownBy(() -> service.saveAnswers(
+                ATTEMPT_ID,
+                SaveSubmissionAnswersRequest.builder()
+                        .answers(List.of(mcAnswerRequest(MC_ITEM_ID, List.of(CORRECT_OPTION_ID))))
+                        .build()
+        )).isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("deadline: student cannot bypass deadline via direct API save call")
+    void saveAnswers_directApiCallAfterDeadline_shouldBeBlocked() {
+        Assignment assignment = activeAssignment(null, Instant.now().minusSeconds(1), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> service.saveAnswers(
+                ATTEMPT_ID,
+                SaveSubmissionAnswersRequest.builder()
+                        .answers(List.of(essayAnswerRequest(ESSAY_ITEM_ID, "Sneaky late answer", List.of())))
+                        .build()
+        )).isInstanceOf(BadRequestException.class);
+
+        assertThat(attempt.getStatus()).isEqualTo(SubmissionAttemptStatus.AUTO_SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("deadline: boundary test — now == dueAt is treated as past due")
+    void saveAnswers_whenExactlyAtDeadline_shouldReject() {
+        Instant exactDeadline = Instant.now();
+        Assignment assignment = activeAssignment(null, exactDeadline, null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThatThrownBy(() -> service.saveAnswers(
+                ATTEMPT_ID,
+                SaveSubmissionAnswersRequest.builder()
+                        .answers(List.of(mcAnswerRequest(MC_ITEM_ID, List.of(CORRECT_OPTION_ID))))
+                        .build()
+        )).isInstanceOf(BadRequestException.class);
+
+        assertThat(attempt.getStatus()).isEqualTo(SubmissionAttemptStatus.AUTO_SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("deadline: normal submit before deadline is not regressed")
+    void submitAttempt_whenBeforeDeadline_shouldSubmitNormally() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        attempt.setActiveAttemptKey(RECIPIENT_ID);
+        attempt.getAnswers().add(answer(attempt, mcItem(assignment), CORRECT_OPTION_ID));
+        attempt.getAnswers().add(essayAnswer(attempt, essayItem(assignment), "My essay"));
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudentAttemptDetailResponse response = service.submitAttempt(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.SUBMITTED);
+        assertThat(response.getAutoScore()).isEqualByComparingTo("2.00");
+        assertThat(response.getMaxScore()).isEqualByComparingTo("7.00");
+        assertThat(attempt.getActiveAttemptKey()).isNull();
+    }
+
+    @Test
+    @DisplayName("deadline: resume past-due attempt returns auto-submitted result")
+    void startOrResume_whenInProgressAndPastDue_shouldFinalizeAndReturn() {
+        Assignment assignment = activeAssignment(null, Instant.now().minusSeconds(60), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        when(assignmentRecipientRepository.findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
+                ASSIGNMENT_ID, STUDENT_ID, CENTER_ID)).thenReturn(Optional.of(recipient));
+        when(submissionAttemptRepository.findByAssignmentRecipient_IdAndStatus(RECIPIENT_ID, SubmissionAttemptStatus.IN_PROGRESS))
+                .thenReturn(Optional.of(attempt));
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudentAttemptDetailResponse response = service.startOrResumeAttempt(ASSIGNMENT_ID, null);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.AUTO_SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("deadline: getAttemptDetail finalizes expired in-progress attempt")
+    void getAttemptDetail_whenInProgressAndPastDue_shouldFinalize() {
+        Assignment assignment = activeAssignment(null, Instant.now().minusSeconds(60), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        StudentAttemptDetailResponse response = service.getAttemptDetail(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.AUTO_SUBMITTED);
+    }
+
     private void whenStudentAttemptFound(SubmissionAttempt attempt) {
         when(submissionAttemptRepository.findByIdAndAssignmentRecipient_StudentUser_IdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
                 ATTEMPT_ID,

@@ -59,6 +59,16 @@ public class StudentService {
         String email = normalizeOptionalEmail(request.getEmail());
         String fullName = request.getFullName().trim();
 
+        if (email != null) {
+            var userWithEmail = userRepository.findByEmail(email);
+            boolean emailBelongsToAnotherUser = userWithEmail
+                    .map(user -> !phoneNumber.equals(user.getPhoneNumber()))
+                    .orElse(false);
+            if (emailBelongsToAnotherUser) {
+                throw new DuplicateResourceException("Email đã tồn tại.");
+            }
+        }
+
         String temporaryPassword = null;
 
         Optional<User> existingStudent = userRepository.findByPhoneNumber(phoneNumber);
@@ -69,12 +79,14 @@ public class StudentService {
             studentUser = existingStudent.get();
 
             if (studentUser.getRole() != Role.STUDENT) {
-                throw new BadRequestException("User is not a STUDENT");
+                throw new BadRequestException("Số điện thoại này đã được đăng ký cho vai trò khác (không phải Học sinh).");
             }
             boolean membership = membershipRepository.existsByUser_IdAndCenter_Id(studentUser.getId(), centerId);
 
             if (!membership) {
                 createMembership(studentUser, center, currentUser);
+            } else {
+                throw new DuplicateResourceException("Số điện thoại đã tồn tại.");
             }
         } else {
 
@@ -116,13 +128,13 @@ public class StudentService {
 
         if (!student.getPhoneNumber().equals(phoneNumber)
             && userRepository.existsByPhoneNumber(phoneNumber)) {
-            throw new DuplicateResourceException("Phone number already exists");
+            throw new DuplicateResourceException("Số điện thoại đã tồn tại.");
         }
 
         if (email != null
             && !email.equals(student.getEmail())
             && userRepository.existsByEmail(email)) {
-            throw new DuplicateResourceException("Email already exists");
+            throw new DuplicateResourceException("Email đã tồn tại.");
         }
 
         student.setPhoneNumber(phoneNumber);

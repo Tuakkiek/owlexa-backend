@@ -4,6 +4,7 @@ import com.owlexa.owlexabackend.modules.document.dto.response.StudentDocumentRes
 import com.owlexa.owlexabackend.modules.document.service.StudentDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -42,6 +43,15 @@ public class StudentDocumentController {
         return studentDocumentService.createForClass(classId, request);
     }
 
+    @DeleteMapping("/owner/classes/{classId}/documents/{documentId}")
+    @PreAuthorize("hasAuthority('DOCUMENT_DELETE')")
+    public void deleteForClass(
+            @PathVariable Long classId,
+            @PathVariable Long documentId
+    ) {
+        studentDocumentService.deleteDocumentForClass(classId, documentId);
+    }
+
     // ── Teacher: class documents ─────────────────────────────────────────────
 
     @GetMapping("/teacher/classes/{classId}/documents")
@@ -57,5 +67,14 @@ public class StudentDocumentController {
             @RequestBody StudentDocumentRequest request
     ) {
         return studentDocumentService.createForClassAsTeacher(classId, request);
+    }
+
+    @DeleteMapping("/teacher/classes/{classId}/documents/{documentId}")
+    @PreAuthorize("hasAuthority('DOCUMENT_DELETE')")
+    public void deleteForClassAsTeacher(
+            @PathVariable Long classId,
+            @PathVariable Long documentId
+    ) {
+        studentDocumentService.deleteDocumentForClassAsTeacher(classId, documentId);
     }
 }

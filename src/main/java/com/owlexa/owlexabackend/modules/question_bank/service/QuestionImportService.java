@@ -217,7 +217,7 @@ public class QuestionImportService {
             if (optionNode == null || !optionNode.isObject()) {
                 throw questionError(questionNumber, "Option " + (index + 1) + " must be an object.");
             }
-            String content = requiredText(optionNode.path("content"), questionNumber, "Option " + (index + 1) + " content is empty.");
+            String content = optionalText(optionNode.path("content"), questionNumber, "Option " + (index + 1) + " content must be a string.");
             JsonNode isCorrectNode = optionNode.path("isCorrect");
             if (!isCorrectNode.isBoolean()) {
                 throw questionError(questionNumber, "Option " + (index + 1) + " isCorrect must be boolean.");
@@ -227,7 +227,7 @@ public class QuestionImportService {
                 correctOptionCount++;
             }
             options.add(QuestionOptionRequest.builder()
-                    .content(content)
+                    .content(content == null ? "" : content)
                     .isCorrect(isCorrect)
                     .displayOrder(index + 1)
                     .build());

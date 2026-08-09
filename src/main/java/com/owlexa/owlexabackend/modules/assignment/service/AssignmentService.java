@@ -126,6 +126,7 @@ public class AssignmentService {
                 .openAt(request.getOpenAt())
                 .dueAt(request.getDueAt())
                 .attemptLimit(request.getAttemptLimit())
+                .timeLimitMinutes(request.getTimeLimitMinutes())
                 .showScore(request.getShowScore() != null ? request.getShowScore() : true)
                 .allowReview(request.getAllowReview() != null ? request.getAllowReview() : true)
                 .accessPassword(normalizeOptionalText(request.getAccessPassword()))
@@ -149,7 +150,14 @@ public class AssignmentService {
             throw new BadRequestException("Cannot update an archived assignment");
         }
 
+        long attemptCount = submissionAttemptRepository.countByAssignmentRecipient_Assignment_Id(assignment.getId());
+
         Assessment assessment = findPublishedAssessment(request.getAssessmentId(), centerId);
+        if (assignment.getAssessment() != null && !assignment.getAssessment().getId().equals(assessment.getId())) {
+            if (attemptCount > 0) {
+                throw new BadRequestException("Không thể đổi đề thi vì đã có học viên bắt đầu làm bài.");
+            }
+        }
 
         assignment.setAssessment(assessment);
         assignment.setTitle(request.getTitle().trim());
@@ -157,6 +165,7 @@ public class AssignmentService {
         assignment.setOpenAt(request.getOpenAt());
         assignment.setDueAt(request.getDueAt());
         assignment.setAttemptLimit(request.getAttemptLimit());
+        assignment.setTimeLimitMinutes(request.getTimeLimitMinutes());
         if (request.getShowScore() != null) {
             assignment.setShowScore(request.getShowScore());
         }
@@ -170,7 +179,9 @@ public class AssignmentService {
 
         if (assignment.getStatus() != AssignmentStatus.DRAFT) {
             Instant now = Instant.now();
-            assignmentSnapshotService.rebuildSnapshot(assignment, now);
+            if (attemptCount == 0) {
+                assignmentSnapshotService.rebuildSnapshot(assignment, now);
+            }
             updateRecipientsForPublishedAssignment(assignment, now);
             assignment.setStatus(resolveStatusAfterUpdate(assignment, now));
             fileReferenceService.syncReferences(
@@ -302,6 +313,9 @@ public class AssignmentService {
         }
         if (request.getAttemptLimit() != null && request.getAttemptLimit() < 1) {
             throw new BadRequestException("Attempt limit must be greater than or equal to 1");
+        }
+        if (request.getTimeLimitMinutes() != null && request.getTimeLimitMinutes() < 1) {
+            throw new BadRequestException("Time limit must be greater than or equal to 1");
         }
         validateTargetRequests(request.getTargets());
     }

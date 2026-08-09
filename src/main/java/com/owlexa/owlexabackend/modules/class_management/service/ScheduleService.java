@@ -29,6 +29,7 @@ import com.owlexa.owlexabackend.modules.class_management.repository.ClassReposit
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
+import com.owlexa.owlexabackend.modules.class_management.repository.TeachingTimeSlotRepository;
 import com.owlexa.owlexabackend.modules.class_management.service.validation.ClassLifecycleValidator;
 import com.owlexa.owlexabackend.modules.class_management.service.validation.TimeRangeValidator;
 import com.owlexa.owlexabackend.modules.class_management.service.validation.RoomConflictValidator;
@@ -64,6 +65,7 @@ public class ScheduleService {
     private final ScheduleEventRepository scheduleEventRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final RoomRepository roomRepository;
+    private final TeachingTimeSlotRepository timeSlotRepository;
 
     private final ClassLifecycleValidator classLifecycleValidator;
     private final TimeRangeValidator timeRangeValidator;
@@ -81,6 +83,7 @@ public class ScheduleService {
             ScheduleEventRepository scheduleEventRepository,
             ClassEnrollmentRepository classEnrollmentRepository,
             RoomRepository roomRepository,
+            TeachingTimeSlotRepository timeSlotRepository,
             ClassLifecycleValidator classLifecycleValidator,
             TimeRangeValidator timeRangeValidator,
             RoomConflictValidator roomConflictValidator,
@@ -95,6 +98,7 @@ public class ScheduleService {
         this.scheduleEventRepository = scheduleEventRepository;
         this.classEnrollmentRepository = classEnrollmentRepository;
         this.roomRepository = roomRepository;
+        this.timeSlotRepository = timeSlotRepository;
         this.classLifecycleValidator = classLifecycleValidator;
         this.timeRangeValidator = timeRangeValidator;
         this.roomConflictValidator = roomConflictValidator;
@@ -109,6 +113,7 @@ public class ScheduleService {
             ScheduleRepository scheduleRepository,
             ClassEnrollmentRepository classEnrollmentRepository,
             RoomRepository roomRepository,
+            TeachingTimeSlotRepository timeSlotRepository,
             ClassLifecycleValidator classLifecycleValidator,
             TimeRangeValidator timeRangeValidator,
             RoomConflictValidator roomConflictValidator,
@@ -124,6 +129,7 @@ public class ScheduleService {
                 null,
                 classEnrollmentRepository,
                 roomRepository,
+                timeSlotRepository,
                 classLifecycleValidator,
                 timeRangeValidator,
                 roomConflictValidator,
@@ -363,6 +369,14 @@ public class ScheduleService {
         User teacher = getTeacherInCenter(request.getTeacherUserId(), centerId);
         Room room = roomRepository.findByIdAndCenter_Id(request.getRoomId(), centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phòng học với ID: " + request.getRoomId()));
+        
+        com.owlexa.owlexabackend.modules.class_management.entity.TeachingTimeSlot timeSlot = timeSlotRepository.findByIdAndCenter_Id(request.getTimeSlotId(), centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ca học với ID: " + request.getTimeSlotId()));
+
+        if (!Boolean.TRUE.equals(timeSlot.getIsActive())) {
+            throw new BadRequestException("Ca học được chọn không còn hoạt động.");
+        }
+
         validateRuleRequest(request);
         int sessionCount = requiredSessionCount(clazz);
         LocalDate endDate = calculateRuleEndDate(request.getStartDate(), Set.copyOf(request.getDaysOfWeek()), sessionCount);
@@ -373,8 +387,8 @@ public class ScheduleService {
                 Set.copyOf(request.getDaysOfWeek()),
                 request.getStartDate(),
                 endDate,
-                request.getStartTime(),
-                request.getEndTime(),
+                timeSlot.getStartTime(),
+                timeSlot.getEndTime(),
                 centerId,
                 null
         );
@@ -384,12 +398,13 @@ public class ScheduleService {
                 .clazz(clazz)
                 .teacherUser(teacher)
                 .room(room)
+                .timeSlot(timeSlot)
                 .repeatType(ScheduleRepeatType.WEEKLY)
                 .daysOfWeek(toDaysCsv(request.getDaysOfWeek()))
                 .startDate(request.getStartDate())
                 .endDate(endDate)
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
+                .startTime(timeSlot.getStartTime())
+                .endTime(timeSlot.getEndTime())
                 .type(request.getType() != null ? request.getType() : ScheduleType.THEORY_CLASS)
                 .isActive(true)
                 .build();
@@ -815,6 +830,9 @@ public class ScheduleService {
                 .teacherUserFullName(rule.getTeacherUser() != null ? rule.getTeacherUser().getFullName() : null)
                 .roomId(rule.getRoom() != null ? rule.getRoom().getId() : null)
                 .roomName(rule.getRoom() != null ? rule.getRoom().getName() : null)
+                .timeSlotId(rule.getTimeSlot() != null ? rule.getTimeSlot().getId() : null)
+                .timeSlotName(rule.getTimeSlot() != null ? rule.getTimeSlot().getName() : null)
+                .timeSlotPeriod(rule.getTimeSlot() != null ? rule.getTimeSlot().getPeriod() : null)
                 .repeatType(rule.getRepeatType())
                 .daysOfWeek(parseDays(rule.getDaysOfWeek()).stream().sorted().toList())
                 .startDate(rule.getStartDate())
@@ -1058,7 +1076,6 @@ public class ScheduleService {
     }
 
     private void validateRuleRequest(ScheduleRuleRequest request) {
-        validateTimeRange(request.getStartTime(), request.getEndTime());
         request.getDaysOfWeek().forEach(day -> {
             if (day == null || day < 1 || day > 7) {
                 throw new BadRequestException("Thứ học phải nằm trong khoảng từ 1 đến 7.");

@@ -66,6 +66,7 @@ class ScheduleServiceTest {
     @Mock private ScheduleEventRepository scheduleEventRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private RoomRepository roomRepository;
+    @Mock private com.owlexa.owlexabackend.modules.class_management.repository.TeachingTimeSlotRepository timeSlotRepository;
 
     private ScheduleService service;
 
@@ -91,7 +92,7 @@ class ScheduleServiceTest {
         service = new ScheduleService(
                 userRepository, classRepository, membershipRepository,
                 scheduleRepository, scheduleRecurringRuleRepository, scheduleEventRepository,
-                classEnrollmentRepository, roomRepository,
+                classEnrollmentRepository, roomRepository, timeSlotRepository,
                 classLifecycleValidator, timeRangeValidator, roomConflictValidator,
                 teacherConflictValidator, studentConflictValidator
         );
@@ -247,13 +248,23 @@ class ScheduleServiceTest {
         when(scheduleEventRepository.findAllByRecurringRule_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(700L, CENTER_ID))
                 .thenReturn(List.of());
 
+        com.owlexa.owlexabackend.modules.class_management.entity.TeachingTimeSlot timeSlot = com.owlexa.owlexabackend.modules.class_management.entity.TeachingTimeSlot.builder()
+                .id(100L)
+                .center(clazz.getCenter())
+                .name("Ca tối 1")
+                .period(com.owlexa.owlexabackend.modules.class_management.entity.TimeSlotPeriod.EVENING)
+                .startTime(LocalTime.of(19, 45))
+                .endTime(LocalTime.of(21, 15))
+                .isActive(true)
+                .build();
+        when(timeSlotRepository.findByIdAndCenter_Id(100L, CENTER_ID)).thenReturn(Optional.of(timeSlot));
+
         var response = service.createRule(CLASS_ID, ScheduleRuleRequest.builder()
                 .teacherUserId(SCHEDULE_TEACHER_ID)
                 .roomId(ROOM_ID)
                 .daysOfWeek(List.of(1, 3, 5))
                 .startDate(LocalDate.of(2026, 8, 3))
-                .startTime(LocalTime.of(19, 45))
-                .endTime(LocalTime.of(21, 15))
+                .timeSlotId(100L)
                 .type(ScheduleType.THEORY_CLASS)
                 .build());
 
@@ -291,13 +302,23 @@ class ScheduleServiceTest {
         when(scheduleRecurringRuleRepository.findAllByCenter_IdAndIsActiveTrue(CENTER_ID))
                 .thenReturn(List.of(existingRule));
 
+        com.owlexa.owlexabackend.modules.class_management.entity.TeachingTimeSlot timeSlot = com.owlexa.owlexabackend.modules.class_management.entity.TeachingTimeSlot.builder()
+                .id(100L)
+                .center(clazz.getCenter())
+                .name("Ca tối 1")
+                .period(com.owlexa.owlexabackend.modules.class_management.entity.TimeSlotPeriod.EVENING)
+                .startTime(LocalTime.of(19, 45))
+                .endTime(LocalTime.of(21, 15))
+                .isActive(true)
+                .build();
+        when(timeSlotRepository.findByIdAndCenter_Id(100L, CENTER_ID)).thenReturn(Optional.of(timeSlot));
+
         assertThatThrownBy(() -> service.createRule(CLASS_ID, ScheduleRuleRequest.builder()
                 .teacherUserId(SCHEDULE_TEACHER_ID)
                 .roomId(ROOM_ID)
                 .daysOfWeek(List.of(1))
                 .startDate(LocalDate.of(2026, 8, 3))
-                .startTime(LocalTime.of(19, 45))
-                .endTime(LocalTime.of(21, 15))
+                .timeSlotId(100L)
                 .type(ScheduleType.THEORY_CLASS)
                 .build()))
                 .isInstanceOf(BusinessRuleException.class)

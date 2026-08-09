@@ -29,6 +29,8 @@ public class TeacherAttendanceMarkRequest {
     @AllArgsConstructor
     @Builder
     public static class Item {
+        private Long scheduleEventId;
+
         @NotNull
         private Long teacherUserId;
 

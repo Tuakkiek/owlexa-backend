@@ -106,8 +106,23 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.message").value("Phieu cham cho luot nop nay da ton tai. Vui long tai lai trang."));
     }
 
+    @Test
+    @DisplayName("Audio endpoint throwing exception returns JSON response with application/json content type")
+    void audioEndpointException_shouldReturnJsonContentType() throws Exception {
+        mockMvc.perform(get("/test/audio-not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Type", containsString("application/json")))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Audio file not found"));
+    }
+
     @RestController
     static class TestExceptionController {
+
+        @GetMapping(value = "/test/audio-not-found", produces = "audio/mpeg")
+        public void audioNotFound() {
+            throw new ResourceNotFoundException("Audio file not found");
+        }
 
         @GetMapping("/test/business-rule")
         public void businessRule() {

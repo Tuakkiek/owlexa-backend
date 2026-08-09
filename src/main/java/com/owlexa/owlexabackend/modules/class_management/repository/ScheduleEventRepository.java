@@ -17,6 +17,8 @@ public interface ScheduleEventRepository extends JpaRepository<ScheduleEvent, Lo
 
     List<ScheduleEvent> findAllByCenter_IdOrderByEventDateAscStartTimeAsc(Long centerId);
 
+    List<ScheduleEvent> findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(Long centerId, LocalDate eventDate, ScheduleEventStatus status);
+
     List<ScheduleEvent> findAllByRoom_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(Long roomId, Long centerId);
 
     List<ScheduleEvent> findAllByRecurringRule_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(Long ruleId, Long centerId);

@@ -16,11 +16,8 @@ import java.util.Set;
 
 @Entity
 @Table(name = "users")
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = Long.class))
-@Filter(name = "tenantFilter", condition = "center_id = :tenantId")
-@EntityListeners(TenantEntityListener.class)
 @Data
-public class User implements TenantAware {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -46,10 +43,6 @@ public class User implements TenantAware {
     @EqualsAndHashCode.Exclude
     private Set<UserPermission> userPermissions = new HashSet<>();
 
-    @Override
-    public Long getCenterId() {
-        return null;
-    }
 
     public void grantPermission(Permission permission) {
         UserPermission link = new UserPermission();

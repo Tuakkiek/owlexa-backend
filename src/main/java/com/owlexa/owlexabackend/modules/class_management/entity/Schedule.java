@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.class_management.entity;
 
 import com.owlexa.owlexabackend.common.context.TenantAware;
+import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 import com.owlexa.owlexabackend.modules.room.entity.Room;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -13,7 +14,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
-import com.owlexa.owlexabackend.common.listener.TenantEntityListener;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -54,10 +54,14 @@ public class Schedule implements TenantAware {
     @Column(name = "day_of_week", nullable = false)
     private DayOfWeek dayOfWeek;
 
-    @Column(name = "start_time", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "time_slot_id")
+    private TeachingTimeSlot timeSlot;
+
+    @Column(name = "start_time")
     private LocalTime startTime;
 
-    @Column(name = "end_time", nullable = false)
+    @Column(name = "end_time")
     private LocalTime endTime;
 
     @Enumerated(EnumType.STRING)
@@ -67,6 +71,14 @@ public class Schedule implements TenantAware {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    public LocalTime getStartTime() {
+        return timeSlot != null ? timeSlot.getStartTime() : startTime;
+    }
+
+    public LocalTime getEndTime() {
+        return timeSlot != null ? timeSlot.getEndTime() : endTime;
+    }
 
     @Override
     public Long getCenterId() {

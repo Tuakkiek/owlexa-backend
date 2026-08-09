@@ -28,6 +28,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
+
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -42,6 +45,7 @@ public class AuthService {
     private final UserRepository         userRepository;
     private final UserSessionRepository  sessionRepository;
     private final MembershipRepository   membershipRepository;
+    private final CenterRepository       centerRepository;
     private final PasswordEncoder        passwordEncoder;
     private final JwtUtil                jwtUtil;
     private final PermissionRepository   permissionRepository;
@@ -311,46 +315,75 @@ public class AuthService {
     // ═══════════════════════════════════════════════════════════════
 
     public LoginResult registerStudent(RegisterStudentRequest request, HttpServletRequest httpRequest) {
-        return registerUser(request.getPhoneNumber(), request.getEmail(),
-                request.getFullName(), request.getPassword(), Role.STUDENT, httpRequest);
-    }
-
-    public LoginResult registerOwner(RegisterOwnerRequest request, HttpServletRequest httpRequest) {
-        return registerUser(request.getPhoneNumber(), request.getEmail(),
-                request.getFullName(), request.getPassword(), Role.OWNER, httpRequest);
+        throw new org.springframework.security.access.AccessDeniedException(
+                "Học viên không thể tự đăng ký. Chỉ có Chủ trung tâm mới có quyền tạo người dùng."
+        );
     }
 
     @Transactional
-    public LoginResult registerUser(String phoneNumber, String email, String fullName,
-                                     String rawPassword, Role role, HttpServletRequest httpRequest) {
+    public LoginResult registerOwner(RegisterOwnerRequest request, HttpServletRequest httpRequest) {
+        String phoneNumber = normalizePhone(request.getPhoneNumber());
         if (userRepository.existsByPhoneNumber(phoneNumber)) {
             throw new DuplicateResourceException("phoneNumber is already exists");
         }
 
-        String normalizedEmail = normalizeOptionalEmail(email);
+        String normalizedEmail = normalizeOptionalEmail(request.getEmail());
         if (normalizedEmail != null && userRepository.existsByEmail(normalizedEmail)) {
             throw new DuplicateResourceException("Email already exists");
         }
 
+        String centerName = request.getCenterName() != null ? request.getCenterName().trim() : "";
+        if (centerName.isBlank()) {
+            throw new BadRequestException("Center name is required");
+        }
+
+        String rawSub = request.getSubdomain() != null ? request.getSubdomain().trim().toLowerCase() : "";
+        String subdomain = rawSub.isEmpty()
+                ? centerName.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "")
+                : rawSub.replaceAll("[^a-z0-9-]+", "");
+        if (subdomain.isBlank()) {
+            subdomain = "center-" + System.currentTimeMillis();
+        }
+
+        if (centerRepository.existsBySubdomain(subdomain)) {
+            throw new DuplicateResourceException("Subdomain already exists: " + subdomain);
+        }
+
+        // 1. Create Owner User
         User user = new User();
         user.setPhoneNumber(phoneNumber);
         user.setEmail(normalizedEmail);
-        user.setFullName(fullName);
-        user.setPassword(passwordEncoder.encode(rawPassword));
-        user.setRole(role);
-        userRepository.save(user);
+        user.setFullName(request.getFullName().trim());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(Role.OWNER);
+        user = userRepository.save(user);
 
-        // New user always gets a fresh session — no dedup needed
+        // 2. Create Primary Center for Owner
+        Center center = new Center();
+        center.setName(centerName);
+        center.setSubdomain(subdomain);
+        center.setOwner(user);
+        center = centerRepository.save(center);
+
+        // 3. Create Owner Membership
+        Membership membership = new Membership();
+        membership.setUser(user);
+        membership.setCenter(center);
+        membership.setJoinedByUser(user);
+        membership.setJoinedAt(Instant.now());
+        membershipRepository.save(membership);
+
+        // 4. Create Session
         String sessionId    = UUID.randomUUID().toString();
         String refreshToken = jwtUtil.generateRefreshToken(phoneNumber, sessionId);
-        String accessToken  = jwtUtil.generateAccessToken(phoneNumber, role.name(), sessionId);
+        String accessToken  = jwtUtil.generateAccessToken(phoneNumber, Role.OWNER.name(), sessionId);
         String userAgent    = httpRequest.getHeader("User-Agent");
         LocalDateTime now   = LocalDateTime.now();
 
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .user(user)
-                .center(resolveCenter(user))
+                .center(center)
                 .refreshTokenHash(jwtUtil.hashToken(refreshToken))
                 .deviceName(resolveDeviceName(null, httpRequest))
                 .deviceType(resolveDeviceType(null, httpRequest))
@@ -367,7 +400,7 @@ public class AuthService {
 
         sessionRepository.save(session);
 
-        AuthResponse authResponse = buildAuthResponse(accessToken, sessionId, user, role.name());
+        AuthResponse authResponse = buildAuthResponse(accessToken, sessionId, user, Role.OWNER.name());
         return LoginResult.builder()
                 .authResponse(authResponse)
                 .refreshToken(refreshToken)

@@ -3,6 +3,9 @@ package com.owlexa.owlexabackend.modules.teacher_attendance.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.teacher_attendance.dto.request.TeacherAttendanceMarkRequest;
 import com.owlexa.owlexabackend.modules.teacher_attendance.dto.response.TeacherAttendanceResponse;
 import com.owlexa.owlexabackend.modules.teacher_attendance.entity.TeacherAttendance;
@@ -21,12 +24,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class TeacherAttendanceService {
 
     private final TeacherAttendanceRepository teacherAttendanceRepository;
+    private final ScheduleEventRepository scheduleEventRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
 
@@ -55,18 +62,49 @@ public class TeacherAttendanceService {
                         "Giáo viên không thuộc trung tâm này: " + item.getTeacherUserId());
             }
 
-            TeacherAttendance attendance = teacherAttendanceRepository
-                    .findByTeacherUser_IdAndDate(teacher.getId(), request.getDate())
-                    .orElseGet(() -> {
-                        com.owlexa.owlexabackend.modules.user.entity.Center c =
-                                new com.owlexa.owlexabackend.modules.user.entity.Center();
-                        c.setId(centerId);
-                        return TeacherAttendance.builder()
-                                .teacherUser(teacher)
-                                .center(c)
-                                .date(request.getDate())
-                                .build();
-                    });
+            ScheduleEvent scheduleEvent = null;
+            if (item.getScheduleEventId() != null) {
+                scheduleEvent = scheduleEventRepository.findById(item.getScheduleEventId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Không tìm thấy buổi học với ID: " + item.getScheduleEventId()));
+
+                if (!scheduleEvent.getCenter().getId().equals(centerId)) {
+                    throw new AccessDeniedException("Buổi học không thuộc trung tâm hiện tại");
+                }
+            }
+
+            final ScheduleEvent finalScheduleEvent = scheduleEvent;
+            TeacherAttendance attendance;
+
+            if (finalScheduleEvent != null) {
+                attendance = teacherAttendanceRepository
+                        .findByScheduleEvent_IdAndTeacherUser_Id(finalScheduleEvent.getId(), teacher.getId())
+                        .orElseGet(() -> {
+                            com.owlexa.owlexabackend.modules.user.entity.Center c =
+                                    new com.owlexa.owlexabackend.modules.user.entity.Center();
+                            c.setId(centerId);
+                            return TeacherAttendance.builder()
+                                    .teacherUser(teacher)
+                                    .scheduleEvent(finalScheduleEvent)
+                                    .schedule(finalScheduleEvent.getRecurringRule() != null ? null : null)
+                                    .center(c)
+                                    .date(finalScheduleEvent.getEventDate())
+                                    .build();
+                        });
+            } else {
+                attendance = teacherAttendanceRepository
+                        .findByTeacherUser_IdAndDate(teacher.getId(), request.getDate())
+                        .orElseGet(() -> {
+                            com.owlexa.owlexabackend.modules.user.entity.Center c =
+                                    new com.owlexa.owlexabackend.modules.user.entity.Center();
+                            c.setId(centerId);
+                            return TeacherAttendance.builder()
+                                    .teacherUser(teacher)
+                                    .center(c)
+                                    .date(request.getDate())
+                                    .build();
+                        });
+            }
 
             attendance.setStatus(item.getStatus());
             attendance.setMarkedBy(currentUser);
@@ -127,22 +165,39 @@ public class TeacherAttendanceService {
 
         assertIsOwner(currentUser, centerId);
 
-        List<TeacherAttendance> attendances;
+        LocalDate targetDate = date;
+        if (targetDate == null && startDate == null) {
+            targetDate = LocalDate.now();
+        }
 
-        if (teacherId != null && date != null) {
-            attendances = List.of(teacherAttendanceRepository
-                    .findByTeacherUser_IdAndDate(teacherId, date)
-                    .orElse(null));
-            attendances = attendances.get(0) != null ? attendances : List.of();
-        } else if (teacherId != null && startDate != null && endDate != null) {
+        if (targetDate != null) {
+            // Schedule-driven query for a specific date
+            List<ScheduleEvent> events = scheduleEventRepository
+                    .findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(
+                            centerId, targetDate, ScheduleEventStatus.CANCELLED);
+
+            List<Long> eventIds = events.stream().map(ScheduleEvent::getId).toList();
+            Map<Long, TeacherAttendance> attendanceMap = eventIds.isEmpty() ? Map.of() :
+                    teacherAttendanceRepository.findAllByCenter_IdAndScheduleEvent_IdIn(centerId, eventIds)
+                            .stream()
+                            .collect(Collectors.toMap(
+                                    ta -> ta.getScheduleEvent().getId(),
+                                    Function.identity(),
+                                    (existing, replacement) -> existing
+                            ));
+
+            return events.stream()
+                    .filter(e -> e.getTeacherUser() != null)
+                    .filter(e -> teacherId == null || e.getTeacherUser().getId().equals(teacherId))
+                    .map(e -> toResponseFromEvent(e, attendanceMap.get(e.getId())))
+                    .toList();
+        }
+
+        // Range query fallback
+        List<TeacherAttendance> attendances;
+        if (teacherId != null && startDate != null && endDate != null) {
             attendances = teacherAttendanceRepository
                     .findAllByTeacherUser_IdAndDateBetween(teacherId, startDate, endDate);
-        } else if (teacherId != null) {
-            attendances = teacherAttendanceRepository
-                    .findAllByTeacherUser_IdAndDateBetween(
-                            teacherId, LocalDate.now().minusMonths(1), LocalDate.now());
-        } else if (date != null) {
-            attendances = teacherAttendanceRepository.findAllByCenter_IdAndDate(centerId, date);
         } else if (startDate != null && endDate != null) {
             attendances = teacherAttendanceRepository
                     .findAllByCenter_IdAndDateBetween(centerId, startDate, endDate);
@@ -152,6 +207,7 @@ public class TeacherAttendanceService {
         }
 
         return attendances.stream()
+                .filter(ta -> teacherId == null || ta.getTeacherUser().getId().equals(teacherId))
                 .map(this::toResponse)
                 .toList();
     }
@@ -187,9 +243,18 @@ public class TeacherAttendanceService {
     }
 
     private TeacherAttendanceResponse toResponse(TeacherAttendance attendance) {
+        ScheduleEvent event = attendance.getScheduleEvent();
         return TeacherAttendanceResponse.builder()
                 .id(attendance.getId())
                 .centerId(attendance.getCenter().getId())
+                .scheduleEventId(event != null ? event.getId() : null)
+                .classId(event != null && event.getClazz() != null ? event.getClazz().getId() : null)
+                .className(event != null && event.getClazz() != null ? event.getClazz().getName() : null)
+                .roomId(event != null && event.getRoom() != null ? event.getRoom().getId() : null)
+                .roomName(event != null && event.getRoom() != null ? event.getRoom().getName() : null)
+                .startTime(event != null ? event.getStartTime() : null)
+                .endTime(event != null ? event.getEndTime() : null)
+                .eventStatus(event != null ? event.getStatus().name() : null)
                 .teacherUserId(attendance.getTeacherUser().getId())
                 .teacherFullName(attendance.getTeacherUser().getFullName())
                 .teacherPhoneNumber(attendance.getTeacherUser().getPhoneNumber())
@@ -199,6 +264,30 @@ public class TeacherAttendanceService {
                 .markedByUserId(attendance.getMarkedBy() != null
                         ? attendance.getMarkedBy().getId() : null)
                 .createdAt(attendance.getCreatedAt())
+                .build();
+    }
+
+    private TeacherAttendanceResponse toResponseFromEvent(ScheduleEvent event, TeacherAttendance existing) {
+        User teacher = event.getTeacherUser();
+        return TeacherAttendanceResponse.builder()
+                .id(existing != null ? existing.getId() : null)
+                .centerId(event.getCenter().getId())
+                .scheduleEventId(event.getId())
+                .classId(event.getClazz().getId())
+                .className(event.getClazz().getName())
+                .roomId(event.getRoom() != null ? event.getRoom().getId() : null)
+                .roomName(event.getRoom() != null ? event.getRoom().getName() : null)
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .eventStatus(event.getStatus().name())
+                .teacherUserId(teacher != null ? teacher.getId() : null)
+                .teacherFullName(teacher != null ? teacher.getFullName() : null)
+                .teacherPhoneNumber(teacher != null ? teacher.getPhoneNumber() : null)
+                .date(event.getEventDate())
+                .status(existing != null ? existing.getStatus() : null)
+                .note(existing != null ? existing.getNote() : null)
+                .markedByUserId(existing != null && existing.getMarkedBy() != null ? existing.getMarkedBy().getId() : null)
+                .createdAt(existing != null ? existing.getCreatedAt() : null)
                 .build();
     }
 

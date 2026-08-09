@@ -14,4 +14,5 @@ public class SubmissionAttemptItemOptionResponse {
     private Long assignmentItemOptionId;
     private String content;
     private Integer displayOrder;
+    private Boolean isCorrect;
 }
