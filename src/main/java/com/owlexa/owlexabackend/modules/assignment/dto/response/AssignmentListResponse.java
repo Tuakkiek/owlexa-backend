@@ -24,6 +24,7 @@ public class AssignmentListResponse {
     private Instant openAt;
     private Instant dueAt;
     private Integer attemptLimit;
+    private Integer timeLimitMinutes;
     private Instant assessmentSnapshotAt;
     private Instant createdAt;
     private Instant updatedAt;

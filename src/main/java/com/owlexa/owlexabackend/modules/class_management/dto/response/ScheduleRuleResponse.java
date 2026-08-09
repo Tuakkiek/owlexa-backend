@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.class_management.dto.response;
 
 import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleRepeatType;
 import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
+import com.owlexa.owlexabackend.modules.class_management.entity.TimeSlotPeriod;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,6 +23,9 @@ public class ScheduleRuleResponse {
     private String teacherUserFullName;
     private Long roomId;
     private String roomName;
+    private Long timeSlotId;
+    private String timeSlotName;
+    private TimeSlotPeriod timeSlotPeriod;
     private ScheduleRepeatType repeatType;
     private List<Integer> daysOfWeek;
     private LocalDate startDate;

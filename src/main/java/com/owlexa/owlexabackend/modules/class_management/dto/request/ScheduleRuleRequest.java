@@ -9,7 +9,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 
 @Data
@@ -17,23 +16,20 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class ScheduleRuleRequest {
-    @NotNull(message = "Please select a teacher")
+    @NotNull(message = "Vui lòng chọn giáo viên")
     private Long teacherUserId;
 
-    @NotNull(message = "Please select a room")
+    @NotNull(message = "Vui lòng chọn phòng học")
     private Long roomId;
 
-    @NotEmpty(message = "Please select at least one weekday")
+    @NotEmpty(message = "Vui lòng chọn ít nhất một thứ trong tuần")
     private List<Integer> daysOfWeek;
 
-    @NotNull(message = "Start date is required")
+    @NotNull(message = "Ngày bắt đầu không được để trống")
     private LocalDate startDate;
 
-    @NotNull(message = "Start time is required")
-    private LocalTime startTime;
-
-    @NotNull(message = "End time is required")
-    private LocalTime endTime;
+    @NotNull(message = "Vui lòng chọn ca học")
+    private Long timeSlotId;
 
     private ScheduleType type;
 }

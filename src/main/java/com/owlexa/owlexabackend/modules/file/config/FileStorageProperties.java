@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "owlexa.files")
 public class FileStorageProperties {
 
-    private long maxSize = 52_428_800L;
+    private long maxSize = 2_147_483_648L;
     private String storage = "LOCAL";
     private String localRoot = "uploads";
     private String publicBaseUrl = "http://localhost:8081/uploads";

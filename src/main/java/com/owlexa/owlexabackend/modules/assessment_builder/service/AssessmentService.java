@@ -428,7 +428,7 @@ public class AssessmentService {
         if (richTextDocumentService.hasMeaningfulContent(content)) {
             return;
         }
-        if (questionType == QuestionType.MULTIPLE_CHOICE && assessmentHasAudio) {
+        if (questionType == QuestionType.MULTIPLE_CHOICE) {
             return;
         }
         throw new BadRequestException("Assessment item content is invalid");

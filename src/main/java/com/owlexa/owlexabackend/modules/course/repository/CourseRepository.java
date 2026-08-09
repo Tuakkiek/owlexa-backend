@@ -8,6 +8,17 @@ import java.util.Optional;
 
 public interface CourseRepository extends JpaRepository<Course, Long> {
 
+    Optional<Course> findByIdAndCenter_Id(Long id, Long centerId);
+
+    Optional<Course> findByCodeAndCenter_Id(String code, Long centerId);
+
+    boolean existsByCodeAndCenter_Id(String code, Long centerId);
+
+    List<Course> findAllByCenter_IdAndIsActiveTrueOrderByNameAsc(Long centerId);
+
+    List<Course> findAllByCenter_IdOrderByNameAsc(Long centerId);
+
+    // Legacy fallbacks
     Optional<Course> findByCode(String code);
 
     boolean existsByCode(String code);

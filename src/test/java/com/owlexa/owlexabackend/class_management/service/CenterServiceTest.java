@@ -6,6 +6,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
@@ -115,6 +116,7 @@ class CenterServiceTest {
 
         when(centerRepository.existsBySubdomain("owlexa-hcm")).thenReturn(false);
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
+        when(centerRepository.findAllByOwner_Id(1L)).thenReturn(List.of());
         when(centerRepository.save(any(Center.class))).thenAnswer(invocation -> {
             Center savedCenter = invocation.getArgument(0);
             savedCenter.setId(10L);
@@ -158,6 +160,7 @@ class CenterServiceTest {
 
         when(centerRepository.existsBySubdomain("owlexa-hcm")).thenReturn(false);
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
+        when(centerRepository.findAllByOwner_Id(1L)).thenReturn(List.of());
         when(centerRepository.save(any(Center.class))).thenAnswer(invocation -> {
             Center savedCenter = invocation.getArgument(0);
             savedCenter.setId(10L);
@@ -377,7 +380,7 @@ class CenterServiceTest {
     }
 
     @Test
-    void delete_whenCurrentUserOwnsCenter_shouldDeleteCenter() {
+    void delete_whenCurrentUserOwnsCenter_shouldThrowBadRequestException() {
         loginAs("0901234567");
 
         User owner = user(1L, "0901234567", Role.OWNER);
@@ -386,9 +389,11 @@ class CenterServiceTest {
         when(userRepository.findByPhoneNumber("0901234567")).thenReturn(Optional.of(owner));
         when(centerRepository.findById(10L)).thenReturn(Optional.of(existingCenter));
 
-        centerService.delete(10L);
+        assertThatThrownBy(() -> centerService.delete(10L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Không thể xóa trung tâm duy nhất của chủ sở hữu.");
 
-        verify(centerRepository).delete(existingCenter);
+        verify(centerRepository, never()).delete(any(Center.class));
     }
 
     @Test

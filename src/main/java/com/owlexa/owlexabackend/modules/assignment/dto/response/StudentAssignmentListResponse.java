@@ -24,6 +24,7 @@ public class StudentAssignmentListResponse {
     private Instant openAt;
     private Instant dueAt;
     private Integer attemptLimit;
+    private Integer timeLimitMinutes;
     private Boolean showScore;
     private Boolean allowReview;
     private Boolean hasPassword;

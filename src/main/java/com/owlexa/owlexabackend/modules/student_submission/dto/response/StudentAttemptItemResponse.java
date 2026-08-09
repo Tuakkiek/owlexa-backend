@@ -18,6 +18,7 @@ import java.util.List;
 public class StudentAttemptItemResponse {
 
     private Long assignmentItemId;
+    private Long questionId;
     private QuestionType questionType;
     private String title;
     private JsonNode content;

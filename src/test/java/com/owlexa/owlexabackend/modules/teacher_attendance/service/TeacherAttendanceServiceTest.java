@@ -3,6 +3,11 @@ package com.owlexa.owlexabackend.modules.teacher_attendance.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventType;
+import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.teacher_attendance.dto.request.TeacherAttendanceMarkRequest;
 import com.owlexa.owlexabackend.modules.teacher_attendance.dto.response.TeacherAttendanceResponse;
 import com.owlexa.owlexabackend.modules.teacher_attendance.entity.TeacherAttendance;
@@ -25,6 +30,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +43,7 @@ import static org.mockito.Mockito.*;
 class TeacherAttendanceServiceTest {
 
     @Mock private TeacherAttendanceRepository teacherAttendanceRepository;
+    @Mock private ScheduleEventRepository scheduleEventRepository;
     @Mock private UserRepository userRepository;
     @Mock private MembershipRepository membershipRepository;
 
@@ -48,11 +55,13 @@ class TeacherAttendanceServiceTest {
     private static final Long TEACHER_ID = 50L;
     private static final String TEACHER_PHONE = "0900000050";
     private static final Long ATTENDANCE_ID = 100L;
+    private static final Long SCHEDULE_EVENT_ID_1 = 201L;
+    private static final Long SCHEDULE_EVENT_ID_2 = 202L;
 
     @BeforeEach
     void setUp() {
         service = new TeacherAttendanceService(
-                teacherAttendanceRepository, userRepository, membershipRepository);
+                teacherAttendanceRepository, scheduleEventRepository, userRepository, membershipRepository);
         TenantContext.setCurrentTenantId(CENTER_ID);
 
         User owner = new User();
@@ -73,131 +82,163 @@ class TeacherAttendanceServiceTest {
         SecurityContextHolder.clearContext();
     }
 
-    private User buildTeacher() {
+    private User buildTeacher(Long id, String name) {
         User teacher = new User();
-        teacher.setId(TEACHER_ID);
-        teacher.setPhoneNumber(TEACHER_PHONE);
-        teacher.setFullName("Teacher John");
+        teacher.setId(id);
+        teacher.setPhoneNumber("09000000" + id);
+        teacher.setFullName(name);
         teacher.setRole(Role.TEACHER);
         return teacher;
     }
 
-    private TeacherAttendance buildAttendance() {
+    private Center buildCenter() {
         Center center = new Center();
         center.setId(CENTER_ID);
-
-        TeacherAttendance attendance = new TeacherAttendance();
-        attendance.setId(ATTENDANCE_ID);
-        attendance.setTeacherUser(buildTeacher());
-        attendance.setCenter(center);
-        attendance.setStatus(TeacherAttendanceStatus.PRESENT);
-        attendance.setDate(LocalDate.of(2026, 7, 16));
-        return attendance;
+        return center;
     }
 
-    // ==================== MARK TESTS ====================
+    private Class buildClass(String name) {
+        Class clazz = new Class();
+        clazz.setId(1L);
+        clazz.setName(name);
+        clazz.setCenter(buildCenter());
+        return clazz;
+    }
+
+    private ScheduleEvent buildScheduleEvent(Long id, User teacher, LocalTime start, LocalTime end, LocalDate date) {
+        return ScheduleEvent.builder()
+                .id(id)
+                .center(buildCenter())
+                .clazz(buildClass("TOEIC 650+"))
+                .teacherUser(teacher)
+                .eventDate(date)
+                .startTime(start)
+                .endTime(end)
+                .eventType(ScheduleEventType.LESSON)
+                .status(ScheduleEventStatus.SCHEDULED)
+                .build();
+    }
+
+    // ==================== SCHEDULE-DRIVEN FIND ALL TESTS ====================
 
     @Test
-    @DisplayName("mark: OWNER marks teacher attendance → creates records")
-    void mark_whenValid_shouldCreateAttendance() {
-        User teacher = buildTeacher();
-        when(userRepository.findById(TEACHER_ID)).thenReturn(Optional.of(teacher));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(true);
-        when(teacherAttendanceRepository.findByTeacherUser_IdAndDate(TEACHER_ID, LocalDate.of(2026, 7, 16)))
-                .thenReturn(Optional.empty());
-        when(teacherAttendanceRepository.save(any(TeacherAttendance.class))).thenAnswer(inv -> {
-            TeacherAttendance a = inv.getArgument(0);
-            a.setId(ATTENDANCE_ID);
-            return a;
-        });
+    @DisplayName("CASE 1: Teacher has no scheduled sessions on date → does not appear in attendance list")
+    void findAll_whenNoSessionsOnDate_shouldReturnEmptyList() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        when(scheduleEventRepository.findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(
+                CENTER_ID, date, ScheduleEventStatus.CANCELLED))
+                .thenReturn(List.of());
 
-        TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(TEACHER_ID)
-                .status(TeacherAttendanceStatus.PRESENT)
-                .note("on time")
-                .build();
+        List<TeacherAttendanceResponse> responses = service.findAll(null, date, null, null);
 
-        List<TeacherAttendanceResponse> responses = service.mark(
-                TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item))
-                        .build());
+        assertThat(responses).isEmpty();
+    }
+
+    @Test
+    @DisplayName("CASE 2: Teacher has 1 session on date → returns 1 attendance obligation")
+    void findAll_whenOneSession_shouldReturnOneObligation() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        User teacher = buildTeacher(TEACHER_ID, "Teacher John");
+        ScheduleEvent event = buildScheduleEvent(SCHEDULE_EVENT_ID_1, teacher, LocalTime.of(19, 45), LocalTime.of(21, 15), date);
+
+        when(scheduleEventRepository.findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(
+                CENTER_ID, date, ScheduleEventStatus.CANCELLED))
+                .thenReturn(List.of(event));
+        when(teacherAttendanceRepository.findAllByCenter_IdAndScheduleEvent_IdIn(CENTER_ID, List.of(SCHEDULE_EVENT_ID_1)))
+                .thenReturn(List.of());
+
+        List<TeacherAttendanceResponse> responses = service.findAll(null, date, null, null);
 
         assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getScheduleEventId()).isEqualTo(SCHEDULE_EVENT_ID_1);
         assertThat(responses.get(0).getTeacherUserId()).isEqualTo(TEACHER_ID);
-        assertThat(responses.get(0).getStatus()).isEqualTo(TeacherAttendanceStatus.PRESENT);
-        verify(teacherAttendanceRepository).save(any(TeacherAttendance.class));
+        assertThat(responses.get(0).getStatus()).isNull(); // Unmarked
     }
 
     @Test
-    @DisplayName("mark: existing attendance → update instead of duplicate")
-    void mark_whenAttendanceExists_shouldUpdate() {
-        User teacher = buildTeacher();
+    @DisplayName("CASE 3: Teacher has 2 sessions on same date → returns 2 independent attendance obligations")
+    void findAll_whenTeacherHasTwoSessionsOnSameDate_shouldReturnTwoObligations() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        User teacher = buildTeacher(TEACHER_ID, "Teacher John");
+
+        ScheduleEvent event1 = buildScheduleEvent(SCHEDULE_EVENT_ID_1, teacher, LocalTime.of(8, 0), LocalTime.of(9, 30), date);
+        ScheduleEvent event2 = buildScheduleEvent(SCHEDULE_EVENT_ID_2, teacher, LocalTime.of(19, 45), LocalTime.of(21, 15), date);
+
+        when(scheduleEventRepository.findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(
+                CENTER_ID, date, ScheduleEventStatus.CANCELLED))
+                .thenReturn(List.of(event1, event2));
+        when(teacherAttendanceRepository.findAllByCenter_IdAndScheduleEvent_IdIn(CENTER_ID, List.of(SCHEDULE_EVENT_ID_1, SCHEDULE_EVENT_ID_2)))
+                .thenReturn(List.of());
+
+        List<TeacherAttendanceResponse> responses = service.findAll(null, date, null, null);
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getScheduleEventId()).isEqualTo(SCHEDULE_EVENT_ID_1);
+        assertThat(responses.get(1).getScheduleEventId()).isEqualTo(SCHEDULE_EVENT_ID_2);
+    }
+
+    @Test
+    @DisplayName("CASE 7: Teacher is PRESENT in morning session and LATE in evening session → 2 status values stored independently")
+    void mark_whenTwoSessionsSameDay_shouldStoreStatusesIndependently() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        User teacher = buildTeacher(TEACHER_ID, "Teacher John");
+
+        ScheduleEvent event1 = buildScheduleEvent(SCHEDULE_EVENT_ID_1, teacher, LocalTime.of(8, 0), LocalTime.of(9, 30), date);
+        ScheduleEvent event2 = buildScheduleEvent(SCHEDULE_EVENT_ID_2, teacher, LocalTime.of(19, 45), LocalTime.of(21, 15), date);
+
         when(userRepository.findById(TEACHER_ID)).thenReturn(Optional.of(teacher));
         when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(true);
+        when(scheduleEventRepository.findById(SCHEDULE_EVENT_ID_1)).thenReturn(Optional.of(event1));
+        when(scheduleEventRepository.findById(SCHEDULE_EVENT_ID_2)).thenReturn(Optional.of(event2));
 
-        TeacherAttendance existing = buildAttendance();
-        existing.setStatus(TeacherAttendanceStatus.ABSENT);
-        when(teacherAttendanceRepository.findByTeacherUser_IdAndDate(TEACHER_ID, LocalDate.of(2026, 7, 16)))
-                .thenReturn(Optional.of(existing));
+        when(teacherAttendanceRepository.findByScheduleEvent_IdAndTeacherUser_Id(SCHEDULE_EVENT_ID_1, TEACHER_ID))
+                .thenReturn(Optional.empty());
+        when(teacherAttendanceRepository.findByScheduleEvent_IdAndTeacherUser_Id(SCHEDULE_EVENT_ID_2, TEACHER_ID))
+                .thenReturn(Optional.empty());
+
         when(teacherAttendanceRepository.save(any(TeacherAttendance.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
+        TeacherAttendanceMarkRequest.Item item1 = TeacherAttendanceMarkRequest.Item.builder()
+                .scheduleEventId(SCHEDULE_EVENT_ID_1)
                 .teacherUserId(TEACHER_ID)
                 .status(TeacherAttendanceStatus.PRESENT)
+                .build();
+
+        TeacherAttendanceMarkRequest.Item item2 = TeacherAttendanceMarkRequest.Item.builder()
+                .scheduleEventId(SCHEDULE_EVENT_ID_2)
+                .teacherUserId(TEACHER_ID)
+                .status(TeacherAttendanceStatus.LATE)
                 .build();
 
         List<TeacherAttendanceResponse> responses = service.mark(
                 TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item))
+                        .date(date)
+                        .records(List.of(item1, item2))
                         .build());
 
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getStatus()).isEqualTo(TeacherAttendanceStatus.PRESENT);
+        assertThat(responses.get(1).getStatus()).isEqualTo(TeacherAttendanceStatus.LATE);
+        verify(teacherAttendanceRepository, times(2)).save(any(TeacherAttendance.class));
+    }
+
+    @Test
+    @DisplayName("CASE 8: Unmarked session → status is null, not auto-marked ABSENT")
+    void findAll_whenUnmarkedSession_statusShouldBeNull() {
+        LocalDate date = LocalDate.of(2026, 8, 10);
+        User teacher = buildTeacher(TEACHER_ID, "Teacher John");
+        ScheduleEvent event = buildScheduleEvent(SCHEDULE_EVENT_ID_1, teacher, LocalTime.of(19, 45), LocalTime.of(21, 15), date);
+
+        when(scheduleEventRepository.findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(
+                CENTER_ID, date, ScheduleEventStatus.CANCELLED))
+                .thenReturn(List.of(event));
+        when(teacherAttendanceRepository.findAllByCenter_IdAndScheduleEvent_IdIn(CENTER_ID, List.of(SCHEDULE_EVENT_ID_1)))
+                .thenReturn(List.of());
+
+        List<TeacherAttendanceResponse> responses = service.findAll(null, date, null, null);
+
         assertThat(responses).hasSize(1);
-        assertThat(existing.getStatus()).isEqualTo(TeacherAttendanceStatus.PRESENT);
-        assertThat(existing.getStatus()).isNotEqualTo(TeacherAttendanceStatus.ABSENT);
-    }
-
-    @Test
-    @DisplayName("mark: user is not TEACHER role → BadRequestException")
-    void mark_whenUserIsNotTeacher_shouldThrowBadRequest() {
-        User notTeacher = buildTeacher();
-        notTeacher.setRole(Role.STUDENT);
-        when(userRepository.findById(TEACHER_ID)).thenReturn(Optional.of(notTeacher));
-
-        TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(TEACHER_ID)
-                .status(TeacherAttendanceStatus.PRESENT)
-                .build();
-
-        assertThatThrownBy(() -> service.mark(
-                TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item))
-                        .build()))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("không phải là Giáo viên");
-    }
-
-    @Test
-    @DisplayName("mark: teacher not member of center → BadRequestException")
-    void mark_whenTeacherNotCenterMember_shouldThrowBadRequest() {
-        User teacher = buildTeacher();
-        when(userRepository.findById(TEACHER_ID)).thenReturn(Optional.of(teacher));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(false);
-
-        TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(TEACHER_ID)
-                .status(TeacherAttendanceStatus.PRESENT)
-                .build();
-
-        assertThatThrownBy(() -> service.mark(
-                TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item))
-                        .build()))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("không thuộc trung tâm này");
+        assertThat(responses.get(0).getStatus()).isNull();
     }
 
     @Test
@@ -206,220 +247,13 @@ class TeacherAttendanceServiceTest {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(TEACHER_PHONE, null, List.of()));
-        User teacher = buildTeacher();
+        User teacher = buildTeacher(TEACHER_ID, "Teacher John");
         when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
 
         TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
                 .teacherUserId(TEACHER_ID)
                 .status(TeacherAttendanceStatus.PRESENT)
                 .build();
-
-        assertThatThrownBy(() -> service.mark(
-                TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item))
-                        .build()))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Chỉ có Chủ trung tâm");
-    }
-
-    @Test
-    @DisplayName("mark: teacher not found → ResourceNotFoundException")
-    void mark_whenTeacherNotFound_shouldThrowResourceNotFound() {
-        when(userRepository.findById(TEACHER_ID)).thenReturn(Optional.empty());
-
-        TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(TEACHER_ID)
-                .status(TeacherAttendanceStatus.PRESENT)
-                .build();
-
-        assertThatThrownBy(() -> service.mark(
-                TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item))
-                        .build()))
-                .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    // ==================== UPDATE TESTS ====================
-
-    @Test
-    @DisplayName("update: OWNER updates attendance status → success")
-    void update_whenValid_shouldUpdate() {
-        TeacherAttendance attendance = buildAttendance();
-        when(teacherAttendanceRepository.findById(ATTENDANCE_ID)).thenReturn(Optional.of(attendance));
-        when(teacherAttendanceRepository.save(any(TeacherAttendance.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        TeacherAttendanceResponse response = service.update(ATTENDANCE_ID, TeacherAttendanceStatus.LATE, "15 min late");
-
-        assertThat(response.getStatus()).isEqualTo(TeacherAttendanceStatus.LATE);
-        assertThat(response.getNote()).isEqualTo("15 min late");
-    }
-
-    @Test
-    @DisplayName("update: non-OWNER → AccessDeniedException")
-    void update_whenCallerIsNotOwner_shouldThrowAccessDenied() {
-        SecurityContextHolder.clearContext();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(TEACHER_PHONE, null, List.of()));
-        User teacher = buildTeacher();
-        when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
-
-        assertThatThrownBy(() -> service.update(ATTENDANCE_ID, TeacherAttendanceStatus.LATE, null))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Chỉ có Chủ trung tâm");
-    }
-
-    @Test
-    @DisplayName("update: attendance not found → ResourceNotFoundException")
-    void update_whenNotFound_shouldThrowResourceNotFound() {
-        when(teacherAttendanceRepository.findById(ATTENDANCE_ID)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.update(ATTENDANCE_ID, TeacherAttendanceStatus.LATE, null))
-                .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    // ==================== DELETE TESTS ====================
-
-    @Test
-    @DisplayName("delete: OWNER deletes attendance → success")
-    void delete_whenValid_shouldDelete() {
-        TeacherAttendance attendance = buildAttendance();
-        when(teacherAttendanceRepository.findById(ATTENDANCE_ID)).thenReturn(Optional.of(attendance));
-
-        service.delete(ATTENDANCE_ID);
-
-        verify(teacherAttendanceRepository).delete(attendance);
-    }
-
-    @Test
-    @DisplayName("delete: non-OWNER → AccessDeniedException")
-    void delete_whenCallerIsNotOwner_shouldThrowAccessDenied() {
-        SecurityContextHolder.clearContext();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(TEACHER_PHONE, null, List.of()));
-        User teacher = buildTeacher();
-        when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
-
-        assertThatThrownBy(() -> service.delete(ATTENDANCE_ID))
-                .isInstanceOf(AccessDeniedException.class)
-                .hasMessageContaining("Chỉ có Chủ trung tâm");
-    }
-
-    // ==================== FIND TESTS ====================
-
-    @Test
-    @DisplayName("findAll: filters by teacherId + date → returns records")
-    void findAll_byTeacherAndDate_shouldReturnRecords() {
-        when(teacherAttendanceRepository.findByTeacherUser_IdAndDate(TEACHER_ID, LocalDate.of(2026, 7, 16)))
-                .thenReturn(Optional.of(buildAttendance()));
-
-        List<TeacherAttendanceResponse> responses = service.findAll(TEACHER_ID, LocalDate.of(2026, 7, 16), null, null);
-
-        assertThat(responses).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("findAll: filters by center + date (all teachers) → returns records")
-    void findAll_byCenterAndDate_shouldReturnRecords() {
-        when(teacherAttendanceRepository.findAllByCenter_IdAndDate(CENTER_ID, LocalDate.of(2026, 7, 16)))
-                .thenReturn(List.of(buildAttendance()));
-
-        List<TeacherAttendanceResponse> responses = service.findAll(null, LocalDate.of(2026, 7, 16), null, null);
-
-        assertThat(responses).hasSize(1);
-    }
-
-    @Test
-    @DisplayName("findAll: no filters → returns today's records")
-    void findAll_noFilters_shouldReturnTodayRecords() {
-        when(teacherAttendanceRepository.findAllByCenter_IdAndDate(CENTER_ID, LocalDate.now()))
-                .thenReturn(List.of());
-
-        List<TeacherAttendanceResponse> responses = service.findAll(null, null, null, null);
-
-        assertThat(responses).isEmpty();
-    }
-
-    @Test
-    @DisplayName("findAll: non-OWNER → AccessDeniedException")
-    void findAll_whenCallerIsNotOwner_shouldThrowAccessDenied() {
-        SecurityContextHolder.clearContext();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(TEACHER_PHONE, null, List.of()));
-        User teacher = buildTeacher();
-        when(userRepository.findByPhoneNumber(TEACHER_PHONE)).thenReturn(Optional.of(teacher));
-
-        assertThatThrownBy(() -> service.findAll(null, null, null, null))
-                .isInstanceOf(AccessDeniedException.class);
-    }
-
-    @Test
-    @DisplayName("findById: returns single record")
-    void findById_whenValid_shouldReturnRecord() {
-        when(teacherAttendanceRepository.findById(ATTENDANCE_ID)).thenReturn(Optional.of(buildAttendance()));
-
-        TeacherAttendanceResponse response = service.findById(ATTENDANCE_ID);
-
-        assertThat(response.getId()).isEqualTo(ATTENDANCE_ID);
-    }
-
-    // ==================== BATCH MARK TESTS ====================
-
-    @Test
-    @DisplayName("mark: batch marks multiple teachers → creates all")
-    void mark_whenBatchMultipleTeachers_shouldCreateAll() {
-        User teacher1 = buildTeacher();
-        User teacher2 = new User();
-        teacher2.setId(60L);
-        teacher2.setPhoneNumber("0900000060");
-        teacher2.setFullName("Teacher Jane");
-        teacher2.setRole(Role.TEACHER);
-
-        when(userRepository.findById(TEACHER_ID)).thenReturn(Optional.of(teacher1));
-        when(userRepository.findById(60L)).thenReturn(Optional.of(teacher2));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(true);
-        when(membershipRepository.existsByUser_IdAndCenter_Id(60L, CENTER_ID)).thenReturn(true);
-        when(teacherAttendanceRepository.findByTeacherUser_IdAndDate(any(), any()))
-                .thenReturn(Optional.empty());
-        when(teacherAttendanceRepository.save(any(TeacherAttendance.class))).thenAnswer(inv -> {
-            TeacherAttendance a = inv.getArgument(0);
-            a.setId(a.getTeacherUser().getId());
-            return a;
-        });
-
-        TeacherAttendanceMarkRequest.Item item1 = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(TEACHER_ID).status(TeacherAttendanceStatus.PRESENT).build();
-        TeacherAttendanceMarkRequest.Item item2 = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(60L).status(TeacherAttendanceStatus.LEAVE).note("Sick leave").build();
-
-        List<TeacherAttendanceResponse> responses = service.mark(
-                TeacherAttendanceMarkRequest.builder()
-                        .date(LocalDate.of(2026, 7, 16))
-                        .records(List.of(item1, item2))
-                        .build());
-
-        assertThat(responses).hasSize(2);
-        assertThat(responses.get(0).getStatus()).isEqualTo(TeacherAttendanceStatus.PRESENT);
-        assertThat(responses.get(1).getStatus()).isEqualTo(TeacherAttendanceStatus.LEAVE);
-        verify(teacherAttendanceRepository, times(2)).save(any(TeacherAttendance.class));
-    }
-
-    @Test
-    @DisplayName("mark: OWNER not member of center → AccessDeniedException")
-    void mark_whenOwnerNotCenterMember_shouldThrowAccessDenied() {
-        SecurityContextHolder.clearContext();
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("owner2", null, List.of()));
-        User owner2 = new User();
-        owner2.setId(99L);
-        owner2.setPhoneNumber("owner2");
-        owner2.setRole(Role.OWNER);
-        when(userRepository.findByPhoneNumber("owner2")).thenReturn(Optional.of(owner2));
-        when(membershipRepository.existsByUser_IdAndCenter_Id(99L, CENTER_ID)).thenReturn(false);
-
-        TeacherAttendanceMarkRequest.Item item = TeacherAttendanceMarkRequest.Item.builder()
-                .teacherUserId(TEACHER_ID).status(TeacherAttendanceStatus.PRESENT).build();
 
         assertThatThrownBy(() -> service.mark(
                 TeacherAttendanceMarkRequest.builder()

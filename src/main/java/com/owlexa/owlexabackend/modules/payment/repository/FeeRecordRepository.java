@@ -93,5 +93,6 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
     // ── Pending fees (UNPAID + PARTIAL, regardless of due date) ──────────
 
     List<FeeRecord> findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(Long centerId, List<FeeStatus> statuses);
-}
 
+    List<FeeRecord> findAllByCenter_IdAndClazz_IdOrderByCreatedAtDesc(Long centerId, Long classId);
+}

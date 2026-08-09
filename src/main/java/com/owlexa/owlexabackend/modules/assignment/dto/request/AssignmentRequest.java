@@ -35,6 +35,9 @@ public class AssignmentRequest {
     @Min(value = 1, message = "Attempt limit must be greater than or equal to 1")
     private Integer attemptLimit;
 
+    @Min(value = 1, message = "Time limit must be greater than or equal to 1")
+    private Integer timeLimitMinutes;
+
     private Boolean showScore;
 
     private Boolean allowReview;

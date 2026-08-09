@@ -48,13 +48,6 @@ public class AuthController {
                 .build();
     }
 
-    @PostMapping("/register/student")
-    public AuthResponse registerStudent(@Valid @RequestBody RegisterStudentRequest body,
-                                        HttpServletRequest request, HttpServletResponse response) {
-        AuthService.LoginResult result = authService.registerStudent(body, request);
-        cookieUtil.setRefreshTokenCookie(response, result.getRefreshToken());
-        return result.getAuthResponse();
-    }
 
     @PostMapping("/register/owner")
     public AuthResponse registerOwner(@Valid @RequestBody RegisterOwnerRequest body,

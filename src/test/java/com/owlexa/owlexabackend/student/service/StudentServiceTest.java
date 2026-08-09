@@ -200,7 +200,7 @@ public class StudentServiceTest {
     }
 
     @Test
-    void create_whenStudentAlreadyExistsAndAlreadyInCenter_shouldReturnStudentWithoutCreatingAgain() {
+    void create_whenStudentAlreadyExistsAndAlreadyInCenter_shouldThrowDuplicateResourceException() {
         loginAs("0901234567");
         setCurrentCenterId(10L);
 
@@ -218,12 +218,9 @@ public class StudentServiceTest {
 
         StudentRequest request = request("Nguyen Van A", "student@example.com", "0987654321");
 
-        StudentResponse response = studentService.create(request);
-
-        assertThat(response.getUserId()).isEqualTo(100L);
-        assertThat(response.getPhoneNumber()).isEqualTo("0987654321");
-        assertThat(response.getCenterId()).isEqualTo(10L);
-        assertThat(response.getTemporaryPassword()).isNull();
+        assertThatThrownBy(() -> studentService.create(request))
+                .isInstanceOf(com.owlexa.owlexabackend.common.exception.DuplicateResourceException.class)
+                .hasMessageContaining("Số điện thoại đã tồn tại.");
 
         verify(userRepository, never()).save(any(User.class));
         verify(membershipRepository, never()).save(any(Membership.class));
@@ -247,7 +244,7 @@ public class StudentServiceTest {
 
         assertThatThrownBy(() -> studentService.create(request))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("User is not a STUDENT");
+                .hasMessageContaining("không phải Học sinh");
 
         verify(userRepository, never()).save(any(User.class));
         verify(membershipRepository, never()).save(any(Membership.class));

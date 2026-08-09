@@ -82,6 +82,9 @@ public class Assignment implements TenantAware {
     @Column(name = "attempt_limit")
     private Integer attemptLimit;
 
+    @Column(name = "time_limit_minutes")
+    private Integer timeLimitMinutes;
+
     @Column(name = "show_score", nullable = false)
     @Builder.Default
     private Boolean showScore = true;

@@ -117,6 +117,37 @@ public class StudentDocumentService {
                 .toList();
     }
 
+    // ── Owner: delete class document ────────────────────────────────────────
+
+    @Transactional
+    public void deleteDocumentForClass(Long classId, Long documentId) {
+        User currentUser = requireCurrentUser(Role.OWNER);
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+
+        doDeleteDocument(classId, documentId, centerId);
+    }
+
+    // ── Teacher: delete class document ──────────────────────────────────────
+
+    @Transactional
+    public void deleteDocumentForClassAsTeacher(Long classId, Long documentId) {
+        User currentUser = requireCurrentUser(Role.TEACHER);
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+        assertTeacherTeachesClass(currentUser, classId, centerId);
+
+        doDeleteDocument(classId, documentId, centerId);
+    }
+
+    private void doDeleteDocument(Long classId, Long documentId, Long centerId) {
+        StudentDocument document = studentDocumentRepository
+                .findByIdAndClazz_IdAndCenter_Id(documentId, classId, centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found with id: " + documentId));
+
+        studentDocumentRepository.delete(document);
+    }
+
     // ── Shared create logic ──────────────────────────────────────────────────
 
     private StudentDocumentResponse doCreateForClass(Long classId, StudentDocumentRequest request,

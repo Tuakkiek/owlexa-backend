@@ -19,6 +19,7 @@ public class AssignmentItemResponse {
 
     private Long id;
     private Long assessmentItemId;
+    private Long questionId;
     private QuestionType questionType;
     private String title;
     private JsonNode content;

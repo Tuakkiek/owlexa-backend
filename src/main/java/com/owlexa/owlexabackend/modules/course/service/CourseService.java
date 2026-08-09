@@ -1,35 +1,36 @@
 package com.owlexa.owlexabackend.modules.course.service;
 
+import com.owlexa.owlexabackend.common.context.TenantContext;
+import com.owlexa.owlexabackend.common.exception.BadRequestException;
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
+import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
 import com.owlexa.owlexabackend.modules.course.dto.request.CourseRequest;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseClassResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseDeleteValidationResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseDependencyDto;
 import com.owlexa.owlexabackend.modules.course.dto.response.CourseResponse;
+import com.owlexa.owlexabackend.modules.course.dto.response.CourseStatisticsResponse;
 import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.course.repository.CourseRepository;
+import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
+import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
+import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
+import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
-import com.owlexa.owlexabackend.modules.class_management.entity.Class;
-import com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus;
-import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
-import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
-import com.owlexa.owlexabackend.modules.user.entity.User;
-import com.owlexa.owlexabackend.modules.user.entity.Role;
-import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
-import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
-import com.owlexa.owlexabackend.common.context.TenantContext;
-import com.owlexa.owlexabackend.common.exception.BadRequestException;
-import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
-import com.owlexa.owlexabackend.modules.course.dto.response.CourseStatisticsResponse;
-import com.owlexa.owlexabackend.modules.course.dto.response.CourseClassResponse;
-import com.owlexa.owlexabackend.modules.course.dto.response.CourseDeleteValidationResponse;
-import com.owlexa.owlexabackend.modules.course.dto.response.CourseDependencyDto;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
-
 
 @Service
 @RequiredArgsConstructor
@@ -40,13 +41,20 @@ public class CourseService {
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
-
+    private final CenterRepository centerRepository;
 
     @Transactional
     public CourseResponse create(CourseRequest request) {
-        if (courseRepository.existsByCode(request.getCode().trim())) {
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+
+        if (courseRepository.existsByCodeAndCenter_Id(request.getCode().trim(), centerId)) {
             throw new DuplicateResourceException("Course code already exists: " + request.getCode());
         }
+
+        Center center = centerRepository.findById(centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
 
         Course course = Course.builder()
                 .code(request.getCode().trim())
@@ -57,6 +65,7 @@ public class CourseService {
                 .defaultMonthlyFee(request.getDefaultMonthlyFee())
                 .defaultTeacherUserId(request.getDefaultTeacherUserId())
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
+                .center(center)
                 .build();
 
         course = courseRepository.save(course);
@@ -65,7 +74,8 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public List<CourseResponse> findAll() {
-        return courseRepository.findAllByIsActiveTrueOrderByNameAsc()
+        Long centerId = requiredCurrentCenterId();
+        return courseRepository.findAllByCenter_IdAndIsActiveTrueOrderByNameAsc(centerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -73,7 +83,8 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public List<CourseResponse> findAllIncludingInactive() {
-        return courseRepository.findAll()
+        Long centerId = requiredCurrentCenterId();
+        return courseRepository.findAllByCenter_IdOrderByNameAsc(centerId)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -81,18 +92,23 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public CourseResponse findById(Long id) {
-        Course course = courseRepository.findById(id)
+        Long centerId = requiredCurrentCenterId();
+        Course course = courseRepository.findByIdAndCenter_Id(id, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
         return toResponse(course);
     }
 
     @Transactional
     public CourseResponse update(Long id, CourseRequest request) {
-        Course course = courseRepository.findById(id)
+        User currentUser = getCurrentUser();
+        Long centerId = requiredCurrentCenterId();
+        assertCenterMembership(currentUser, centerId);
+
+        Course course = courseRepository.findByIdAndCenter_Id(id, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
 
         if (!course.getCode().equalsIgnoreCase(request.getCode().trim())
-                && courseRepository.existsByCode(request.getCode().trim())) {
+                && courseRepository.existsByCodeAndCenter_Id(request.getCode().trim(), centerId)) {
             throw new DuplicateResourceException("Course code already exists: " + request.getCode());
         }
 
@@ -115,9 +131,9 @@ public class CourseService {
     public void delete(Long id) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
-        assertOwnerAndCenterMembership(currentUser, centerId);
+        assertCenterMembership(currentUser, centerId);
 
-        Course course = courseRepository.findById(id)
+        Course course = courseRepository.findByIdAndCenter_Id(id, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khóa học với ID: " + id));
 
         if (classRepository.existsByCourse_Id(id)) {
@@ -141,13 +157,6 @@ public class CourseService {
         return centerId;
     }
 
-    private void assertOwnerAndCenterMembership(User currentUser, Long centerId) {
-        if (currentUser.getRole() != Role.OWNER) {
-            throw new AccessDeniedException("Only OWNER can perform this operation");
-        }
-        assertCenterMembership(currentUser, centerId);
-    }
-
     private void assertCenterMembership(User currentUser, Long centerId) {
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(currentUser.getId(), centerId);
         if (!hasMembership) {
@@ -161,7 +170,7 @@ public class CourseService {
         Long centerId = requiredCurrentCenterId();
         assertCenterMembership(currentUser, centerId);
 
-        courseRepository.findById(courseId)
+        courseRepository.findByIdAndCenter_Id(courseId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
 
         List<Class> classes = classRepository.findAllByCourse_IdAndCenter_Id(courseId, centerId);
@@ -190,7 +199,7 @@ public class CourseService {
         Long centerId = requiredCurrentCenterId();
         assertCenterMembership(currentUser, centerId);
 
-        courseRepository.findById(courseId)
+        courseRepository.findByIdAndCenter_Id(courseId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
 
         List<Class> classes = classRepository.findAllByCourse_IdAndCenter_Id(courseId, centerId);
@@ -224,7 +233,7 @@ public class CourseService {
         Long centerId = requiredCurrentCenterId();
         assertCenterMembership(currentUser, centerId);
 
-        Course course = courseRepository.findById(courseId)
+        Course course = courseRepository.findByIdAndCenter_Id(courseId, centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + courseId));
 
         List<Class> classes = classRepository.findAllByCourse_IdAndCenter_Id(courseId, centerId);

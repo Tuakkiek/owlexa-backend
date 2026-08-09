@@ -85,6 +85,15 @@ public class SubmissionService {
 
         AssignmentRecipient recipient = findStudentRecipient(assignmentId, student.getId(), centerId);
         Assignment assignment = recipient.getAssignment();
+
+        Optional<SubmissionAttempt> existingAttempt = submissionAttemptRepository
+                .findByAssignmentRecipient_IdAndStatus(recipient.getId(), SubmissionAttemptStatus.IN_PROGRESS);
+
+        if (existingAttempt.isPresent()) {
+            SubmissionAttempt attempt = finalizeIfExpired(existingAttempt.get(), now);
+            return toStudentDetail(attempt);
+        }
+
         validateCanStartAttempt(assignment, now);
 
         if (assignment.getAccessPassword() != null && !assignment.getAccessPassword().isBlank()) {
@@ -94,10 +103,7 @@ public class SubmissionService {
             }
         }
 
-        SubmissionAttempt attempt = submissionAttemptRepository
-                .findByAssignmentRecipient_IdAndStatus(recipient.getId(), SubmissionAttemptStatus.IN_PROGRESS)
-                .orElseGet(() -> createAttempt(recipient, now));
-
+        SubmissionAttempt attempt = createAttempt(recipient, now);
         return toStudentDetail(attempt);
     }
 
@@ -113,10 +119,11 @@ public class SubmissionService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public StudentAttemptDetailResponse getAttemptDetail(Long attemptId) {
         User student = requireStudentInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
+        Instant now = Instant.now();
 
         SubmissionAttempt attempt = submissionAttemptRepository
                 .findByIdAndAssignmentRecipient_StudentUser_IdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
@@ -126,6 +133,7 @@ public class SubmissionService {
                 )
                 .orElseThrow(() -> new ResourceNotFoundException("Submission attempt not found with id: " + attemptId));
 
+        attempt = finalizeIfExpired(attempt, now);
         return toStudentDetail(attempt);
     }
 
@@ -138,8 +146,41 @@ public class SubmissionService {
         SubmissionAttempt attempt = findStudentAttempt(attemptId, student.getId(), centerId);
         requireInProgress(attempt, "Only in-progress attempts can be updated");
         validateAssignmentStillAccessible(attempt.getAssignmentRecipient().getAssignment());
+
+        attempt = finalizeIfExpired(attempt, now);
+        if (attempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS) {
+            throw new BadRequestException("Bài tập đã hết hạn, không thể lưu câu trả lời.");
+        }
+
         replaceAnswers(attempt, request);
         attempt.setLastSavedAt(now);
+
+        return toStudentDetail(submissionAttemptRepository.save(attempt));
+    }
+
+    @Transactional
+    public StudentAttemptDetailResponse saveAudioProgress(Long attemptId, com.owlexa.owlexabackend.modules.student_submission.dto.request.AudioProgressUpdateRequest request) {
+        User student = requireStudentInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+        Instant now = Instant.now();
+
+        SubmissionAttempt attempt = findStudentAttempt(attemptId, student.getId(), centerId);
+        requireInProgress(attempt, "Only in-progress attempts can be updated");
+        validateAssignmentStillAccessible(attempt.getAssignmentRecipient().getAssignment());
+
+        attempt = finalizeIfExpired(attempt, now);
+        if (attempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS) {
+            throw new BadRequestException("Bài tập đã hết hạn, không thể lưu audio progress.");
+        }
+
+        int currentPosition = attempt.getAudioPositionSeconds() != null ? attempt.getAudioPositionSeconds() : 0;
+        int incomingPosition = request.getPositionSeconds() != null ? request.getPositionSeconds() : 0;
+        
+        attempt.setAudioPositionSeconds(Math.max(currentPosition, incomingPosition));
+        
+        if (Boolean.TRUE.equals(request.getCompleted())) {
+            attempt.setAudioCompleted(true);
+        }
 
         return toStudentDetail(submissionAttemptRepository.save(attempt));
     }
@@ -155,11 +196,15 @@ public class SubmissionService {
 
         Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
         validateAssignmentStillAccessible(assignment);
+
+        attempt = finalizeIfExpired(attempt, now);
+        if (attempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS) {
+            return toStudentDetail(attempt);
+        }
+
         scoreAttempt(attempt, assignment, now);
         attempt.setSubmittedAt(now);
-        attempt.setStatus(isPastDue(assignment, now)
-                ? SubmissionAttemptStatus.AUTO_SUBMITTED
-                : SubmissionAttemptStatus.SUBMITTED);
+        attempt.setStatus(SubmissionAttemptStatus.SUBMITTED);
         attempt.setActiveAttemptKey(null);
         attempt.setLastSavedAt(now);
 
@@ -414,6 +459,18 @@ public class SubmissionService {
                 .map(latest -> latest.getAttemptNumber() + 1)
                 .orElse(1);
 
+        Instant expiresAt = null;
+        Instant candidateByDuration = assignment.getTimeLimitMinutes() != null ? now.plus(assignment.getTimeLimitMinutes(), java.time.temporal.ChronoUnit.MINUTES) : null;
+        Instant candidateByDueAt = assignment.getDueAt();
+        
+        if (candidateByDuration != null && candidateByDueAt != null) {
+            expiresAt = candidateByDuration.isBefore(candidateByDueAt) ? candidateByDuration : candidateByDueAt;
+        } else if (candidateByDuration != null) {
+            expiresAt = candidateByDuration;
+        } else if (candidateByDueAt != null) {
+            expiresAt = candidateByDueAt;
+        }
+
         SubmissionAttempt attempt = SubmissionAttempt.builder()
                 .assignmentRecipient(recipient)
                 .status(SubmissionAttemptStatus.IN_PROGRESS)
@@ -422,6 +479,7 @@ public class SubmissionService {
                 .startedAt(now)
                 .lastSavedAt(now)
                 .activeAttemptKey(recipient.getId())
+                .expiresAt(expiresAt)
                 .build();
 
         return submissionAttemptRepository.save(attempt);
@@ -612,7 +670,52 @@ public class SubmissionService {
     }
 
     private boolean isPastDue(Assignment assignment, Instant now) {
-        return assignment.getDueAt() != null && now.isAfter(assignment.getDueAt());
+        return assignment.getDueAt() != null && !now.isBefore(assignment.getDueAt());
+    }
+
+    /**
+     * Single domain rule: if the attempt is IN_PROGRESS and the assignment deadline
+     * has passed, finalize it as AUTO_SUBMITTED with the answers saved so far.
+     * Returns the (possibly finalized) attempt.
+     */
+    private SubmissionAttempt finalizeIfExpired(SubmissionAttempt attempt, Instant now) {
+        if (attempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS) {
+            return attempt;
+        }
+        if (attempt.getExpiresAt() != null && !now.isBefore(attempt.getExpiresAt())) {
+            Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
+            log.info("Finalizing expired attempt: attemptId={}, expiresAt={}, now={}",
+                    attempt.getId(),
+                    attempt.getExpiresAt(),
+                    now);
+            scoreAttempt(attempt, assignment, now);
+            attempt.setSubmittedAt(now);
+            attempt.setStatus(SubmissionAttemptStatus.AUTO_SUBMITTED);
+            attempt.setActiveAttemptKey(null);
+            attempt.setLastSavedAt(now);
+            return submissionAttemptRepository.save(attempt);
+        }
+        return attempt;
+    }
+
+    /**
+     * Scheduler entry point: finalize all IN_PROGRESS attempts whose assignment
+     * deadline has passed. Idempotent — safe to call repeatedly.
+     */
+    @Transactional
+    public int finalizeExpiredAttempts(Instant now) {
+        List<SubmissionAttempt> expired = submissionAttemptRepository
+                .findAllByStatusAndExpiresAtLessThanEqual(
+                        SubmissionAttemptStatus.IN_PROGRESS, now);
+        int count = 0;
+        for (SubmissionAttempt attempt : expired) {
+            finalizeIfExpired(attempt, now);
+            count++;
+        }
+        if (count > 0) {
+            log.info("SubmissionDeadlineJob: finalized {} expired attempts", count);
+        }
+        return count;
     }
 
     private AssignmentRecipient findStudentRecipient(Long assignmentId, Long studentUserId, Long centerId) {

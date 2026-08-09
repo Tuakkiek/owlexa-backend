@@ -19,6 +19,12 @@ public interface TeacherAttendanceRepository extends JpaRepository<TeacherAttend
     List<TeacherAttendance> findAllByCenter_IdAndDateBetween(
             Long centerId, LocalDate startDate, LocalDate endDate);
 
+    Optional<TeacherAttendance> findByScheduleEvent_IdAndTeacherUser_Id(Long scheduleEventId, Long teacherUserId);
+
+    Optional<TeacherAttendance> findByScheduleEvent_Id(Long scheduleEventId);
+
+    List<TeacherAttendance> findAllByCenter_IdAndScheduleEvent_IdIn(Long centerId, List<Long> scheduleEventIds);
+
     Optional<TeacherAttendance> findByTeacherUser_IdAndDate(Long teacherUserId, LocalDate date);
 
     boolean existsByTeacherUser_IdAndDate(Long teacherUserId, LocalDate date);

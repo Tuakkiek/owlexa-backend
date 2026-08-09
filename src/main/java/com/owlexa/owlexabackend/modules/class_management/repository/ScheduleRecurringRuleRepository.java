@@ -18,6 +18,8 @@ public interface ScheduleRecurringRuleRepository extends JpaRepository<ScheduleR
 
     boolean existsByRoom_IdAndCenter_Id(Long roomId, Long centerId);
 
+    boolean existsByTimeSlot_IdAndCenter_Id(Long timeSlotId, Long centerId);
+
     long countByRoom_IdAndCenter_Id(Long roomId, Long centerId);
 
     @Query("""
