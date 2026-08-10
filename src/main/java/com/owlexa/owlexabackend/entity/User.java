@@ -9,14 +9,62 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "phone_number", nullable = false, unique = true)
+    private String phoneNumber;
+
+    @Column(name = "full_name")
+    private String fullName;
+
+    @Column(unique = true)
     private String email;
+
+    @Column(nullable = false)
     private String password;
 
-    @ManyToOne
-    @JoinColumn(name = "role_id")
-    private Role role;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RoleName role;
 
     @ManyToOne
     @JoinColumn(name = "center_id")
     private Center center;
+
+    protected User() {
+    }
+
+    public User(String phoneNumber, String fullName, String email, String password, RoleName role) {
+        this.phoneNumber = phoneNumber;
+        this.fullName = fullName;
+        this.email = email;
+        this.password = password;
+        this.role = role;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public RoleName getRole() {
+        return role;
+    }
+
+    public Center getCenter() {
+        return center;
+    }
 }

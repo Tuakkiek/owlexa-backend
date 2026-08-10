@@ -11,4 +11,12 @@ public class Center {
 
     private String name;
     private String subdomain;
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
 }
