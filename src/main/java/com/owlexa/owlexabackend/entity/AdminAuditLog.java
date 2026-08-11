@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.entity;
 
+import com.owlexa.owlexabackend.modules.user.entity.User;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;

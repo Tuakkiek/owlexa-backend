@@ -1,8 +1,8 @@
 package com.owlexa.owlexabackend.config;
 
-import com.owlexa.owlexabackend.entity.RoleName;
-import com.owlexa.owlexabackend.entity.User;
-import com.owlexa.owlexabackend.repository.UserRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,7 +44,7 @@ public class AdminDataSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        var existingAdmin = userRepository.findFirstByRole(RoleName.ADMIN);
+        var existingAdmin = userRepository.findFirstByRole(Role.ADMIN);
         if (existingAdmin.isPresent()) {
             log.info("Admin seed đã tồn tại với số điện thoại {}", mask(existingAdmin.get().getPhoneNumber()));
             return;
@@ -55,13 +55,13 @@ public class AdminDataSeeder implements ApplicationRunner {
                     "Không thể seed Admin: số điện thoại cấu hình đã thuộc tài khoản khác");
         }
 
-        User admin = new User(
-                phoneNumber,
-                fullName,
-                email.isBlank() ? null : email,
-                passwordEncoder.encode(password),
-                RoleName.ADMIN
-        );
+        User admin = new User();
+        admin.setPhoneNumber(phoneNumber);
+        admin.setFullName(fullName);
+        admin.setEmail(email.isBlank() ? null : email);
+        admin.setPassword(passwordEncoder.encode(password));
+        admin.setRole(Role.ADMIN);
+        admin.setActive(true);
         userRepository.save(admin);
         log.info("Đã seed tài khoản Admin với số điện thoại {}", mask(phoneNumber));
     }

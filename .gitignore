@@ -44,3 +44,15 @@ build/
 !**/src/test/**/build/
 
 .vscode/
+
+# Custom ignored files
+owlexa_roadmap.md
+
+# Environment variables (contains secrets — do not commit)
+.env
+
+# Uploaded media & logs
+uploads/
+*.log*
+app.log*
+

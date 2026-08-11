@@ -1,8 +1,8 @@
 package com.owlexa.owlexabackend.config;
 
-import com.owlexa.owlexabackend.entity.RoleName;
-import com.owlexa.owlexabackend.entity.User;
-import com.owlexa.owlexabackend.repository.UserRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.User;
+import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +21,7 @@ class AdminDataSeederTest {
 
     @Test
     void createsAdminWhenNoAdminExists() {
-        when(userRepository.findFirstByRole(RoleName.ADMIN)).thenReturn(Optional.empty());
+        when(userRepository.findFirstByRole(Role.ADMIN)).thenReturn(Optional.empty());
         when(userRepository.findByPhoneNumber("0900000000")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("password123")).thenReturn("bcrypt-hash");
 
@@ -40,15 +40,18 @@ class AdminDataSeederTest {
         User savedAdmin = captor.getValue();
         assertThat(savedAdmin.getPhoneNumber()).isEqualTo("0900000000");
         assertThat(savedAdmin.getPassword()).isEqualTo("bcrypt-hash");
-        assertThat(savedAdmin.getRole()).isEqualTo(RoleName.ADMIN);
-        assertThat(savedAdmin.getCenter()).isNull();
+        assertThat(savedAdmin.getRole()).isEqualTo(Role.ADMIN);
+        assertThat(savedAdmin.isActive()).isTrue();
     }
 
     @Test
     void doesNotCreateOrResetAnExistingAdmin() {
-        User existingAdmin = new User(
-                "0999999999", "Existing Admin", null, "existing-hash", RoleName.ADMIN);
-        when(userRepository.findFirstByRole(RoleName.ADMIN)).thenReturn(Optional.of(existingAdmin));
+        User existingAdmin = new User();
+        existingAdmin.setPhoneNumber("0999999999");
+        existingAdmin.setFullName("Existing Admin");
+        existingAdmin.setPassword("existing-hash");
+        existingAdmin.setRole(Role.ADMIN);
+        when(userRepository.findFirstByRole(Role.ADMIN)).thenReturn(Optional.of(existingAdmin));
 
         AdminDataSeeder seeder = new AdminDataSeeder(
                 userRepository,
