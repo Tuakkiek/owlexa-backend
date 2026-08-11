@@ -35,6 +35,9 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new BadCredentialsException("Số điện thoại hoặc mật khẩu không đúng");
         }
+        if (!user.isActive()) {
+            throw new BadCredentialsException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
+        }
 
         String centerName = user.getCenter() == null ? null : user.getCenter().getName();
         Long centerId = user.getCenter() == null ? null : user.getCenter().getId();

@@ -71,6 +71,7 @@ public class SecurityConfig {
                         .withUsername(user.getPhoneNumber())
                         .password(user.getPassword())
                         .roles(user.getRole().name())
+                        .disabled(!user.isActive())
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy tài khoản"));
     }

@@ -29,6 +29,9 @@ public class User {
     @JoinColumn(name = "center_id")
     private Center center;
 
+    @Column(name = "is_active", nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
+
     protected User() {
     }
 
@@ -66,5 +69,13 @@ public class User {
 
     public Center getCenter() {
         return center;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
     }
 }
