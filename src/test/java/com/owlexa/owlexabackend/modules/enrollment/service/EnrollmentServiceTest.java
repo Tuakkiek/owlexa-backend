@@ -55,6 +55,9 @@ class EnrollmentServiceTest {
     @Mock private ScheduleRepository scheduleRepository;
     @Mock private ScheduleEventRepository scheduleEventRepository;
     @Mock private ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
+    @Mock private com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository auditLogRepository;
+    @Mock private com.owlexa.owlexabackend.modules.payment.repository.RefundRepository refundRepository;
+    @Mock private com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository paymentRepository;
 
     private EnrollmentService service;
 
@@ -70,7 +73,8 @@ class EnrollmentServiceTest {
         service = new EnrollmentService(
                 classEnrollmentRepository, classRepository, userRepository,
                 membershipRepository, feeRecordRepository, scheduleRepository,
-                scheduleEventRepository, scheduleRecurringRuleRepository
+                scheduleEventRepository, scheduleRecurringRuleRepository,
+                auditLogRepository, refundRepository, paymentRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 

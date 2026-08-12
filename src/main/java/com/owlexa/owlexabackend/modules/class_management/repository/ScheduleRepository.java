@@ -61,6 +61,21 @@ public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
             @Param("centerId") Long centerId,
             @Param("excludeScheduleId") Long excludeScheduleId);
 
+    @Query("SELECT s FROM Schedule s WHERE s.clazz.id IN " +
+           "(SELECT e.clazz.id FROM ClassEnrollment e WHERE e.studentUser.id = :studentId AND e.status IN (com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE, com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.PENDING, com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.SUSPENDED) " +
+           "AND (:excludeClassId IS NULL OR e.clazz.id <> :excludeClassId)) " +
+           "AND s.dayOfWeek = :dayOfWeek AND s.type <> com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.CANCELLED AND s.center.id = :centerId " +
+           "AND s.startTime < :endTime AND s.endTime > :startTime " +
+           "AND (:excludeScheduleId IS NULL OR s.id <> :excludeScheduleId)")
+    List<Schedule> findOverlappingStudentSchedulesExcludingClass(
+            @Param("studentId") Long studentId,
+            @Param("dayOfWeek") DayOfWeek dayOfWeek,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime,
+            @Param("centerId") Long centerId,
+            @Param("excludeScheduleId") Long excludeScheduleId,
+            @Param("excludeClassId") Long excludeClassId);
+
     @Query("SELECT COUNT(s) FROM Schedule s WHERE s.teacherUser.id = :teacherId " +
            "AND s.dayOfWeek = :dayOfWeek AND s.type <> com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType.CANCELLED AND s.center.id = :centerId " +
            "AND s.startTime < :endTime AND s.endTime > :startTime " +

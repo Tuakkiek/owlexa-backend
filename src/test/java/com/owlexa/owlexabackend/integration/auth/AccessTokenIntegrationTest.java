@@ -4,8 +4,10 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.security.JwtUtil;
 import com.owlexa.owlexabackend.integration.BaseIntegrationTest;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.entity.UserSession;
+import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserSessionRepository;
 import io.jsonwebtoken.Jwts;
@@ -82,6 +84,9 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private CenterRepository centerRepository;
+
+    @Autowired
     private UserSessionRepository sessionRepository;
 
     @Autowired
@@ -96,6 +101,7 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
     @AfterEach
     void cleanUp() {
         sessionRepository.deleteAllInBatch();
+        centerRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
         SecurityContextHolder.clearContext();
         TenantContext.clear();
@@ -292,6 +298,27 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("JwtFilter accepts valid token when session has a center and sets TenantContext")
+    void jwtFilter_shouldAuthenticateAndSetTenantContext_whenSessionHasCenter() throws Exception {
+        User owner = seedUser("0900000032", Role.OWNER);
+        Center center = seedCenter(owner, "Integration Center", "integration-center");
+        String sessionId = seedActiveSession(owner, center);
+        String token = issueAccessToken(owner, OWNER_ROLE, sessionId);
+
+        SecurityContextCaptureInterceptor.lastTenantId = null;
+
+        MvcResult result = mockMvc.perform(get(SESSIONS_URL)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(result.getRequest().getAttribute("currentSessionId")).isEqualTo(sessionId);
+        assertThat(SecurityContextCaptureInterceptor.lastTenantId).isEqualTo(center.getId());
+
+        SecurityContextCaptureInterceptor.lastTenantId = null;
+    }
+
+    @Test
     @DisplayName("JwtFilter does not set TenantContext for users whose User.getCenterId() returns null")
     void jwtFilter_shouldNotSetTenantContext_whenUserHasNoCenter() throws Exception {
         // Note: User.getCenterId() is hard-coded to return null. JwtFilter only sets TenantContext
@@ -348,11 +375,16 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
 
     /** Persists an active session for the user and returns the session id (UUID string). */
     private String seedActiveSession(User user) {
+        return seedActiveSession(user, null);
+    }
+
+    private String seedActiveSession(User user, Center center) {
         String sessionId = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .user(user)
+                .center(center)
                 .refreshTokenHash(jwtUtil.hashToken("placeholder-refresh-token"))
                 .deviceName("Test Device")
                 .deviceType(com.owlexa.owlexabackend.modules.user.entity.DeviceType.DESKTOP)
@@ -368,6 +400,15 @@ class AccessTokenIntegrationTest extends BaseIntegrationTest {
                 .build();
         sessionRepository.save(session);
         return sessionId;
+    }
+
+    private Center seedCenter(User owner, String name, String subdomain) {
+        Center center = new Center();
+        center.setOwner(owner);
+        center.setName(name);
+        center.setSubdomain(subdomain);
+        center.setActive(true);
+        return centerRepository.save(center);
     }
 
     /** Issues a real access token via JwtUtil so claims (tokenType=access) match production. */

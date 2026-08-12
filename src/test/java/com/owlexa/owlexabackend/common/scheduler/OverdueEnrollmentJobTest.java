@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -38,6 +39,7 @@ class OverdueEnrollmentJobTest {
     @BeforeEach
     void setUp() {
         job = new OverdueEnrollmentJob(feeRecordRepository, classEnrollmentRepository);
+        ReflectionTestUtils.setField(job, "autoSuspendOverdueEnabled", true);
     }
 
     private FeeRecord buildFeeRecord(Long feeId, FeeStatus status, LocalDate dueDate) {

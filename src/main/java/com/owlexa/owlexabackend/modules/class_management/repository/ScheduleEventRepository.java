@@ -136,4 +136,35 @@ public interface ScheduleEventRepository extends JpaRepository<ScheduleEvent, Lo
             @Param("cancelledStatus") ScheduleEventStatus cancelledStatus,
             @Param("excludeEventId") Long excludeEventId
     );
+
+    @Query("""
+            SELECT e FROM ScheduleEvent e
+            WHERE e.center.id = :centerId
+              AND e.clazz.id IN (
+                    SELECT ce.clazz.id FROM ClassEnrollment ce
+                    WHERE ce.studentUser.id = :studentId
+                      AND ce.status IN (
+                            com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE,
+                            com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.PENDING,
+                            com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.SUSPENDED
+                      )
+                      AND (:excludeClassId IS NULL OR ce.clazz.id <> :excludeClassId)
+              )
+              AND e.eventDate = :eventDate
+              AND e.status <> :cancelledStatus
+              AND e.startTime < :endTime
+              AND e.endTime > :startTime
+              AND (:excludeEventId IS NULL OR e.id <> :excludeEventId)
+            ORDER BY e.startTime ASC
+            """)
+    List<ScheduleEvent> findOverlappingStudentEventsExcludingClass(
+            @Param("centerId") Long centerId,
+            @Param("studentId") Long studentId,
+            @Param("eventDate") LocalDate eventDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime,
+            @Param("cancelledStatus") ScheduleEventStatus cancelledStatus,
+            @Param("excludeEventId") Long excludeEventId,
+            @Param("excludeClassId") Long excludeClassId
+    );
 }
