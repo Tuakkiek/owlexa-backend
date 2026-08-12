@@ -26,5 +26,6 @@ public interface MembershipRepository extends JpaRepository<Membership, Long> {
     void deleteByCenter_Id(Long centerId);
 
     long countByCenter_IdAndUserRole(Long centerId, Role userRole);
+
+    long countByCenter_Id(Long centerId);
 }
-    
