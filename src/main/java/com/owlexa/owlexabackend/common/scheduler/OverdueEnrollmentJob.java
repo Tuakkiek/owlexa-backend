@@ -47,9 +47,17 @@ public class OverdueEnrollmentJob {
     @SuppressWarnings("unused")
     private String cronExpression;
 
+    @Value("${app.enrollment.auto-suspend-overdue-enabled:false}")
+    private boolean autoSuspendOverdueEnabled;
+
     @Scheduled(cron = "${app.enrollment.overdue-cron:0 0 2 * * *}")
     @Transactional
     public void suspendOverdueEnrollments() {
+        if (!autoSuspendOverdueEnabled) {
+            log.debug("OverdueEnrollmentJob: automatic overdue suspension is disabled");
+            return;
+        }
+
         LocalDate today = LocalDate.now();
 
         List<FeeRecord> overdueFees = feeRecordRepository

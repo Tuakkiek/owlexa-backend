@@ -78,6 +78,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
                                                        @Param("start") Instant start,
                                                        @Param("end") Instant end);
 
+
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.center.id = :centerId AND p.method = :method AND p.createdAt >= :start AND p.createdAt < :end AND p.status = 'ACTIVE'")
     BigDecimal sumAmountByCenterIdAndMethodAndCreatedAtBetween(@Param("centerId") Long centerId,
                                                                 @Param("method") com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod method,
@@ -89,5 +90,15 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
                                                       @Param("method") com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod method,
                                                       @Param("start") Instant start,
                                                       @Param("end") Instant end);
+
+    // ── Drop / Transfer helpers ──────────────────────────────────────────
+
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.studentUser.id = :studentUserId AND p.feeRecord.clazz.id = :classId AND p.status = 'ACTIVE'")
+    BigDecimal sumActivePaymentsByStudentAndClass(@Param("studentUserId") Long studentUserId,
+                                                   @Param("classId") Long classId);
+
+    @Query("SELECT p FROM Payment p WHERE p.studentUser.id = :studentUserId AND p.feeRecord.clazz.id = :classId AND p.status = 'ACTIVE' ORDER BY p.createdAt DESC")
+    List<Payment> findActivePaymentsByStudentAndClass(@Param("studentUserId") Long studentUserId,
+                                                       @Param("classId") Long classId);
 
 }

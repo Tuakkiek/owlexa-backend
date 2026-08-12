@@ -3,5 +3,6 @@ public enum EnrollmentStatus {
     PENDING,
     ACTIVE,
     DROPPED,
-    SUSPENDED
+    SUSPENDED,
+    TRANSFERRED
 }

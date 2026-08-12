@@ -440,21 +440,7 @@ public class PaymentService {
         feeRecord.setStatus(resloveFeeStatus(effectiveAmount, newPaidAmount));
         feeRecordRepository.save(feeRecord);
 
-        // If payment clears overdue condition, reactivate any SUSPENDED enrollment
-        FeeStatus newEffectiveStatus = resolveEffectivePaymentStatus(
-                feeRecord.getStatus(), feeRecord.getDueDate());
-        if (newEffectiveStatus != FeeStatus.UNPAID && newEffectiveStatus != FeeStatus.OVERDUE) {
-            classEnrollmentRepository
-                    .findByClazz_IdAndStudentUser_Id(
-                            feeRecord.getClazz().getId(),
-                            feeRecord.getStudentUser().getId())
-                    .ifPresent(enrollment -> {
-                        if (enrollment.getStatus() == EnrollmentStatus.SUSPENDED) {
-                            enrollment.setStatus(EnrollmentStatus.ACTIVE);
-                            classEnrollmentRepository.save(enrollment);
-                        }
-                    });
-        }
+        reactivateSuspendedEnrollmentIfTuitionCleared(feeRecord, payment.getCollectedByUser());
 
         // Audit log
         auditLog(payment.getCollectedByUser(), payment.getCenter(), "PAYMENT_CONFIRMED", "Payment",
@@ -520,20 +506,7 @@ public class PaymentService {
 
         // If payment clears overdue condition, reactivate any SUSPENDED enrollment
         // for this student+class (per business rule: payment → ACTIVE again).
-        FeeStatus newEffectiveStatus = resolveEffectivePaymentStatus(
-                feeRecord.getStatus(), feeRecord.getDueDate());
-        if (newEffectiveStatus != FeeStatus.UNPAID && newEffectiveStatus != FeeStatus.OVERDUE) {
-            classEnrollmentRepository
-                    .findByClazz_IdAndStudentUser_Id(
-                            feeRecord.getClazz().getId(),
-                            feeRecord.getStudentUser().getId())
-                    .ifPresent(enrollment -> {
-                        if (enrollment.getStatus() == EnrollmentStatus.SUSPENDED) {
-                            enrollment.setStatus(EnrollmentStatus.ACTIVE);
-                            classEnrollmentRepository.save(enrollment);
-                        }
-                    });
-        }
+        reactivateSuspendedEnrollmentIfTuitionCleared(feeRecord, currentUser);
 
         // Audit log
         auditLog(currentUser, feeRecord.getCenter(), "PAYMENT_COLLECTED", "Payment",
@@ -860,20 +833,37 @@ public class PaymentService {
         return FeeStatus.PARTIAL;
     }
 
-    /**
-     * Computes effective status for reactivation check.
-     * Mirrors {@code FeeRecordService.resolveEffectiveStatus} so PaymentService
-     * can determine whether a payment clears the overdue condition without
-     * creating a cross-module service dependency.
-     */
-    private FeeStatus resolveEffectivePaymentStatus(FeeStatus storedStatus, LocalDate dueDate) {
-        if (dueDate == null) return storedStatus;
-        if (storedStatus == FeeStatus.UNPAID || storedStatus == FeeStatus.PARTIAL) {
-            if (dueDate.isBefore(LocalDate.now())) {
-                return FeeStatus.OVERDUE;
-            }
+    private void reactivateSuspendedEnrollmentIfTuitionCleared(FeeRecord feeRecord, User actor) {
+        if (feeRecord.getClazz() == null || feeRecord.getStudentUser() == null) {
+            return;
         }
-        return storedStatus;
+        if (feeRecord.getStatus() != FeeStatus.PAID) {
+            return;
+        }
+
+        long outstandingDueCount = feeRecordRepository.countOutstandingDueByStudentAndClass(
+                feeRecord.getStudentUser().getId(),
+                feeRecord.getClazz().getId(),
+                List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE),
+                LocalDate.now());
+
+        if (outstandingDueCount > 0) {
+            return;
+        }
+
+        classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(
+                        feeRecord.getClazz().getId(),
+                        feeRecord.getStudentUser().getId())
+                .ifPresent(enrollment -> {
+                    if (enrollment.getStatus() == EnrollmentStatus.SUSPENDED) {
+                        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+                        classEnrollmentRepository.save(enrollment);
+                        auditLog(actor, feeRecord.getCenter(), "ENROLLMENT_REACTIVATED", "ClassEnrollment",
+                                enrollment.getId(), "Auto reactivated after tuition was fully paid for class "
+                                        + feeRecord.getClazz().getId());
+                    }
+                });
     }
 
     // Validate amount

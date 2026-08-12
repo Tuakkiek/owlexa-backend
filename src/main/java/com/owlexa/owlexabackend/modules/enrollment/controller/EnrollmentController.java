@@ -1,10 +1,12 @@
 package com.owlexa.owlexabackend.modules.enrollment.controller;
+
 import com.owlexa.owlexabackend.modules.enrollment.dto.request.EnrollmentRequest;
 import com.owlexa.owlexabackend.modules.enrollment.dto.response.EnrollmentResponse;
 import com.owlexa.owlexabackend.modules.enrollment.service.EnrollmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -72,10 +74,28 @@ public class EnrollmentController {
 
     @PatchMapping("/{studentUserId}/reactivate")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('STUDENT_ENROLL')")
     public void reactivate(
             @PathVariable Long classId,
-            @PathVariable Long studentUserId
-    ) {
+            @PathVariable Long studentUserId) {
         enrollmentService.reactivate(classId, studentUserId);
+    }
+
+    @PostMapping("/{studentUserId}/drop-with-reason")
+    @PreAuthorize("hasAuthority('ENROLLMENT_DROP')")
+    public EnrollmentResponse dropWithReason(
+            @PathVariable Long classId,
+            @PathVariable Long studentUserId,
+            @Valid @RequestBody com.owlexa.owlexabackend.modules.enrollment.dto.request.DropEnrollmentRequest request) {
+        return enrollmentService.dropWithReason(classId, studentUserId, request);
+    }
+
+    @PostMapping("/{studentUserId}/transfer")
+    @PreAuthorize("hasAuthority('ENROLLMENT_TRANSFER')")
+    public com.owlexa.owlexabackend.modules.enrollment.dto.response.TransferResponse transfer(
+            @PathVariable Long classId,
+            @PathVariable Long studentUserId,
+            @Valid @RequestBody com.owlexa.owlexabackend.modules.enrollment.dto.request.TransferEnrollmentRequest request) {
+        return enrollmentService.transfer(classId, studentUserId, request);
     }
 }

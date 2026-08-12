@@ -1,6 +1,7 @@
 package com.owlexa.owlexabackend.modules.user.repository;
 import com.owlexa.owlexabackend.modules.user.entity.UserSession;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +17,7 @@ public interface UserSessionRepository extends JpaRepository<UserSession, String
 
     boolean existsByIdAndActiveTrue(String id);
 
+    @EntityGraph(attributePaths = "center")
     Optional<UserSession> findByIdAndActiveTrue(String id);
 
     List<UserSession> findByUser_IdAndActiveTrueOrderByLastUsedAtDesc(Long userId);
