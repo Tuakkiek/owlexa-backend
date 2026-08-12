@@ -35,6 +35,9 @@ public class Center implements TenantAware {
     @Column(nullable = false, unique = true)
     private String subdomain;
 
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     private Instant createdAt;

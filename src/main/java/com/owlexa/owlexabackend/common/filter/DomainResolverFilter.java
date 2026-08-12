@@ -74,6 +74,14 @@ public class DomainResolverFilter extends OncePerRequestFilter {
         }
 
         Center center = centerOpt.get();
+        if (!center.isActive()) {
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write(
+                    "{\"status\":403,\"message\":\"Center is inactive\"}"
+            );
+            return;
+        }
         request.setAttribute(ATTR_RESOLVED_CENTER_ID, center.getId());
         request.setAttribute(ATTR_RESOLVED_CENTER, center);
         log.debug("Resolved subdomain={} -> centerId={}", subdomain, center.getId());

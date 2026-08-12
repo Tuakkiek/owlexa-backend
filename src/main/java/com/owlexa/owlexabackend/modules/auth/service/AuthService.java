@@ -71,6 +71,10 @@ public class AuthService {
         User user = userRepository.findByPhoneNumber(phone)
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
+        if (!user.isActive()) {
+            throw new BadRequestException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
+        }
+
         verifyPassword(request.getPassword(), user);
 
         // Upgrade mật khẩu plaintext cũ sang bcrypt ngay khi đăng nhập thành công
@@ -190,6 +194,13 @@ public class AuthService {
 
         UserSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new BadRequestException("Session not found or already revoked"));
+
+        if (!session.getUser().isActive()) {
+            throw new BadRequestException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
+        }
+        if (session.getCenter() != null && !session.getCenter().isActive()) {
+            throw new BadRequestException("Trung tâm đã tạm ngừng hoạt động");
+        }
 
         String incomingHash = jwtUtil.hashToken(token);
 

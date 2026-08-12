@@ -3,7 +3,9 @@ package com.owlexa.owlexabackend.modules.user.service;
 import com.owlexa.owlexabackend.modules.user.dto.response.AdminStatsResponse;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.repository.CenterRepository;
+import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
+import com.owlexa.owlexabackend.repository.AdminAuditLogRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,12 +22,15 @@ class AdminServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private CenterRepository centerRepository;
+    @Mock private MembershipRepository membershipRepository;
+    @Mock private AdminAuditLogRepository auditLogRepository;
 
     private AdminService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminService(userRepository, centerRepository);
+        service = new AdminService(
+                userRepository, centerRepository, membershipRepository, auditLogRepository);
     }
 
     @Test

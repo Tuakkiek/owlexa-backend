@@ -61,8 +61,16 @@ public class JwtFilter extends OncePerRequestFilter {
                         chain.doFilter(request, response);
                         return;
                     }
+                    if (session.getCenter() != null && !session.getCenter().isActive()) {
+                        chain.doFilter(request, response);
+                        return;
+                    }
 
                     UserDetails userDetails = userDetailsService.loadUserByUsername(phoneNumber);
+                    if (!userDetails.isEnabled() || !userDetails.isAccountNonLocked()) {
+                        chain.doFilter(request, response);
+                        return;
+                    }
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails, null, userDetails.getAuthorities());
