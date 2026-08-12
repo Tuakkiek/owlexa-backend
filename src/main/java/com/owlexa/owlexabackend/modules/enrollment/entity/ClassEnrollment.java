@@ -56,6 +56,25 @@ public class ClassEnrollment implements TenantAware {
     @Column(name = "enrolled_at", nullable = false, updatable = false)
     private Instant enrolledAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "drop_reason", length = 30)
+    private DropReason dropReason;
+
+    @Column(name = "dropped_at")
+    private Instant droppedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dropped_by_user_id")
+    private User droppedByUser;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transferred_to_enrollment_id")
+    private ClassEnrollment transferredToEnrollment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transferred_from_enrollment_id")
+    private ClassEnrollment transferredFromEnrollment;
+
     @Override
     public Long getCenterId() {
         return center != null ? center.getId() : null;

@@ -14,6 +14,8 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
 
     List<FeeRecord> findAllByStudentUser_IdOrderByCreatedAtDesc(Long studentUserId);
 
+    List<FeeRecord> findAllByStudentUser_IdAndClazz_Id(Long studentUserId, Long classId);
+
     @Query("SELECT fr FROM FeeRecord fr WHERE fr.studentUser.id = :studentUserId " +
            "AND fr.clazz.id IN (" +
            "  SELECT e.clazz.id FROM ClassEnrollment e " +
@@ -42,6 +44,19 @@ public interface FeeRecordRepository extends JpaRepository<FeeRecord, Long> {
     @Query("SELECT fr FROM FeeRecord fr WHERE fr.status IN :statuses AND fr.dueDate < :dueDate")
     List<FeeRecord> findAllByStatusInAndDueDateBefore(@Param("statuses") List<FeeStatus> statuses,
                                                        @Param("dueDate") LocalDate dueDate);
+
+    @Query("""
+            SELECT COUNT(fr) FROM FeeRecord fr
+            WHERE fr.studentUser.id = :studentUserId
+              AND fr.clazz.id = :classId
+              AND fr.status IN :statuses
+              AND (fr.dueDate IS NULL OR fr.dueDate <= :asOfDate)
+            """)
+    long countOutstandingDueByStudentAndClass(
+            @Param("studentUserId") Long studentUserId,
+            @Param("classId") Long classId,
+            @Param("statuses") List<FeeStatus> statuses,
+            @Param("asOfDate") LocalDate asOfDate);
 
     boolean existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
             Long studentUserId, Long classId, FeeStatus status, LocalDate date);
