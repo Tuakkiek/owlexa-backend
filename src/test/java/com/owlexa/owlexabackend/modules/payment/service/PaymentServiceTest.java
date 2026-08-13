@@ -12,7 +12,6 @@ import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
 import com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
@@ -53,7 +52,6 @@ class PaymentServiceTest {
     @Mock private AuditLogRepository auditLogRepository;
     @Mock private InstallmentRepository installmentRepository;
     @Mock private RefundRepository refundRepository;
-    @Mock private DiscountRepository discountRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private BankTransferQrService bankTransferQrService;
 
@@ -66,7 +64,7 @@ class PaymentServiceTest {
     void setUp() {
         paymentService = new PaymentService(
                 userRepository, membershipRepository, feeRecordRepository, paymentRepository,
-                auditLogRepository, installmentRepository, refundRepository, discountRepository,
+                auditLogRepository, installmentRepository, refundRepository,
                 classEnrollmentRepository, bankTransferQrService
         );
         TenantContext.setCurrentTenantId(CURRENT_CENTER_ID);
@@ -116,7 +114,6 @@ class PaymentServiceTest {
         fr.setClazz(clazz);
         fr.setStudentUser(student);
         fr.setAmount(amount);
-        fr.setDiscountAmount(BigDecimal.ZERO);
         fr.setPaidAmount(paid);
         fr.setStatus(FeeStatus.PARTIAL);
         fr.setMonth("2026-07");

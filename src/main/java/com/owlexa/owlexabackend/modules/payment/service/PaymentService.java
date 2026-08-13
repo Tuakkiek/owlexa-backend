@@ -38,7 +38,6 @@ import com.owlexa.owlexabackend.modules.payment.entity.InstallmentStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.Refund;
 import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
@@ -77,7 +76,6 @@ public class PaymentService {
     private final AuditLogRepository auditLogRepository;
     private final InstallmentRepository installmentRepository;
     private final RefundRepository refundRepository;
-    private final DiscountRepository discountRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final BankTransferQrService bankTransferQrService;
 
@@ -107,9 +105,7 @@ public class PaymentService {
 
         validateAmount(request.getAmount());
 
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
-        BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
+        BigDecimal remainingAmount = feeRecord.getAmount().subtract(feeRecord.getPaidAmount());
 
         if (request.getAmount().compareTo(remainingAmount) > 0) {
             throw new BusinessRuleException("Số tiền thanh toán vượt quá dư nợ còn lại");
@@ -214,9 +210,7 @@ public class PaymentService {
             throw new BusinessRuleException("Không thể đóng học phí cho lớp học mà bạn không còn tham gia");
         }
 
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
-        BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
+        BigDecimal remainingAmount = feeRecord.getAmount().subtract(feeRecord.getPaidAmount());
 
         if (remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessRuleException("Hóa đơn này đã được thanh toán đầy đủ");
@@ -433,11 +427,9 @@ public class PaymentService {
         // Allocate to oldest unpaid installment if installments exist
         allocateToInstallments(feeRecord, payment.getAmount());
 
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
         BigDecimal newPaidAmount = feeRecord.getPaidAmount().add(payment.getAmount());
         feeRecord.setPaidAmount(newPaidAmount);
-        feeRecord.setStatus(resloveFeeStatus(effectiveAmount, newPaidAmount));
+        feeRecord.setStatus(resloveFeeStatus(feeRecord.getAmount(), newPaidAmount));
         feeRecordRepository.save(feeRecord);
 
         reactivateSuspendedEnrollmentIfTuitionCleared(feeRecord, payment.getCollectedByUser());
@@ -470,9 +462,7 @@ public class PaymentService {
 
         validateAmount(request.getAmount());
 
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
-        BigDecimal remainingAmount = effectiveAmount.subtract(feeRecord.getPaidAmount());
+        BigDecimal remainingAmount = feeRecord.getAmount().subtract(feeRecord.getPaidAmount());
 
         if(request.getAmount().compareTo(remainingAmount) > 0) {
             throw new BusinessRuleException("Số tiền thanh toán vượt quá dư nợ còn lại");
@@ -500,7 +490,7 @@ public class PaymentService {
 
         BigDecimal newPaidAmount = feeRecord.getPaidAmount().add(request.getAmount());
         feeRecord.setPaidAmount(newPaidAmount);
-        feeRecord.setStatus(resloveFeeStatus(effectiveAmount, newPaidAmount));
+        feeRecord.setStatus(resloveFeeStatus(feeRecord.getAmount(), newPaidAmount));
 
         feeRecordRepository.save(feeRecord);
 
@@ -614,8 +604,7 @@ public class PaymentService {
         if (wasActive) {
             FeeRecord feeRecord = payment.getFeeRecord();
             feeRecord.setPaidAmount(feeRecord.getPaidAmount().subtract(payment.getAmount()));
-            BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-            feeRecord.setStatus(resloveFeeStatus(feeRecord.getAmount().subtract(discount), feeRecord.getPaidAmount()));
+            feeRecord.setStatus(resloveFeeStatus(feeRecord.getAmount(), feeRecord.getPaidAmount()));
             feeRecordRepository.save(feeRecord);
 
             auditLog(currentUser, payment.getCenter(), "PAYMENT_VOIDED", "Payment",
@@ -672,8 +661,7 @@ public class PaymentService {
         // Decrease paid amount
         FeeRecord feeRecord = payment.getFeeRecord();
         feeRecord.setPaidAmount(feeRecord.getPaidAmount().subtract(amount));
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        feeRecord.setStatus(resloveFeeStatus(feeRecord.getAmount().subtract(discount), feeRecord.getPaidAmount()));
+        feeRecord.setStatus(resloveFeeStatus(feeRecord.getAmount(), feeRecord.getPaidAmount()));
         feeRecordRepository.save(feeRecord);
 
         auditLog(currentUser, payment.getCenter(), "REFUND_CREATED", "Payment",
@@ -1004,18 +992,6 @@ public class PaymentService {
                                 .description("Refund: " + (r.getReason() != null ? r.getReason() : ""))
                                 .amount(r.getAmount())
                                 .entityId(r.getId())
-                                .build())));
-
-        // Discounts — find via fee records for this student
-        feeRecordRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(studentId)
-                .forEach(fr -> discountRepository.findAllByFeeRecord_Id(fr.getId())
-                        .forEach(d -> timeline.add(TimelineEntryResponse.builder()
-                                .timestamp(d.getCreatedAt())
-                                .action("DISCOUNT_APPLIED")
-                                .userName(d.getCreatedBy().getFullName())
-                                .description("Discount: " + d.getName() + " (" + d.getType() + " " + d.getValue() + ")")
-                                .amount(null)
-                                .entityId(d.getId())
                                 .build())));
 
         // Sort by timestamp descending

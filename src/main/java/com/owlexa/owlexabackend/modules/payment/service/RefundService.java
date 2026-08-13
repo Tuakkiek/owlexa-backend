@@ -175,9 +175,7 @@ public class RefundService {
         // Decrease paid amount on FeeRecord
         FeeRecord feeRecord = refund.getPayment().getFeeRecord();
         feeRecord.setPaidAmount(feeRecord.getPaidAmount().subtract(refund.getAmount()));
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
-        feeRecord.setStatus(resolveFeeStatus(effectiveAmount, feeRecord.getPaidAmount()));
+        feeRecord.setStatus(resolveFeeStatus(feeRecord.getAmount(), feeRecord.getPaidAmount()));
         feeRecordRepository.save(feeRecord);
 
         writeAuditLog(currentUser, refund.getCenter(), "REFUND_PAID", "Refund",

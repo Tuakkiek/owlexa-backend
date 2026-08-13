@@ -4,7 +4,9 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJob;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
+import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingJobRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingOutputReader;
@@ -72,6 +74,7 @@ public class SubmissionService {
     private final AuthorizationService authorizationService;
     private final MembershipRepository membershipRepository;
     private final SubmissionMapper submissionMapper;
+    private final AIGradingJobRepository aiGradingJobRepository;
     private final AIGradingResultRepository aiGradingResultRepository;
     private final AIGradingService aiGradingService;
     private final AIGradingOutputReader aiGradingOutputReader;
@@ -292,6 +295,13 @@ public class SubmissionService {
         if (attempt.getStatus() == SubmissionAttemptStatus.IN_PROGRESS) {
             return;
         }
+        boolean hasEssayItems = hasEssayItems(attempt);
+        if (!hasEssayItems) {
+            return;
+        }
+        aiGradingJobRepository.findTopBySubmissionAttempt_IdOrderByCreatedAtDesc(attempt.getId())
+                .ifPresent(job -> attachAiGradingStatus(response, job));
+
         aiGradingResultRepository
                 .findTopBySubmissionAttempt_IdAndJob_StatusOrderByCreatedAtDesc(
                         attempt.getId(),
@@ -314,16 +324,52 @@ public class SubmissionService {
             response.setDisplayedScore(null);
             return;
         }
+        boolean hasEssayItems = hasEssayItems(attempt);
+        if (hasEssayItems) {
+            aiGradingJobRepository.findTopBySubmissionAttempt_IdOrderByCreatedAtDesc(attempt.getId())
+                    .ifPresent(job -> attachAiGradingStatus(response, job));
+        }
 
-        aiGradingResultRepository
+        Optional<AIGradingResult> latestResult = aiGradingResultRepository
                 .findTopBySubmissionAttempt_IdAndJob_StatusOrderByCreatedAtDesc(
                         attempt.getId(),
                         AIGradingJobStatus.COMPLETED
-                )
-                .ifPresent(result -> {
-                    response.setAiScore(result.getAiScore());
-                    response.setDisplayedScore(scoreValue(response.getAutoScore()).add(scoreValue(result.getAiScore())));
-                });
+        );
+        if (latestResult.isPresent()) {
+            AIGradingResult result = latestResult.get();
+            response.setAiScore(result.getAiScore());
+            response.setDisplayedScore(scoreValue(response.getAutoScore()).add(scoreValue(result.getAiScore())));
+        } else if (hasEssayItems) {
+            response.setDisplayedScore(null);
+        }
+    }
+
+    private boolean hasEssayItems(SubmissionAttempt attempt) {
+        return attempt.getAssignmentRecipient().getAssignment().getItems().stream()
+                .anyMatch(item -> item.getQuestionType() == QuestionType.ESSAY);
+    }
+
+    private void attachAiGradingStatus(StudentAttemptDetailResponse response, AIGradingJob job) {
+        response.setAiGradingStatus(job.getStatus());
+        response.setAiGradingMessage(studentAiGradingMessage(job.getStatus()));
+    }
+
+    private void attachAiGradingStatus(StudentAttemptSummaryResponse response, AIGradingJob job) {
+        response.setAiGradingStatus(job.getStatus());
+        response.setAiGradingMessage(studentAiGradingMessage(job.getStatus()));
+    }
+
+    private String studentAiGradingMessage(AIGradingJobStatus status) {
+        if (status == AIGradingJobStatus.COMPLETED) {
+            return "AI đã chấm xong bài tự luận.";
+        }
+        if (status == AIGradingJobStatus.FAILED) {
+            return "AI chưa chấm được bài tự luận. Giáo viên sẽ kiểm tra và chấm lại.";
+        }
+        if (status == AIGradingJobStatus.RUNNING || status == AIGradingJobStatus.PENDING) {
+            return "AI đang chấm bài tự luận. Vui lòng tải lại sau ít phút.";
+        }
+        return null;
     }
 
     private StudentAIGradingResultResponse toStudentAiResult(AIGradingResult result) {

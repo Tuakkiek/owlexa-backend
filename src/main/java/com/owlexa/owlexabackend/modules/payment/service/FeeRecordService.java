@@ -46,6 +46,13 @@ public class FeeRecordService {
     /** Statuses that indicate the student still owes money (used for unpaid/overdue lists). */
     private static final List<FeeStatus> NOT_FULLY_PAID = List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL);
 
+    /**
+     * Includes CANCELLED only for repairing rows left behind by a drop/enroll
+     * race. The repository query still requires an active enrollment.
+     */
+    private static final List<FeeStatus> PENDING_WITH_RECOVERY =
+            List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.CANCELLED);
+
     @Transactional(readOnly = true)
     public List<FeeRecordResponse> findAllOverdue() {
         User currentUser = getCurrentUser();
@@ -60,18 +67,39 @@ public class FeeRecordService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<FeeRecordResponse> findAllPending() {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
         assertCanViewFees(currentUser, centerId);
 
-        return feeRecordRepository
-                .findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(centerId, NOT_FULLY_PAID)
+        List<FeeRecord> records = feeRecordRepository
+                .findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(centerId, PENDING_WITH_RECOVERY)
+                .stream()
+                .filter(record -> record.getStatus() != FeeStatus.CANCELLED
+                        || isUnpaid(record))
+                .toList();
+
+        // A dropped enrollment cancels unpaid fees. If the enrollment is active
+        // again, the fee is collectible and must be visible to the cashier.
+        // Repairing here also fixes rows created by older concurrent requests.
+        records.stream()
+                .filter(record -> record.getStatus() == FeeStatus.CANCELLED)
+                .forEach(record -> {
+                    record.setStatus(FeeStatus.UNPAID);
+                    feeRecordRepository.save(record);
+                });
+
+        return records
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    private boolean isUnpaid(FeeRecord record) {
+        return record.getPaidAmount() == null
+                || record.getPaidAmount().compareTo(BigDecimal.ZERO) == 0;
     }
 
     @Transactional(readOnly = true)
@@ -110,9 +138,7 @@ public class FeeRecordService {
 
     private FeeRecordResponse toResponse(FeeRecord feeRecord) {
         BigDecimal paid = feeRecord.getPaidAmount() != null ? feeRecord.getPaidAmount() : BigDecimal.ZERO;
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
-        BigDecimal remaining = effectiveAmount.subtract(paid);
+        BigDecimal remaining = feeRecord.getAmount().subtract(paid);
 
         FeeStatus effectiveStatus = resolveEffectiveStatus(feeRecord.getStatus(), feeRecord.getDueDate());
 
@@ -133,7 +159,6 @@ public class FeeRecordService {
                 .classId(feeRecord.getClazz().getId())
                 .className(feeRecord.getClazz().getName())
                 .amount(feeRecord.getAmount())
-                .discountAmount(discount)
                 .paidAmount(paid)
                 .remainingAmount(remaining.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : remaining)
                 .month(feeRecord.getMonth())

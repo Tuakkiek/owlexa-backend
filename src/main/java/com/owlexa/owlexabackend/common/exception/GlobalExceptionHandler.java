@@ -77,7 +77,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleOptimisticLock(ObjectOptimisticLockingFailureException ex) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", "OPTIMISTIC_LOCK_CONFLICT");
-        body.put("message", "Assessment has been modified; refresh before saving");
+        body.put("message", "Dữ liệu vừa được cập nhật bởi thao tác khác. Vui lòng tải lại và thử lại.");
         return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(body);
     }
 
@@ -85,7 +85,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleJpaOptimisticLock(OptimisticLockException ex) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("code", "OPTIMISTIC_LOCK_CONFLICT");
-        body.put("message", "Assessment has been modified; refresh before saving");
+        body.put("message", "Dữ liệu vừa được cập nhật bởi thao tác khác. Vui lòng tải lại và thử lại.");
         return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(body);
     }
 
@@ -141,7 +141,7 @@ public class GlobalExceptionHandler {
         log.warn("Tenancy violation attempt: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                 403,
-                "Khong tim thay du lieu",
+                "Không tìm thấy dữ liệu",
                 null
         ));
     }
@@ -161,7 +161,7 @@ public class GlobalExceptionHandler {
         log.warn("Authentication failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                 401,
-                "Yeu cau xac thuc tai khoan",
+                "Yêu cầu xác thực tài khoản",
                 null
         ));
     }
@@ -172,20 +172,20 @@ public class GlobalExceptionHandler {
         if (containsMessage(ex, "uk_teacher_reviews_submission_attempt_id")) {
             return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                     409,
-                    "Phieu cham cho luot nop nay da ton tai. Vui long tai lai trang.",
+                    "Phiếu chấm cho lượt nộp này đã tồn tại. Vui lòng tải lại trang.",
                     null
             ));
         }
         if (containsMessage(ex, "Duplicate entry")) {
             return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                     409,
-                    "Du lieu da ton tai hoac thao tac vua duoc xu ly truoc do.",
+                    "Dữ liệu đã tồn tại hoặc thao tác vừa được xử lý trước đó.",
                     null
             ));
         }
         return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                 409,
-                "Loi rang buoc du lieu: Khong the xoa hoac sua doi vi du lieu nay dang duoc lien ket boi cac ban ghi khac.",
+                "Lỗi ràng buộc dữ liệu: Không thể xóa hoặc sửa đổi vì dữ liệu này đang được liên kết bởi các bản ghi khác.",
                 null
         ));
     }
@@ -216,7 +216,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", 400);
-        body.put("message", "Kiem tra du lieu giao vien hang loat that bai");
+        body.put("message", "Kiểm tra dữ liệu giáo viên hàng loạt thất bại");
         body.put("errors", ex.getErrors());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(body);
@@ -227,7 +227,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now());
         body.put("status", 400);
-        body.put("message", "Kiem tra du lieu hoc sinh hang loat that bai");
+        body.put("message", "Kiểm tra dữ liệu học sinh hàng loạt thất bại");
         body.put("errors", ex.getErrors());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(body);

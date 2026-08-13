@@ -3,10 +3,14 @@ package com.owlexa.owlexabackend.modules.payment.service;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.modules.payment.dto.response.FeeRecordResponse;
+import com.owlexa.owlexabackend.modules.class_management.entity.Class;
+import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
+import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
+import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
@@ -104,6 +108,46 @@ class FeeRecordServiceTest {
                         org.mockito.ArgumentMatchers.anyList(),
                         org.mockito.ArgumentMatchers.any(LocalDate.class)
                 );
+    }
+
+    @Test
+    @DisplayName("findAllPending: tự khôi phục fee CANCELLED chưa thu khi enrollment đang active")
+    void findAllPending_shouldRecoverCancelledUnpaidFeeForActiveEnrollment() {
+        User student = new User();
+        student.setId(100L);
+        student.setPhoneNumber("0900000100");
+        student.setFullName("Student 100");
+        Class clazz = new Class();
+        clazz.setId(50L);
+        clazz.setName("Class A");
+        Center center = new Center();
+        center.setId(CENTER_ID);
+        clazz.setCenter(center);
+
+        FeeRecord cancelledFee = FeeRecord.builder()
+                .id(1L)
+                .center(center)
+                .studentUser(student)
+                .clazz(clazz)
+                .amount(java.math.BigDecimal.valueOf(1500000L))
+                .paidAmount(java.math.BigDecimal.ZERO)
+                .status(FeeStatus.CANCELLED)
+                .build();
+        ClassEnrollment activeEnrollment = new ClassEnrollment();
+        activeEnrollment.setStatus(EnrollmentStatus.ACTIVE);
+
+        when(feeRecordRepository.findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(
+                CENTER_ID, List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.CANCELLED)))
+                .thenReturn(List.of(cancelledFee));
+        when(feeRecordRepository.save(cancelledFee)).thenReturn(cancelledFee);
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(50L, 100L))
+                .thenReturn(Optional.of(activeEnrollment));
+
+        List<FeeRecordResponse> responses = service.findAllPending();
+
+        assertThat(responses).hasSize(1);
+        assertThat(cancelledFee.getStatus()).isEqualTo(FeeStatus.UNPAID);
+        assertThat(responses.get(0).getStatus()).isEqualTo(FeeStatus.UNPAID);
     }
 }
 

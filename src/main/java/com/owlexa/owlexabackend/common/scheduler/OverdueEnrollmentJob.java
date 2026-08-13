@@ -51,7 +51,6 @@ public class OverdueEnrollmentJob {
     private boolean autoSuspendOverdueEnabled;
 
     @Scheduled(cron = "${app.enrollment.overdue-cron:0 0 2 * * *}")
-    @Transactional
     public void suspendOverdueEnrollments() {
         if (!autoSuspendOverdueEnabled) {
             log.debug("OverdueEnrollmentJob: automatic overdue suspension is disabled");
@@ -71,7 +70,8 @@ public class OverdueEnrollmentJob {
         for (FeeRecord fee : overdueFees) {
             if (fee.getClazz() == null) continue;
 
-            classEnrollmentRepository
+            try {
+                classEnrollmentRepository
                     .findByClazz_IdAndStudentUser_Id(
                             fee.getClazz().getId(),
                             fee.getStudentUser().getId())
@@ -86,7 +86,10 @@ public class OverdueEnrollmentJob {
                                     fee.getId());
                         }
                     });
-            suspendedCount++;
+                suspendedCount++;
+            } catch (Exception ex) {
+                log.error("OverdueEnrollmentJob: failed to process feeId={}", fee.getId(), ex);
+            }
         }
 
         if (suspendedCount > 0) {

@@ -17,7 +17,6 @@ import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
 import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
-import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
@@ -64,7 +63,6 @@ public class ClassService {
     private final FeeRecordRepository feeRecordRepository;
     private final PaymentRepository paymentRepository;
     private final InstallmentRepository installmentRepository;
-    private final DiscountRepository discountRepository;
     private final StudentDocumentRepository studentDocumentRepository;
     private final AssignmentRecipientRepository assignmentRecipientRepository;
     private final AssignmentTargetRepository assignmentTargetRepository;
@@ -358,7 +356,6 @@ public class ClassService {
     private void deleteClassDraftData(Long classId, Long centerId) {
         paymentRepository.deleteByFeeRecord_Clazz_IdAndFeeRecord_Center_Id(classId, centerId);
         installmentRepository.deleteByFeeRecord_Clazz_IdAndCenter_Id(classId, centerId);
-        discountRepository.deleteByFeeRecord_Clazz_IdAndCenter_Id(classId, centerId);
         feeRecordRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
         classEnrollmentRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);
         scheduleEventRepository.deleteByClazz_IdAndCenter_Id(classId, centerId);

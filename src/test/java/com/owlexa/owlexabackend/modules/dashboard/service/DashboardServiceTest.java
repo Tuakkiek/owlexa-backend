@@ -6,7 +6,6 @@ import com.owlexa.owlexabackend.modules.dashboard.dto.response.DashboardStatsRes
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ClassRepository;
@@ -41,7 +40,6 @@ class DashboardServiceTest {
     @Mock private FeeRecordRepository feeRecordRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private UserRepository userRepository;
-    @Mock private DiscountRepository discountRepository;
     @Mock private RefundRepository refundRepository;
     @Mock private InstallmentRepository installmentRepository;
 
@@ -55,7 +53,7 @@ class DashboardServiceTest {
         service = new DashboardService(
                 membershipRepository, classRepository, feeRecordRepository,
                 paymentRepository, userRepository,
-                discountRepository, refundRepository, installmentRepository
+                refundRepository, installmentRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
         SecurityContextHolder.getContext().setAuthentication(

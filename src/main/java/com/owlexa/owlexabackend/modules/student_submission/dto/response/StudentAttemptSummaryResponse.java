@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.student_submission.dto.response;
 
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,4 +27,6 @@ public class StudentAttemptSummaryResponse {
     private BigDecimal aiScore;
     private BigDecimal displayedScore;
     private BigDecimal maxScore;
+    private AIGradingJobStatus aiGradingStatus;
+    private String aiGradingMessage;
 }
