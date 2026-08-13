@@ -34,6 +34,11 @@ public class FeeRecord implements TenantAware {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Long version = 0L;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "center_id", nullable = false)
     private Center center;
@@ -48,10 +53,6 @@ public class FeeRecord implements TenantAware {
 
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
-
-    @Column(name = "discount_amount", precision = 12, scale = 2)
-    @Builder.Default
-    private BigDecimal discountAmount = BigDecimal.ZERO;
 
     @Column(name = "paid_amount", precision = 12, scale = 2)
     private BigDecimal paidAmount;

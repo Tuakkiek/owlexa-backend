@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Comparator;
 
 public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment, Long> {
 
@@ -14,7 +15,29 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
     List<ClassEnrollment> findAllByClazz_IdAndCenter_Id(Long clazzId, Long centerId);
 
-    Optional<ClassEnrollment> findByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId);
+    List<ClassEnrollment> findAllByClazz_IdAndStudentUser_IdOrderByIdDesc(Long clazzId, Long studentUserId);
+
+    /**
+     * Compatibility API used by older services. Selecting from the list keeps
+     * legacy duplicate rows from surfacing as IncorrectResultSizeDataAccessException.
+     */
+    default Optional<ClassEnrollment> findByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId) {
+        return findAllByClazz_IdAndStudentUser_IdOrderByIdDesc(clazzId, studentUserId).stream()
+                .sorted(Comparator
+                        .comparingInt((ClassEnrollment enrollment) -> statusPriority(enrollment.getStatus()))
+                        .thenComparing(ClassEnrollment::getId, Comparator.reverseOrder()))
+                .findFirst();
+    }
+
+    private static int statusPriority(EnrollmentStatus status) {
+        return switch (status) {
+            case ACTIVE -> 0;
+            case SUSPENDED -> 1;
+            case PENDING -> 2;
+            case TRANSFERRED -> 3;
+            case DROPPED -> 4;
+        };
+    }
 
     boolean existsByClazz_IdAndStudentUser_Id(Long clazzId, Long studentUserId);
 

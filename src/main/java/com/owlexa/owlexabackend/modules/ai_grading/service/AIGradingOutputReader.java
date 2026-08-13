@@ -1,8 +1,8 @@
 package com.owlexa.owlexabackend.modules.ai_grading.service;
 
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.AIGradingResultParser;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingOutput;
-import com.owlexa.owlexabackend.modules.ai_grading.provider.openai.OpenAIGradingResultParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,7 +14,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AIGradingOutputReader {
 
-    private final OpenAIGradingResultParser resultParser;
+    private final AIGradingResultParser resultParser;
 
     public Optional<AIGradingOutput> read(AIGradingResult result) {
         if (result == null || result.getRawResponse() == null || result.getRawResponse().isBlank()) {

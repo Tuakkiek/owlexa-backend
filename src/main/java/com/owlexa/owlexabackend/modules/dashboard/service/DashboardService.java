@@ -20,7 +20,6 @@ import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceReposito
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
-import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.entity.InstallmentStatus;
@@ -52,7 +51,6 @@ public class DashboardService {
     private final FeeRecordRepository feeRecordRepository;
     private final PaymentRepository paymentRepository;
     private final UserRepository userRepository;
-    private final DiscountRepository discountRepository;
     private final RefundRepository refundRepository;
     private final InstallmentRepository installmentRepository;
 
@@ -178,7 +176,6 @@ public class DashboardService {
         // Extended stats
         BigDecimal grossRevenue = paymentRepository.sumAmountByCenterId(centerId);
         BigDecimal refundTotal = refundRepository.sumAmountByCenterId(centerId);
-        BigDecimal discountTotal = BigDecimal.ZERO; // Discount tracked on FeeRecord — sum via query if needed
         BigDecimal netRevenue = grossRevenue.subtract(refundTotal);
 
         BigDecimal outstandingTuition = feeRecordRepository.sumRemainingByCenterIdAndStatusIn(centerId,
@@ -192,7 +189,6 @@ public class DashboardService {
                 .thisWeekRevenue(thisWeekRevenue)
                 .thisMonthRevenue(thisMonthRevenue)
                 .grossRevenue(grossRevenue)
-                .discountTotal(discountTotal)
                 .refundTotal(refundTotal)
                 .netRevenue(netRevenue)
                 .outstandingTuition(outstandingTuition)

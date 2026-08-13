@@ -1,5 +1,5 @@
 package com.owlexa.owlexabackend.modules.ai_grading.entity;
 
 public enum AIModelProvider {
-    OPENAI
+    GEMINI
 }

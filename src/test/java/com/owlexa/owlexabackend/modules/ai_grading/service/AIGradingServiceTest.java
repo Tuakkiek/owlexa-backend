@@ -73,7 +73,7 @@ class AIGradingServiceTest {
     void setUp() {
         properties = new AIGradingProperties();
         properties.setEnabled(true);
-        properties.setProvider(AIModelProvider.OPENAI);
+         properties.setProvider(AIModelProvider.GEMINI);
         properties.setModel("gpt-test");
         properties.setMaxTokens(1000);
 
@@ -98,7 +98,7 @@ class AIGradingServiceTest {
         lenient().when(authorizationService.getCurrentUser()).thenReturn(teacher);
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID))
                 .thenReturn(true);
-        lenient().when(provider.provider()).thenReturn(AIModelProvider.OPENAI);
+         lenient().when(provider.provider()).thenReturn(AIModelProvider.GEMINI);
     }
 
     @AfterEach
@@ -113,7 +113,7 @@ class AIGradingServiceTest {
         AIGradingExecutionContext context = new AIGradingExecutionContext(
                 JOB_ID,
                 true,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 request
         );
         AIGradingProviderResponse providerResponse = new AIGradingProviderResponse(
@@ -144,7 +144,7 @@ class AIGradingServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -169,7 +169,7 @@ class AIGradingServiceTest {
         AIGradingExecutionContext context = new AIGradingExecutionContext(
                 JOB_ID,
                 false,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 null
         );
         AIGradingJobSummaryResponse running = jobSummary(AIGradingJobStatus.RUNNING);
@@ -177,7 +177,7 @@ class AIGradingServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -200,7 +200,7 @@ class AIGradingServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -220,7 +220,7 @@ class AIGradingServiceTest {
         AIGradingExecutionContext context = new AIGradingExecutionContext(
                 JOB_ID,
                 true,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 request
         );
         AIGradingJobSummaryResponse failed = jobSummary(AIGradingJobStatus.FAILED);
@@ -228,7 +228,7 @@ class AIGradingServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -249,7 +249,7 @@ class AIGradingServiceTest {
         AIGradingExecutionContext context = new AIGradingExecutionContext(
                 JOB_ID + 1,
                 false,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 null
         );
         AIGradingJobSummaryResponse pending = AIGradingJobSummaryResponse.builder()
@@ -261,7 +261,7 @@ class AIGradingServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
