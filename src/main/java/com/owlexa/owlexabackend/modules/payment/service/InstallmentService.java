@@ -39,14 +39,11 @@ public class InstallmentService {
         FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bản ghi học phí"));
 
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
-
         BigDecimal totalExpected = request.getInstallments().stream()
                 .map(i -> i.getExpectedAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (totalExpected.compareTo(effectiveAmount) != 0) {
+        if (totalExpected.compareTo(feeRecord.getAmount()) != 0) {
             throw new BusinessRuleException("Tổng số tiền các kỳ hạn (" + totalExpected
-                    + ") phải bằng số tiền học phí sau chiết khấu (" + effectiveAmount + ")");
+                    + ") phải bằng số tiền học phí (" + feeRecord.getAmount() + ")");
         }
 
         // Delete existing installments
@@ -116,14 +113,12 @@ public class InstallmentService {
     }
 
     private void validateTotalMatches(FeeRecord feeRecord) {
-        BigDecimal discount = feeRecord.getDiscountAmount() != null ? feeRecord.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal effectiveAmount = feeRecord.getAmount().subtract(discount);
         List<Installment> current = installmentRepository.findAllByFeeRecord_IdOrderByDueDateAsc(feeRecord.getId());
         BigDecimal totalExpected = current.stream()
                 .map(Installment::getExpectedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (totalExpected.compareTo(effectiveAmount) != 0) {
+        if (totalExpected.compareTo(feeRecord.getAmount()) != 0) {
             throw new BusinessRuleException("Tổng số tiền các kỳ hạn (" + totalExpected
-                    + ") phải bằng số tiền học phí sau chiết khấu (" + effectiveAmount + ")");
+                    + ") phải bằng số tiền học phí (" + feeRecord.getAmount() + ")");
         }
     }
 

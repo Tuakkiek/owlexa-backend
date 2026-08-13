@@ -13,11 +13,13 @@ import java.math.BigDecimal;
 public class AIGradingProperties {
 
     private boolean enabled = true;
-    private AIModelProvider provider = AIModelProvider.OPENAI;
-    private String baseUrl = "https://api.deepseek.com";
+    private AIModelProvider provider = AIModelProvider.GEMINI;
+    private String baseUrl = "https://generativelanguage.googleapis.com/v1beta";
     private String apiKey = "";
-    private String model = "deepseek-chat";
+    private String model = "gemini-2.5-flash";
     private BigDecimal temperature;
     private int maxTokens = 8000;
     private int timeoutMs = 120000;
+    private int maxRetries = 3;
+    private long retryBackoffMs = 500;
 }

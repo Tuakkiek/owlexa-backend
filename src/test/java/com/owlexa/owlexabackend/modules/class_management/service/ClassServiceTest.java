@@ -15,7 +15,6 @@ import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.course.repository.CourseRepository;
 import com.owlexa.owlexabackend.modules.document.repository.StudentDocumentRepository;
 import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
-import com.owlexa.owlexabackend.modules.payment.repository.DiscountRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
@@ -76,7 +75,6 @@ class ClassServiceTest {
     @Mock private FeeRecordRepository feeRecordRepository;
     @Mock private PaymentRepository paymentRepository;
     @Mock private InstallmentRepository installmentRepository;
-    @Mock private DiscountRepository discountRepository;
     @Mock private StudentDocumentRepository studentDocumentRepository;
     @Mock private AssignmentRecipientRepository assignmentRecipientRepository;
     @Mock private AssignmentTargetRepository assignmentTargetRepository;
@@ -98,7 +96,7 @@ class ClassServiceTest {
                 classRepository, centerRepository, userRepository, membershipRepository,
                 scheduleRepository, classEnrollmentRepository, courseRepository,
                 scheduleEventRepository, scheduleRecurringRuleRepository, attendanceRepository,
-                feeRecordRepository, paymentRepository, installmentRepository, discountRepository,
+                feeRecordRepository, paymentRepository, installmentRepository,
                 studentDocumentRepository, assignmentRecipientRepository, assignmentTargetRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -457,7 +455,6 @@ class ClassServiceTest {
 
         org.mockito.Mockito.verify(paymentRepository).deleteByFeeRecord_Clazz_IdAndFeeRecord_Center_Id(CLASS_ID, CENTER_ID);
         org.mockito.Mockito.verify(installmentRepository).deleteByFeeRecord_Clazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
-        org.mockito.Mockito.verify(discountRepository).deleteByFeeRecord_Clazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
         org.mockito.Mockito.verify(feeRecordRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
         org.mockito.Mockito.verify(classEnrollmentRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);
         org.mockito.Mockito.verify(scheduleEventRepository).deleteByClazz_IdAndCenter_Id(CLASS_ID, CENTER_ID);

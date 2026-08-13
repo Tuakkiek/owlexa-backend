@@ -15,7 +15,8 @@ import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJob;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
 import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
-import com.owlexa.owlexabackend.modules.ai_grading.provider.openai.OpenAIGradingResultParser;
+import com.owlexa.owlexabackend.modules.ai_grading.provider.gemini.GeminiGradingResultParser;
+import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingJobRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingOutputReader;
@@ -73,6 +74,7 @@ class SubmissionServiceTest {
     @Mock private SubmissionAttemptRepository submissionAttemptRepository;
     @Mock private AuthorizationService authorizationService;
     @Mock private MembershipRepository membershipRepository;
+    @Mock private AIGradingJobRepository aiGradingJobRepository;
     @Mock private AIGradingResultRepository aiGradingResultRepository;
     @Mock private AIGradingService aiGradingService;
     @Mock private TeacherReviewRepository teacherReviewRepository;
@@ -108,9 +110,10 @@ class SubmissionServiceTest {
                         documentService,
                         fileMapper
                 ),
+                aiGradingJobRepository,
                 aiGradingResultRepository,
                 aiGradingService,
-                new AIGradingOutputReader(new OpenAIGradingResultParser(new ObjectMapper())),
+                new AIGradingOutputReader(new GeminiGradingResultParser(new ObjectMapper())),
                 teacherReviewRepository
         );
 
@@ -415,6 +418,28 @@ class SubmissionServiceTest {
         StudentAttemptDetailResponse response = service.submitAttemptWithAutoGrading(ATTEMPT_ID);
 
         assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("submit+auto-grade: exposes failed AI grading status to student response")
+    void submitAttemptWithAutoGrading_whenAiJobFails_shouldExposeAiStatus() {
+        Assignment assignment = activeAssignment(null, Instant.now().plusSeconds(3600), null);
+        AssignmentRecipient recipient = recipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        attempt.setActiveAttemptKey(RECIPIENT_ID);
+        attempt.getAnswers().add(essayAnswer(attempt, essayItem(assignment), "My essay"));
+        whenStudentAttemptFound(attempt);
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(aiGradingService.autoGradeOnSubmit(ATTEMPT_ID, CENTER_ID, STUDENT_ID)).thenReturn(true);
+        when(aiGradingJobRepository.findTopBySubmissionAttempt_IdOrderByCreatedAtDesc(ATTEMPT_ID))
+                .thenReturn(Optional.of(aiJob(attempt, AIGradingJobStatus.FAILED)));
+
+        StudentAttemptDetailResponse response = service.submitAttemptWithAutoGrading(ATTEMPT_ID);
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionAttemptStatus.SUBMITTED);
+        assertThat(response.getAiResult()).isNull();
+        assertThat(response.getAiGradingStatus()).isEqualTo(AIGradingJobStatus.FAILED);
+        assertThat(response.getAiGradingMessage()).contains("AI chưa chấm được");
     }
 
     @Test
@@ -780,6 +805,14 @@ class SubmissionServiceTest {
                 .maxScore(new BigDecimal("5.00"))
                 .confidence(new BigDecimal("0.9000"))
                 .itemResults(new ArrayList<>())
+                .build();
+    }
+
+    private AIGradingJob aiJob(SubmissionAttempt attempt, AIGradingJobStatus status) {
+        return AIGradingJob.builder()
+                .id(999L)
+                .status(status)
+                .submissionAttempt(attempt)
                 .build();
     }
 

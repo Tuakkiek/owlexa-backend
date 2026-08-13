@@ -14,6 +14,9 @@ import com.owlexa.owlexabackend.modules.payment.entity.RefundStatus;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
 import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleRecurringRule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleType;
+import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
@@ -41,6 +44,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -48,14 +53,19 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class EnrollmentService {
+
+    private static final Logger log = LoggerFactory.getLogger(EnrollmentService.class);
 
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final ClassRepository classRepository;
@@ -100,8 +110,7 @@ public class EnrollmentService {
         }
 
         // Check for existing enrollment record
-        var existingEnrollment = classEnrollmentRepository
-                .findByClazz_IdAndStudentUser_Id(classId, student.getId());
+        var existingEnrollment = findEnrollment(classId, student.getId());
 
         if (existingEnrollment.isPresent()) {
             ClassEnrollment enrollment = existingEnrollment.get();
@@ -114,7 +123,6 @@ public class EnrollmentService {
                             "Học sinh đã đăng ký lớp học này trước đó. Trạng thái hiện tại: " + enrollment.getStatus()
                     );
                 case DROPPED:
-                case TRANSFERRED:
                     // Restore the dropped/transferred enrollment - check capacity first
                     long activeCount = classEnrollmentRepository.countByClazz_IdAndStatusIn(
                             classId, List.of(EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED)
@@ -128,12 +136,24 @@ public class EnrollmentService {
                     // Restore: set status to ACTIVE, update enrolled-by user
                     enrollment.setStatus(EnrollmentStatus.ACTIVE);
                     enrollment.setEnrolledByUser(currentUser);
+                    enrollment.setDropReason(null);
+                    enrollment.setDroppedAt(null);
+                    enrollment.setDroppedByUser(null);
                     enrollment = classEnrollmentRepository.save(enrollment);
 
-                    // Regenerate fee record if needed (the method already checks existence)
+                    // A drop cancels every unpaid fee for this enrollment. When
+                    // the student is enrolled again, restore all of those fee
+                    // rows, not only the current month; otherwise the student
+                    // portal can show old fees that cashier cannot collect.
+                    reactivateCancelledUnpaidFeeRecords(enrollment);
+
+                    // Generate the current month's fee if it does not exist.
                     generateFeeRecordIfAbsent(enrollment);
 
                     return toResponse(enrollment);
+                case TRANSFERRED:
+                    throw new BusinessRuleException(
+                            "Enrollment has already been transferred and cannot be restored in the old class.");
             }
         }
 
@@ -147,23 +167,6 @@ public class EnrollmentService {
         }
 
         validateStudentScheduleConflicts(clazz, student, centerId);
-
-        // Check student schedule conflicts
-        List<com.owlexa.owlexabackend.modules.class_management.entity.Schedule> classSchedules =
-                scheduleRepository.findAllByClazz_IdAndCenter_Id(classId, centerId);
-        for (var schedule : classSchedules) {
-            List<com.owlexa.owlexabackend.modules.class_management.entity.Schedule> overlaps =
-                    scheduleRepository.findOverlappingStudentSchedules(
-                            student.getId(), schedule.getDayOfWeek(),
-                            schedule.getStartTime(), schedule.getEndTime(), centerId, null);
-            if (!overlaps.isEmpty()) {
-                throw new BusinessRuleException(
-                        "STUDENT_CONFLICT",
-                        String.format("Học sinh %s đã có lịch học lớp khác vào thời gian này.",
-                                student.getFullName())
-                );
-            }
-        }
 
         ClassEnrollment enrollment = ClassEnrollment.builder()
                 .clazz(clazz)
@@ -204,6 +207,11 @@ public class EnrollmentService {
         if (enrollment.getStatus() != EnrollmentStatus.PENDING) {
             throw new BusinessRuleException("Chỉ có thể duyệt các yêu cầu đăng ký đang chờ xử lý. Trạng thái hiện tại: " + enrollment.getStatus());
         }
+
+        // A PENDING enrollment may have been created before the class schedule
+        // changed. Re-check at approval time so approval cannot bypass the
+        // same conflict rules as direct owner enrollment.
+        validateStudentScheduleConflicts(clazz, enrollment.getStudentUser(), centerId);
 
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
         enrollment = classEnrollmentRepository.save(enrollment);
@@ -312,7 +320,18 @@ public class EnrollmentService {
         }
 
         enrollment.setStatus(EnrollmentStatus.DROPPED);
+        enrollment.setDropReason(DropReason.OTHER);
+        enrollment.setDroppedAt(Instant.now());
+        enrollment.setDroppedByUser(currentUser);
         classEnrollmentRepository.save(enrollment);
+        cancelUnpaidFeeRecords(enrollment);
+        BigDecimal feeDiff = calculateDropFeeDifference(enrollment, centerId);
+        if (feeDiff.compareTo(BigDecimal.ZERO) > 0) {
+            autoCreateRefundRequest(enrollment, feeDiff, currentUser,
+                    "Auto-created for legacy drop endpoint");
+        }
+        writeAuditLog(currentUser, enrollment.getCenter(), "ENROLLMENT_DROP", "ClassEnrollment",
+                enrollment.getId(), "Enrollment dropped from class " + classId);
     }
 
     /**
@@ -367,6 +386,12 @@ public class EnrollmentService {
             );
         }
 
+        Class clazz = enrollment.getClazz();
+        if (clazz == null || clazz.getCenter() == null || !centerId.equals(clazz.getCenter().getId())) {
+            throw new TenancyViolationException("Ghi danh không thuộc trung tâm hiện tại.");
+        }
+        validateStudentScheduleConflicts(clazz, enrollment.getStudentUser(), centerId);
+
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
         classEnrollmentRepository.save(enrollment);
     }
@@ -376,122 +401,170 @@ public class EnrollmentService {
         Integer ruleRoomCapacity = scheduleRecurringRuleRepository.findMinRoomCapacityByClass(clazz.getId(), centerId);
         Integer legacyRoomCapacity = scheduleRepository.findMinRoomCapacityByClass(clazz.getId(), centerId);
 
-        return List.of(eventRoomCapacity, ruleRoomCapacity, legacyRoomCapacity).stream()
+        // A class may only use one scheduling model, so the other capacity
+        // queries legitimately return null. Stream.of accepts those values;
+        // List.of throws before the null filter can run.
+        return java.util.stream.Stream.of(eventRoomCapacity, ruleRoomCapacity, legacyRoomCapacity)
                 .filter(value -> value != null && value > 0)
                 .min(Integer::compareTo)
                 .orElse(Integer.MAX_VALUE);
     }
 
+    /**
+     * Validates the complete schedule of a class before a student is enrolled.
+     *
+     * The project currently supports three schedule representations. They must
+     * be compared against each other, otherwise a recurring rule can be missed
+     * or an old schedule row can cause a false positive. A legacy weekly slot
+     * has an open-ended date range; a recurring rule has its own date range; an
+     * event applies only to its exact date.
+     */
     private void validateStudentScheduleConflicts(Class clazz, User student, Long centerId) {
         validateStudentScheduleConflicts(clazz, student, centerId, null);
     }
 
     private void validateStudentScheduleConflicts(Class clazz, User student, Long centerId, Long excludedClassId) {
-        Long classId = clazz.getId();
+        Long targetClassId = clazz.getId();
+        List<StudentScheduleSlot> existingSlots = loadStudentScheduleSlots(
+                student, centerId, targetClassId, excludedClassId);
 
-        var classEvents = scheduleEventRepository.findAllByClazz_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(classId, centerId);
-        for (var event : classEvents) {
-            if (event.getStatus() == com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus.CANCELLED) {
-                continue;
-            }
-            assertNoLegacyStudentConflict(student, event.getEventDate().getDayOfWeek(), event.getStartTime(), event.getEndTime(), centerId, excludedClassId);
-            if (!scheduleEventRepository.findOverlappingStudentEventsExcludingClass(
-                    centerId,
-                    student.getId(),
-                    event.getEventDate(),
-                    event.getStartTime(),
-                    event.getEndTime(),
-                    com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus.CANCELLED,
-                    event.getId(),
-                    excludedClassId
-            ).isEmpty()) {
-                throwStudentConflict(student);
-            }
-            assertNoRuleStudentConflict(student, event.getEventDate().getDayOfWeek(), event.getStartTime(), event.getEndTime(), centerId, classId, excludedClassId);
+        if (existingSlots.isEmpty()) {
+            return;
         }
 
-        var classRules = scheduleRecurringRuleRepository.findAllByClazz_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(classId, centerId);
-        for (var rule : classRules) {
-            if (!Boolean.TRUE.equals(rule.getIsActive())) {
+        for (Schedule schedule : scheduleRepository.findAllByClazz_IdAndCenter_Id(targetClassId, centerId)) {
+            if (schedule.getType() == ScheduleType.CANCELLED
+                    || schedule.getDayOfWeek() == null
+                    || schedule.getStartTime() == null
+                    || schedule.getEndTime() == null) {
+                continue;
+            }
+            assertNoConflict(student, existingSlots, new StudentScheduleSlot(
+                    schedule.getDayOfWeek(), schedule.getStartTime(), schedule.getEndTime(), null, null));
+        }
+
+        for (ScheduleRecurringRule rule : scheduleRecurringRuleRepository
+                .findAllByClazz_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(targetClassId, centerId)) {
+            if (!isUsableRecurringRule(rule)) {
                 continue;
             }
             for (Integer day : parseDays(rule.getDaysOfWeek())) {
-                DayOfWeek dayOfWeek = DayOfWeek.of(day);
-                assertNoLegacyStudentConflict(student, dayOfWeek, rule.getStartTime(), rule.getEndTime(), centerId, excludedClassId);
-                assertNoRuleStudentConflict(student, dayOfWeek, rule.getStartTime(), rule.getEndTime(), centerId, classId, excludedClassId);
+                assertNoConflict(student, existingSlots, new StudentScheduleSlot(
+                        DayOfWeek.of(day), rule.getStartTime(), rule.getEndTime(),
+                        rule.getStartDate(), rule.getEndDate()));
             }
+        }
+
+        for (ScheduleEvent event : scheduleEventRepository
+                .findAllByClazz_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(targetClassId, centerId)) {
+            if (event.getStatus() == ScheduleEventStatus.CANCELLED
+                    || event.getEventDate() == null
+                    || event.getStartTime() == null
+                    || event.getEndTime() == null) {
+                continue;
+            }
+            assertNoConflict(student, existingSlots, new StudentScheduleSlot(
+                    event.getEventDate().getDayOfWeek(), event.getStartTime(), event.getEndTime(),
+                    event.getEventDate(), event.getEventDate()));
         }
     }
 
-    private void assertNoLegacyStudentConflict(
-            User student,
-            DayOfWeek dayOfWeek,
-            LocalTime startTime,
-            LocalTime endTime,
-            Long centerId
-    ) {
-        assertNoLegacyStudentConflict(student, dayOfWeek, startTime, endTime, centerId, null);
+    private List<StudentScheduleSlot> loadStudentScheduleSlots(
+            User student, Long centerId, Long targetClassId, Long excludedClassId) {
+        List<StudentScheduleSlot> slots = new ArrayList<>();
+        List<ClassEnrollment> enrollments = classEnrollmentRepository
+                .findAllByStudentUser_IdAndCenter_IdAndStatusIn(
+                        student.getId(), centerId,
+                        List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.PENDING, EnrollmentStatus.SUSPENDED));
+
+        for (ClassEnrollment enrollment : enrollments) {
+            if (enrollment.getClazz() == null || enrollment.getClazz().getId() == null) {
+                continue;
+            }
+            Long enrolledClassId = enrollment.getClazz().getId();
+            if (enrolledClassId.equals(targetClassId)
+                    || (excludedClassId != null && enrolledClassId.equals(excludedClassId))) {
+                continue;
+            }
+
+            for (Schedule schedule : scheduleRepository.findAllByClazz_IdAndCenter_Id(enrolledClassId, centerId)) {
+                if (schedule.getType() != ScheduleType.CANCELLED
+                        && schedule.getDayOfWeek() != null
+                        && schedule.getStartTime() != null
+                        && schedule.getEndTime() != null) {
+                    slots.add(new StudentScheduleSlot(
+                            schedule.getDayOfWeek(), schedule.getStartTime(), schedule.getEndTime(), null, null));
+                }
+            }
+
+            for (ScheduleRecurringRule rule : scheduleRecurringRuleRepository
+                    .findAllByClazz_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(enrolledClassId, centerId)) {
+                if (!isUsableRecurringRule(rule)) {
+                    continue;
+                }
+                for (Integer day : parseDays(rule.getDaysOfWeek())) {
+                    slots.add(new StudentScheduleSlot(
+                            DayOfWeek.of(day), rule.getStartTime(), rule.getEndTime(),
+                            rule.getStartDate(), rule.getEndDate()));
+                }
+            }
+
+            for (ScheduleEvent event : scheduleEventRepository
+                    .findAllByClazz_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(enrolledClassId, centerId)) {
+                if (event.getStatus() != ScheduleEventStatus.CANCELLED
+                        && event.getEventDate() != null
+                        && event.getStartTime() != null
+                        && event.getEndTime() != null) {
+                    slots.add(new StudentScheduleSlot(
+                            event.getEventDate().getDayOfWeek(), event.getStartTime(), event.getEndTime(),
+                            event.getEventDate(), event.getEventDate()));
+                }
+            }
+        }
+        return slots;
     }
 
-    private void assertNoLegacyStudentConflict(
-            User student,
-            DayOfWeek dayOfWeek,
-            LocalTime startTime,
-            LocalTime endTime,
-            Long centerId,
-            Long excludedClassId
-    ) {
-        if (!scheduleRepository.findOverlappingStudentSchedulesExcludingClass(
-                student.getId(), dayOfWeek, startTime, endTime, centerId, null, excludedClassId).isEmpty()) {
+    private void assertNoConflict(User student, List<StudentScheduleSlot> existingSlots,
+                                  StudentScheduleSlot targetSlot) {
+        if (targetSlot.startTime() == null || targetSlot.endTime() == null
+                || !targetSlot.startTime().isBefore(targetSlot.endTime())) {
+            return;
+        }
+        if (existingSlots.stream().anyMatch(existingSlot -> slotsOverlap(existingSlot, targetSlot))) {
             throwStudentConflict(student);
         }
     }
 
-    private void assertNoRuleStudentConflict(
-            User student,
-            DayOfWeek dayOfWeek,
-            LocalTime startTime,
-            LocalTime endTime,
-            Long centerId,
-            Long targetClassId
-    ) {
-        assertNoRuleStudentConflict(student, dayOfWeek, startTime, endTime, centerId, targetClassId, null);
+    private boolean slotsOverlap(StudentScheduleSlot first, StudentScheduleSlot second) {
+        return first.dayOfWeek() == second.dayOfWeek()
+                && first.startTime().isBefore(second.endTime())
+                && first.endTime().isAfter(second.startTime())
+                && dateRangesOverlap(first.startDate(), first.endDate(), second.startDate(), second.endDate());
     }
 
-    private void assertNoRuleStudentConflict(
-            User student,
+    private boolean dateRangesOverlap(LocalDate firstStart, LocalDate firstEnd,
+                                      LocalDate secondStart, LocalDate secondEnd) {
+        return (firstEnd == null || secondStart == null || !firstEnd.isBefore(secondStart))
+                && (secondEnd == null || firstStart == null || !secondEnd.isBefore(firstStart));
+    }
+
+    private boolean isUsableRecurringRule(ScheduleRecurringRule rule) {
+        return rule != null
+                && Boolean.TRUE.equals(rule.getIsActive())
+                && rule.getType() != ScheduleType.CANCELLED
+                && rule.getStartDate() != null
+                && rule.getEndDate() != null
+                && !rule.getStartDate().isAfter(rule.getEndDate())
+                && rule.getStartTime() != null
+                && rule.getEndTime() != null;
+    }
+
+    private record StudentScheduleSlot(
             DayOfWeek dayOfWeek,
             LocalTime startTime,
             LocalTime endTime,
-            Long centerId,
-            Long targetClassId,
-            Long excludedClassId
-    ) {
-        Set<Long> enrolledClassIds = classEnrollmentRepository
-                .findAllByStudentUser_IdAndCenter_IdAndStatusIn(
-                        student.getId(),
-                        centerId,
-                        List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.PENDING, EnrollmentStatus.SUSPENDED))
-                .stream()
-                .map(enrollment -> enrollment.getClazz().getId())
-                .filter(enrolledClassId -> !enrolledClassId.equals(targetClassId))
-                .filter(enrolledClassId -> excludedClassId == null || !enrolledClassId.equals(excludedClassId))
-                .collect(Collectors.toSet());
-
-        if (enrolledClassIds.isEmpty()) {
-            return;
-        }
-
-        for (var rule : scheduleRecurringRuleRepository.findAllByCenter_IdAndIsActiveTrue(centerId)) {
-            if (!enrolledClassIds.contains(rule.getClazz().getId())) {
-                continue;
-            }
-            if (parseDays(rule.getDaysOfWeek()).contains(dayOfWeek.getValue())
-                    && startTime.isBefore(rule.getEndTime())
-                    && endTime.isAfter(rule.getStartTime())) {
-                throwStudentConflict(student);
-            }
-        }
+            LocalDate startDate,
+            LocalDate endDate) {
     }
 
     private Set<Integer> parseDays(String csv) {
@@ -508,36 +581,105 @@ public class EnrollmentService {
     private void throwStudentConflict(User student) {
         throw new BusinessRuleException(
                 "STUDENT_CONFLICT",
-                String.format("Há»c sinh %s Ä‘Ã£ cÃ³ lá»‹ch há»c lá»›p khÃ¡c vÃ o thá»i gian nÃ y.",
+                String.format("Học sinh %s đã có lịch học lớp khác vào thời gian này.",
                         student.getFullName())
         );
+    }
+
+    private Optional<ClassEnrollment> findEnrollment(Long classId, Long studentUserId) {
+        return classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(classId, studentUserId);
+    }
+
+    /** Cancel only fee rows that have not received money yet. Paid/partial rows
+     * remain auditable and are handled by the refund workflow below. */
+    private void cancelUnpaidFeeRecords(ClassEnrollment enrollment) {
+        feeRecordRepository.findAllByStudentUser_IdAndClazz_Id(
+                        enrollment.getStudentUser().getId(), enrollment.getClazz().getId())
+                .stream()
+                .filter(record -> record.getStatus() == FeeStatus.UNPAID
+                        || record.getStatus() == FeeStatus.PARTIAL)
+                .filter(record -> record.getPaidAmount() == null
+                        || record.getPaidAmount().compareTo(BigDecimal.ZERO) == 0)
+                .forEach(record -> record.setStatus(FeeStatus.CANCELLED));
+    }
+
+    private void reactivateCancelledUnpaidFeeRecords(ClassEnrollment enrollment) {
+        feeRecordRepository.findAllByStudentUser_IdAndClazz_Id(
+                        enrollment.getStudentUser().getId(), enrollment.getClazz().getId())
+                .stream()
+                .filter(record -> record.getStatus() == FeeStatus.CANCELLED)
+                .filter(record -> record.getPaidAmount() == null
+                        || record.getPaidAmount().compareTo(BigDecimal.ZERO) == 0)
+                .forEach(record -> {
+                    record.setStatus(FeeStatus.UNPAID);
+                    feeRecordRepository.save(record);
+                });
     }
 
     // Helper: auto-generate FeeRecord when enrollment becomes ACTIVE
     private void generateFeeRecordIfAbsent(ClassEnrollment enrollment) {
         String currentMonth = YearMonth.now().toString();
 
-        boolean alreadyExists = feeRecordRepository
+        BigDecimal feeAmount = resolveMonthlyFee(enrollment.getClazz());
+
+        Optional<FeeRecord> existingFeeRecord = feeRecordRepository
                 .findByStudentUser_IdAndClazz_IdAndMonth(
                         enrollment.getStudentUser().getId(),
                         enrollment.getClazz().getId(),
                         currentMonth
-                ).isPresent();
+                );
 
-        if (!alreadyExists && enrollment.getClazz().getMonthlyFee() != null
-                && enrollment.getClazz().getMonthlyFee() > 0) {
+        if (existingFeeRecord.isPresent()) {
+            FeeRecord feeRecord = existingFeeRecord.get();
+
+            // Dropping an enrollment cancels an unpaid fee row so it no longer
+            // appears in the cashier's pending list. Re-enrolling the same
+            // student must reactivate that row instead of treating it as an
+            // already-complete fee record. Paid history is never reset here.
+            if (feeRecord.getStatus() == FeeStatus.CANCELLED
+                    && (feeRecord.getPaidAmount() == null
+                    || feeRecord.getPaidAmount().compareTo(BigDecimal.ZERO) == 0)
+                    && feeAmount != null) {
+                feeRecord.setAmount(feeAmount);
+                feeRecord.setPaidAmount(BigDecimal.ZERO);
+                feeRecord.setDueDate(LocalDate.now().plusDays(feeGraceDays));
+                feeRecord.setStatus(FeeStatus.UNPAID);
+                feeRecordRepository.save(feeRecord);
+                log.info("Reactivated enrollment fee: studentId={}, classId={}, month={}, amount={}",
+                        enrollment.getStudentUser().getId(), enrollment.getClazz().getId(), currentMonth, feeAmount);
+            }
+            return;
+        }
+
+        if (feeAmount != null) {
             FeeRecord feeRecord = FeeRecord.builder()
                     .studentUser(enrollment.getStudentUser())
                     .center(enrollment.getCenter())
                     .clazz(enrollment.getClazz())
-                    .amount(BigDecimal.valueOf(enrollment.getClazz().getMonthlyFee()))
+                    .amount(feeAmount)
                     .paidAmount(BigDecimal.ZERO)
                     .month(currentMonth)
                     .dueDate(LocalDate.now().plusDays(feeGraceDays))
                     .status(FeeStatus.UNPAID)
                     .build();
             feeRecordRepository.save(feeRecord);
+            log.info("Created enrollment fee: studentId={}, classId={}, month={}, amount={}",
+                    enrollment.getStudentUser().getId(), enrollment.getClazz().getId(), currentMonth, feeAmount);
+        } else {
+            log.warn("Skipped enrollment fee: classId={} has no positive monthly fee configured",
+                    enrollment.getClazz().getId());
         }
+    }
+
+    private BigDecimal resolveMonthlyFee(Class clazz) {
+        Double monthlyFee = clazz.getMonthlyFee();
+        if ((monthlyFee == null || monthlyFee <= 0)
+                && clazz.getCourse() != null) {
+            monthlyFee = clazz.getCourse().getDefaultMonthlyFee();
+        }
+        return monthlyFee != null && monthlyFee > 0
+                ? BigDecimal.valueOf(monthlyFee)
+                : null;
     }
 
     // To response
@@ -631,6 +773,7 @@ public class EnrollmentService {
         enrollment.setDroppedAt(Instant.now());
         enrollment.setDroppedByUser(currentUser);
         classEnrollmentRepository.save(enrollment);
+        cancelUnpaidFeeRecords(enrollment);
 
         // Calculate fee difference and auto-create Refund REQUESTED if student overpaid
         BigDecimal feeDiff = calculateDropFeeDifference(enrollment, centerId);
@@ -685,20 +828,56 @@ public class EnrollmentService {
         User student = oldEnrollment.getStudentUser();
         validateStudentScheduleConflicts(targetClass, student, centerId, classId);
 
+        ClassEnrollment existingTargetEnrollment = findEnrollment(targetClass.getId(), student.getId())
+                .orElse(null);
+        if (existingTargetEnrollment != null
+                && (existingTargetEnrollment.getStatus() == EnrollmentStatus.ACTIVE
+                || existingTargetEnrollment.getStatus() == EnrollmentStatus.PENDING
+                || existingTargetEnrollment.getStatus() == EnrollmentStatus.SUSPENDED)) {
+            throw new DuplicateResourceException("Student already has an active enrollment in the target class.");
+        }
+        if (existingTargetEnrollment != null
+                && existingTargetEnrollment.getStatus() == EnrollmentStatus.TRANSFERRED) {
+            throw new BusinessRuleException("The target enrollment has already been transferred and cannot be reused.");
+        }
+
         // Mark old enrollment as TRANSFERRED
         oldEnrollment.setStatus(EnrollmentStatus.TRANSFERRED);
         oldEnrollment.setDroppedAt(Instant.now());
         classEnrollmentRepository.save(oldEnrollment);
 
-        // Create new enrollment in target class
-        ClassEnrollment newEnrollment = ClassEnrollment.builder()
-                .studentUser(student)
-                .clazz(targetClass)
-                .center(oldEnrollment.getCenter())
-                .enrolledByUser(currentUser)
-                .status(EnrollmentStatus.ACTIVE)
-                .transferredFromEnrollment(oldEnrollment)
-                .build();
+        // A student may already have a historical DROPPED row in the target
+        // class. Reuse that row; inserting another one violates the natural
+        // key (class_id, student_user_id).
+        ClassEnrollment newEnrollment = existingTargetEnrollment;
+        if (newEnrollment != null) {
+            if (newEnrollment.getStatus() == EnrollmentStatus.ACTIVE
+                    || newEnrollment.getStatus() == EnrollmentStatus.PENDING
+                    || newEnrollment.getStatus() == EnrollmentStatus.SUSPENDED) {
+                throw new DuplicateResourceException(
+                        "Học sinh đã có ghi danh đang hoạt động trong lớp đích.");
+            }
+            if (newEnrollment.getStatus() == EnrollmentStatus.TRANSFERRED) {
+                throw new BusinessRuleException(
+                        "Ghi danh trong lớp đích đã được chuyển tiếp, không thể tái sử dụng.");
+            }
+
+            newEnrollment.setStatus(EnrollmentStatus.ACTIVE);
+            newEnrollment.setEnrolledByUser(currentUser);
+            newEnrollment.setDropReason(null);
+            newEnrollment.setDroppedAt(null);
+            newEnrollment.setDroppedByUser(null);
+            newEnrollment.setTransferredFromEnrollment(oldEnrollment);
+        } else {
+            newEnrollment = ClassEnrollment.builder()
+                    .studentUser(student)
+                    .clazz(targetClass)
+                    .center(oldEnrollment.getCenter())
+                    .enrolledByUser(currentUser)
+                    .status(EnrollmentStatus.ACTIVE)
+                    .transferredFromEnrollment(oldEnrollment)
+                    .build();
+        }
         newEnrollment = classEnrollmentRepository.save(newEnrollment);
 
         // Link old → new
@@ -793,6 +972,22 @@ public class EnrollmentService {
 
     private void generateTransferFeeRecord(ClassEnrollment enrollment, BigDecimal amount) {
         String currentMonth = YearMonth.now().toString();
+        Optional<FeeRecord> existing = feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(
+                enrollment.getStudentUser().getId(), enrollment.getClazz().getId(), currentMonth);
+
+        if (existing.isPresent()) {
+            FeeRecord feeRecord = existing.get();
+            if (feeRecord.getStatus() == FeeStatus.CANCELLED
+                    && (feeRecord.getPaidAmount() == null
+                    || feeRecord.getPaidAmount().compareTo(BigDecimal.ZERO) == 0)) {
+                feeRecord.setAmount(amount);
+                feeRecord.setPaidAmount(BigDecimal.ZERO);
+                feeRecord.setDueDate(LocalDate.now().plusDays(feeGraceDays));
+                feeRecord.setStatus(FeeStatus.UNPAID);
+            }
+            return;
+        }
+
         FeeRecord feeRecord = FeeRecord.builder()
                 .studentUser(enrollment.getStudentUser())
                 .center(enrollment.getCenter())

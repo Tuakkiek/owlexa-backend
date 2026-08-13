@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.student_submission.dto.response;
 
 import com.owlexa.owlexabackend.modules.assessment_builder.entity.PlaybackMode;
 import com.owlexa.owlexabackend.modules.assignment.dto.response.AssignmentBlockResponse;
+import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingJobStatus;
 import com.owlexa.owlexabackend.modules.file.dto.FileResponse;
 import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttemptStatus;
 import lombok.AllArgsConstructor;
@@ -44,4 +45,6 @@ public class StudentAttemptDetailResponse {
     private Boolean allowReview;
     private Boolean hasPassword;
     private StudentAIGradingResultResponse aiResult;
+    private AIGradingJobStatus aiGradingStatus;
+    private String aiGradingMessage;
 }

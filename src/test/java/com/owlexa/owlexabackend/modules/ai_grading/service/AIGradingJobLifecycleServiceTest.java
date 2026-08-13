@@ -109,7 +109,7 @@ class AIGradingJobLifecycleServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 new BigDecimal("0.20"),
                 1000
@@ -140,7 +140,7 @@ class AIGradingJobLifecycleServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -164,7 +164,7 @@ class AIGradingJobLifecycleServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -183,7 +183,7 @@ class AIGradingJobLifecycleServiceTest {
                 ATTEMPT_ID,
                 CENTER_ID,
                 TEACHER_ID,
-                AIModelProvider.OPENAI,
+                 AIModelProvider.GEMINI,
                 "gpt-test",
                 null,
                 1000
@@ -446,7 +446,7 @@ class AIGradingJobLifecycleServiceTest {
                 .status(status)
                 .promptTemplateVersion("template-v1")
                 .promptBuilderVersion("builder-v1")
-                .modelProvider(AIModelProvider.OPENAI)
+                 .modelProvider(AIModelProvider.GEMINI)
                 .modelName("gpt-test")
                 .systemPrompt("system")
                 .userPrompt("user")

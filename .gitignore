@@ -55,4 +55,6 @@ owlexa_roadmap.md
 uploads/
 *.log*
 app.log*
+backup_*.sql
+
 

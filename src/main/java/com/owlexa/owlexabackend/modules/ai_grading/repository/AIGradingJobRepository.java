@@ -13,6 +13,8 @@ public interface AIGradingJobRepository extends JpaRepository<AIGradingJob, Long
 
     Optional<AIGradingJob> findByActiveJobKey(Long activeJobKey);
 
+    Optional<AIGradingJob> findTopBySubmissionAttempt_IdOrderByCreatedAtDesc(Long submissionAttemptId);
+
     List<AIGradingJob> findAllBySubmissionAttempt_IdOrderByCreatedAtDesc(Long submissionAttemptId);
 
     Page<AIGradingJob> findAllByStatus(AIGradingJobStatus status, Pageable pageable);

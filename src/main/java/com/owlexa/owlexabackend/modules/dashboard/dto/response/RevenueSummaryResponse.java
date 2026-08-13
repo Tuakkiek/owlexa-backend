@@ -20,7 +20,6 @@ public class RevenueSummaryResponse {
     private BigDecimal thisMonthRevenue;
 
     private BigDecimal grossRevenue;
-    private BigDecimal discountTotal;
     private BigDecimal refundTotal;
     private BigDecimal netRevenue;
 
