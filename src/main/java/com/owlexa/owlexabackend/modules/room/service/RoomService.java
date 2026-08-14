@@ -139,7 +139,7 @@ public class RoomService {
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + roomId + " in this center"));
 
         if (isRoomInUse(roomId, centerId)) {
-            throw new BusinessRuleException("ROOM_IN_USE", "Phong hoc " + room.getName() + " dang duoc su dung trong lich hoc, khong the xoa.");
+            throw new BusinessRuleException("ROOM_IN_USE", "Phòng học " + room.getName() + " đang được sử dụng trong lịch học, không thể xóa.");
         }
 
         roomRepository.delete(room);
@@ -255,7 +255,7 @@ public class RoomService {
                 .startTime(schedule.getStartTime().toString())
                 .endTime(schedule.getEndTime().toString())
                 .className(schedule.getClazz().getName())
-                .teacherName(schedule.getTeacherUser() != null ? schedule.getTeacherUser().getFullName() : "Chua phan cong")
+                .teacherName(schedule.getTeacherUser() != null ? schedule.getTeacherUser().getFullName() : "Chưa phân công")
                 .type(schedule.getType().name())
                 .build();
     }
@@ -266,7 +266,7 @@ public class RoomService {
                 .map(day -> RoomDependencyDto.builder()
                         .source("RULE")
                         .className(rule.getClazz().getName())
-                        .teacherName(rule.getTeacherUser() != null ? rule.getTeacherUser().getFullName() : "Chua phan cong")
+                        .teacherName(rule.getTeacherUser() != null ? rule.getTeacherUser().getFullName() : "Chưa phân công")
                         .dayOfWeek(day.name())
                         .timeRange(rule.getStartTime() + " - " + rule.getEndTime())
                         .build())
@@ -282,7 +282,7 @@ public class RoomService {
                 .startTime(event.getStartTime().toString())
                 .endTime(event.getEndTime().toString())
                 .className(event.getClazz().getName())
-                .teacherName(event.getTeacherUser() != null ? event.getTeacherUser().getFullName() : "Chua phan cong")
+                .teacherName(event.getTeacherUser() != null ? event.getTeacherUser().getFullName() : "Chưa phân công")
                 .type(toScheduleType(event).name())
                 .build();
     }

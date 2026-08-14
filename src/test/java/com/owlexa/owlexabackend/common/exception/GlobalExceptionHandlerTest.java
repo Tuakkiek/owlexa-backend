@@ -46,7 +46,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test/tenancy-violation"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))
-                .andExpect(jsonPath("$.message").value("Khong tim thay du lieu"));
+                .andExpect(jsonPath("$.message").value("Không tìm thấy dữ liệu"));
     }
 
     @Test
@@ -73,7 +73,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test/spring-optimistic-lock"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OPTIMISTIC_LOCK_CONFLICT"))
-                .andExpect(jsonPath("$.message").value("Assessment has been modified; refresh before saving"));
+                .andExpect(jsonPath("$.message").value("Dữ liệu vừa được cập nhật bởi thao tác khác. Vui lòng tải lại và thử lại."));
     }
 
     @Test
@@ -82,7 +82,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test/jpa-optimistic-lock"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OPTIMISTIC_LOCK_CONFLICT"))
-                .andExpect(jsonPath("$.message").value("Assessment has been modified; refresh before saving"));
+                .andExpect(jsonPath("$.message").value("Dữ liệu vừa được cập nhật bởi thao tác khác. Vui lòng tải lại và thử lại."));
     }
 
     @Test
@@ -103,7 +103,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test/data-integrity-review-duplicate"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
-                .andExpect(jsonPath("$.message").value("Phieu cham cho luot nop nay da ton tai. Vui long tai lai trang."));
+                .andExpect(jsonPath("$.message").value("Phiếu chấm cho lượt nộp này đã tồn tại. Vui lòng tải lại trang."));
     }
 
     @Test

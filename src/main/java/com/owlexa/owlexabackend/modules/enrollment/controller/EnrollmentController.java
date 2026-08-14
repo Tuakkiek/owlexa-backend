@@ -90,12 +90,4 @@ public class EnrollmentController {
         return enrollmentService.dropWithReason(classId, studentUserId, request);
     }
 
-    @PostMapping("/{studentUserId}/transfer")
-    @PreAuthorize("hasAuthority('ENROLLMENT_TRANSFER')")
-    public com.owlexa.owlexabackend.modules.enrollment.dto.response.TransferResponse transfer(
-            @PathVariable Long classId,
-            @PathVariable Long studentUserId,
-            @Valid @RequestBody com.owlexa.owlexabackend.modules.enrollment.dto.request.TransferEnrollmentRequest request) {
-        return enrollmentService.transfer(classId, studentUserId, request);
-    }
 }

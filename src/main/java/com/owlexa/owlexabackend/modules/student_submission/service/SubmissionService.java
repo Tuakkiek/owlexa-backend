@@ -15,8 +15,11 @@ import com.owlexa.owlexabackend.modules.assignment.entity.Assignment;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItem;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentItemOption;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
+import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
+import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
+import com.owlexa.owlexabackend.modules.enrollment.service.EnrollmentAccessService;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SaveSubmissionAnswersRequest;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SubmissionAnswerRequest;
@@ -79,6 +82,7 @@ public class SubmissionService {
     private final AIGradingService aiGradingService;
     private final AIGradingOutputReader aiGradingOutputReader;
     private final TeacherReviewRepository teacherReviewRepository;
+    private final EnrollmentAccessService enrollmentAccessService;
 
     @Transactional
     public StudentAttemptDetailResponse startOrResumeAttempt(Long assignmentId, com.owlexa.owlexabackend.modules.student_submission.dto.request.StartAttemptRequest request) {
@@ -87,6 +91,7 @@ public class SubmissionService {
         Instant now = Instant.now();
 
         AssignmentRecipient recipient = findStudentRecipient(assignmentId, student.getId(), centerId);
+        requireWritableRecipientAccess(recipient, student.getId());
         Assignment assignment = recipient.getAssignment();
 
         Optional<SubmissionAttempt> existingAttempt = submissionAttemptRepository
@@ -148,6 +153,7 @@ public class SubmissionService {
 
         SubmissionAttempt attempt = findStudentAttempt(attemptId, student.getId(), centerId);
         requireInProgress(attempt, "Only in-progress attempts can be updated");
+        requireWritableRecipientAccess(attempt.getAssignmentRecipient(), student.getId());
         validateAssignmentStillAccessible(attempt.getAssignmentRecipient().getAssignment());
 
         attempt = finalizeIfExpired(attempt, now);
@@ -169,6 +175,7 @@ public class SubmissionService {
 
         SubmissionAttempt attempt = findStudentAttempt(attemptId, student.getId(), centerId);
         requireInProgress(attempt, "Only in-progress attempts can be updated");
+        requireWritableRecipientAccess(attempt.getAssignmentRecipient(), student.getId());
         validateAssignmentStillAccessible(attempt.getAssignmentRecipient().getAssignment());
 
         attempt = finalizeIfExpired(attempt, now);
@@ -196,6 +203,7 @@ public class SubmissionService {
 
         SubmissionAttempt attempt = findStudentAttempt(attemptId, student.getId(), centerId);
         requireInProgress(attempt, "Only in-progress attempts can be submitted");
+        requireWritableRecipientAccess(attempt.getAssignmentRecipient(), student.getId());
 
         Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
         validateAssignmentStillAccessible(assignment);
@@ -493,6 +501,10 @@ public class SubmissionService {
                 )
                 .orElseThrow(() -> new ResourceNotFoundException("Submission attempt not found with id: " + attemptId));
 
+        if (attempt.getAssignmentRecipient().getStatus() != AssignmentRecipientStatus.ASSIGNED) {
+            throw new ResourceNotFoundException("Submission attempt not found with id: " + attemptId);
+        }
+
         return submissionMapper.toTeacherAttemptDetailResponse(attempt);
     }
 
@@ -715,6 +727,17 @@ public class SubmissionService {
         }
     }
 
+    private void requireWritableRecipientAccess(AssignmentRecipient recipient, Long studentUserId) {
+        if (recipient.getStatus() != AssignmentRecipientStatus.ASSIGNED) {
+            throw new ResourceNotFoundException("Không tìm thấy bài tập với ID: " + recipient.getAssignment().getId());
+        }
+        if (recipient.getSourceType() != AssignmentTargetType.CLASS || recipient.getClazz() == null) {
+            return;
+        }
+
+        enrollmentAccessService.requireActiveEnrollment(recipient.getClazz().getId(), studentUserId);
+    }
+
     private boolean isPastDue(Assignment assignment, Instant now) {
         return assignment.getDueAt() != null && !now.isBefore(assignment.getDueAt());
     }
@@ -771,17 +794,22 @@ public class SubmissionService {
                         studentUserId,
                         centerId
                 )
+                .filter(recipient -> recipient.getStatus() == AssignmentRecipientStatus.ASSIGNED)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài tập với ID: " + assignmentId));
     }
 
     private SubmissionAttempt findStudentAttempt(Long attemptId, Long studentUserId, Long centerId) {
-        return submissionAttemptRepository
+        SubmissionAttempt attempt = submissionAttemptRepository
                 .findByIdAndAssignmentRecipient_StudentUser_IdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
                         attemptId,
                         studentUserId,
                         centerId
                 )
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lượt làm bài với ID: " + attemptId));
+        if (attempt.getAssignmentRecipient().getStatus() != AssignmentRecipientStatus.ASSIGNED) {
+            throw new ResourceNotFoundException("Không tìm thấy lượt làm bài với ID: " + attemptId);
+        }
+        return attempt;
     }
 
     private void requireInProgress(SubmissionAttempt attempt, String message) {

@@ -299,6 +299,7 @@ public class AssignmentService {
                         centerId
                 )
                 .stream()
+                .filter(recipient -> recipient.getStatus() == AssignmentRecipientStatus.ASSIGNED)
                 .map(assignmentMapper::toStudentListResponse)
                 .toList();
     }
@@ -500,12 +501,15 @@ public class AssignmentService {
         Map<Long, AssignmentRecipient> existingByStudentId = new LinkedHashMap<>();
         List<AssignmentRecipient> currentRecipients = new ArrayList<>(assignment.getRecipients());
         for (AssignmentRecipient recipient : currentRecipients) {
-            existingByStudentId.put(recipient.getStudentUser().getId(), recipient);
+            if (recipient.getStatus() == AssignmentRecipientStatus.ASSIGNED) {
+                existingByStudentId.put(recipient.getStudentUser().getId(), recipient);
+            }
         }
 
         for (AssignmentRecipient existing : currentRecipients) {
             Long studentId = existing.getStudentUser().getId();
-            if (!requiredRecipients.containsKey(studentId)) {
+            if (existing.getStatus() == AssignmentRecipientStatus.ASSIGNED
+                    && !requiredRecipients.containsKey(studentId)) {
                 long attemptCount = submissionAttemptRepository.countByAssignmentRecipient_Id(existing.getId());
                 if (attemptCount == 0) {
                     assignment.getRecipients().remove(existing);

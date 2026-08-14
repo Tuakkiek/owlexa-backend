@@ -34,8 +34,7 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
             case ACTIVE -> 0;
             case SUSPENDED -> 1;
             case PENDING -> 2;
-            case TRANSFERRED -> 3;
-            case DROPPED -> 4;
+            case DROPPED -> 3;
         };
     }
 
