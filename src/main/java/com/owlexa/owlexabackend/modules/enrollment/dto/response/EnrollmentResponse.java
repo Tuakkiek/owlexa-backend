@@ -30,7 +30,4 @@ public class EnrollmentResponse {
     private DropReason dropReason;
     private Instant droppedAt;
 
-    // Transfer fields
-    private Long transferredToEnrollmentId;
-    private Long transferredFromEnrollmentId;
 }

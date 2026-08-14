@@ -326,7 +326,7 @@ class RoomServiceTest {
 
         assertThatThrownBy(() -> service.delete(ROOM_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("dang duoc su dung trong lich hoc");
+                .hasMessageContaining("đang được sử dụng trong lịch học");
     }
 
     private Center buildCenter(Long id) {

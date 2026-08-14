@@ -328,28 +328,28 @@ public class ClassService {
                 TransactionStatus.ACTIVE
         );
         if (settledFeeRecords > 0 || activePayments > 0) {
-            blockers.add("da co hoc phi duoc ghi nhan");
+            blockers.add("đã có học phí được ghi nhận");
         }
 
         long attendanceCount = attendanceRepository.countByClassId(classId, centerId);
         if (attendanceCount > 0) {
-            blockers.add("da co diem danh");
+            blockers.add("đã có điểm danh");
         }
 
         long documentCount = studentDocumentRepository.countByClazz_IdAndCenter_Id(classId, centerId);
         if (documentCount > 0) {
-            blockers.add("da co tai lieu hoc vien");
+            blockers.add("đã có tài liệu học viên");
         }
 
         long assignmentCount =
                 assignmentTargetRepository.countByClazz_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(classId, centerId)
                         + assignmentRecipientRepository.countByClazz_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(classId, centerId);
         if (assignmentCount > 0) {
-            blockers.add("da co bai tap/kiem tra gan voi lop");
+            blockers.add("đã có bài tập/kiểm tra gắn với lớp");
         }
 
         if (!blockers.isEmpty()) {
-            throw new BusinessRuleException("Khong the xoa lop hoc vi " + String.join(", ", blockers) + ".");
+            throw new BusinessRuleException("Không thể xóa lớp học vì " + String.join(", ", blockers) + ".");
         }
     }
 

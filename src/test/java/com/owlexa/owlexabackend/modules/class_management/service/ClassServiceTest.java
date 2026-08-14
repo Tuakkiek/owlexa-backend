@@ -464,7 +464,7 @@ class ClassServiceTest {
     }
 
     @Test
-    @DisplayName("delete: class da co hoc phi duoc ghi nhan -> BusinessRuleException")
+    @DisplayName("delete: class đã có học phí được ghi nhận -> BusinessRuleException")
     void delete_whenClassHasSettledFees_shouldThrowBusinessRule() {
         Class existing = buildClass(CLASS_ID, CENTER_ID, "Class A", ClassStatus.ACTIVE);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(existing));
@@ -472,7 +472,7 @@ class ClassServiceTest {
 
         assertThatThrownBy(() -> service.delete(CLASS_ID))
                 .isInstanceOf(BusinessRuleException.class)
-                .hasMessageContaining("hoc phi");
+                .hasMessageContaining("học phí");
 
         org.mockito.Mockito.verify(classRepository, org.mockito.Mockito.never()).delete(any(Class.class));
     }

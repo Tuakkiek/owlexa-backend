@@ -176,11 +176,22 @@ public class GlobalExceptionHandler {
                     null
             ));
         }
+        if (containsMessage(ex, "uq_class_enrollments_class_student")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(conflictBody(
+                    "ENROLLMENT_ALREADY_EXISTS",
+                    "Học viên đã có hồ sơ ghi danh trong lớp này."
+            ));
+        }
+        if (containsMessage(ex, "uq_fee_records_student_class_month")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(conflictBody(
+                    "FEE_RECORD_ALREADY_EXISTS",
+                    "Học phí của học viên cho lớp và kỳ này đã tồn tại."
+            ));
+        }
         if (containsMessage(ex, "Duplicate entry")) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(errorBody(
-                    409,
-                    "Dữ liệu đã tồn tại hoặc thao tác vừa được xử lý trước đó.",
-                    null
+            return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(conflictBody(
+                    "DATA_DUPLICATE",
+                    "Dữ liệu đã tồn tại hoặc thao tác vừa được xử lý trước đó."
             ));
         }
         return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(errorBody(
@@ -241,6 +252,15 @@ public class GlobalExceptionHandler {
         if (errors != null && !errors.isEmpty()) {
             body.put("errors", errors);
         }
+        return body;
+    }
+
+    private Map<String, Object> conflictBody(String code, String message) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now());
+        body.put("status", 409);
+        body.put("code", code);
+        body.put("message", message);
         return body;
     }
 
