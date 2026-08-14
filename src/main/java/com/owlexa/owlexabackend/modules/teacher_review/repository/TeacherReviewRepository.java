@@ -109,6 +109,7 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
+                      AND attempt.assignmentRecipient.status = com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED
                       AND attempt.status IN :submissionStatuses
                     """,
             countQuery = """
@@ -117,6 +118,7 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
+                      AND attempt.assignmentRecipient.status = com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED
                       AND attempt.status IN :submissionStatuses
                     """
     )
@@ -138,6 +140,7 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
+                      AND attempt.assignmentRecipient.status = com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED
                       AND attempt.status IN :submissionStatuses
                       AND NOT EXISTS (
                           SELECT review.id
@@ -151,6 +154,7 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
+                      AND attempt.assignmentRecipient.status = com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED
                       AND attempt.status IN :submissionStatuses
                       AND NOT EXISTS (
                           SELECT review.id
@@ -177,6 +181,7 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
+                      AND attempt.assignmentRecipient.status = com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED
                       AND attempt.status IN :submissionStatuses
                       AND EXISTS (
                           SELECT review.id
@@ -191,6 +196,7 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
                     WHERE attempt.assignmentRecipient.assignment.id = :assignmentId
                       AND attempt.assignmentRecipient.assignment.center.id = :centerId
                       AND attempt.assignmentRecipient.assignment.deletedAt IS NULL
+                      AND attempt.assignmentRecipient.status = com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED
                       AND attempt.status IN :submissionStatuses
                       AND EXISTS (
                           SELECT review.id
@@ -208,3 +214,4 @@ public interface TeacherReviewRepository extends JpaRepository<TeacherReview, Lo
             Pageable pageable
     );
 }
+

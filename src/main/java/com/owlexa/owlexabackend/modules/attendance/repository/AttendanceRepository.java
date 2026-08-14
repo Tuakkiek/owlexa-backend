@@ -3,6 +3,7 @@ package com.owlexa.owlexabackend.modules.attendance.repository;
 import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -41,6 +42,22 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     );
 
     void deleteByCenter_Id(Long centerId);
+
+    @Modifying
+    @Query("""
+            DELETE FROM Attendance a
+            WHERE a.studentUser.id = :studentUserId
+              AND a.center.id = :centerId
+              AND (
+                  a.schedule.clazz.id = :classId
+                  OR a.scheduleEvent.clazz.id = :classId
+              )
+            """)
+    void deleteLearningHistoryByStudentAndClass(
+            @Param("studentUserId") Long studentUserId,
+            @Param("classId") Long classId,
+            @Param("centerId") Long centerId
+    );
 
     @Query("SELECT COUNT(a) FROM Attendance a " +
            "LEFT JOIN a.schedule s " +

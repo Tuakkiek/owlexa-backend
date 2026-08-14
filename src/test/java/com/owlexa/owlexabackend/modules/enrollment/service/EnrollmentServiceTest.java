@@ -16,9 +16,7 @@ import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepo
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRecurringRuleRepository;
 import com.owlexa.owlexabackend.modules.course.entity.Course;
 import com.owlexa.owlexabackend.modules.enrollment.dto.request.EnrollmentRequest;
-import com.owlexa.owlexabackend.modules.enrollment.dto.request.TransferEnrollmentRequest;
 import com.owlexa.owlexabackend.modules.enrollment.dto.response.EnrollmentResponse;
-import com.owlexa.owlexabackend.modules.enrollment.dto.response.TransferResponse;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
 import com.owlexa.owlexabackend.modules.enrollment.repository.ClassEnrollmentRepository;
@@ -65,8 +63,8 @@ class EnrollmentServiceTest {
     @Mock private ScheduleEventRepository scheduleEventRepository;
     @Mock private ScheduleRecurringRuleRepository scheduleRecurringRuleRepository;
     @Mock private com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository auditLogRepository;
-    @Mock private com.owlexa.owlexabackend.modules.payment.repository.RefundRepository refundRepository;
-    @Mock private com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository paymentRepository;
+    @Mock private com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository attendanceRepository;
+    @Mock private com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository assignmentRecipientRepository;
 
     private EnrollmentService service;
 
@@ -83,7 +81,7 @@ class EnrollmentServiceTest {
                 classEnrollmentRepository, classRepository, userRepository,
                 membershipRepository, feeRecordRepository, scheduleRepository,
                 scheduleEventRepository, scheduleRecurringRuleRepository,
-                auditLogRepository, refundRepository, paymentRepository
+                auditLogRepository, attendanceRepository, assignmentRecipientRepository
         );
         TenantContext.setCurrentTenantId(CENTER_ID);
 
@@ -97,6 +95,8 @@ class EnrollmentServiceTest {
         owner.setRole(Role.OWNER);
         lenient().when(userRepository.findByPhoneNumber(OWNER_PHONE)).thenReturn(Optional.of(owner));
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(OWNER_ID, CENTER_ID)).thenReturn(true);
+        lenient().when(classRepository.findByIdForEnrollmentUpdate(any()))
+                .thenAnswer(invocation -> classRepository.findById(invocation.getArgument(0)));
     }
 
     @AfterEach
@@ -242,85 +242,6 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("transfer: lớp đích đã có enrollment DROPPED → tái sử dụng row, không insert trùng")
-    void transfer_whenTargetHasDroppedEnrollment_shouldReuseExistingRow() {
-        ClassEnrollment source = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
-        Class targetClass = buildClass(60L, CENTER_ID);
-        ClassEnrollment target = buildEnrollment(2L, STUDENT_ID, EnrollmentStatus.DROPPED);
-        target.setClazz(targetClass);
-
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
-                .thenReturn(Optional.of(source));
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(60L, STUDENT_ID))
-                .thenReturn(Optional.of(target));
-        when(classRepository.findById(60L)).thenReturn(Optional.of(targetClass));
-        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(eq(60L), any())).thenReturn(0L);
-        when(classEnrollmentRepository.save(any(ClassEnrollment.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(
-                eq(STUDENT_ID), eq(60L), org.mockito.ArgumentMatchers.anyString()))
-                .thenReturn(Optional.empty());
-
-        TransferResponse response = service.transfer(CLASS_ID, STUDENT_ID,
-                new TransferEnrollmentRequest(60L, "target has history"));
-
-        assertThat(response.getNewEnrollment().getId()).isEqualTo(2L);
-        assertThat(target.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
-        assertThat(source.getStatus()).isEqualTo(EnrollmentStatus.TRANSFERRED);
-    }
-
-    @Test
-    @DisplayName("transfer: lớp đích đã có enrollment ACTIVE → từ chối trước khi đổi lớp nguồn")
-    void transfer_whenTargetHasActiveEnrollment_shouldRejectWithoutChangingSource() {
-        ClassEnrollment source = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
-        Class targetClass = buildClass(60L, CENTER_ID);
-        ClassEnrollment target = buildEnrollment(2L, STUDENT_ID, EnrollmentStatus.ACTIVE);
-        target.setClazz(targetClass);
-
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
-                .thenReturn(Optional.of(source));
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(60L, STUDENT_ID))
-                .thenReturn(Optional.of(target));
-        when(classRepository.findById(60L)).thenReturn(Optional.of(targetClass));
-        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(eq(60L), any())).thenReturn(0L);
-
-        assertThatThrownBy(() -> service.transfer(CLASS_ID, STUDENT_ID,
-                new TransferEnrollmentRequest(60L, null)))
-                .isInstanceOf(DuplicateResourceException.class);
-        assertThat(source.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
-    }
-
-    @Test
-    @DisplayName("enroll: lịch lặp khác ngày không bị coi là trùng")
-    void enroll_whenRecurringDaysDoNotOverlap_shouldSucceed() {
-        Class clazz = buildClass(CLASS_ID, CENTER_ID);
-        User student = buildStudent(STUDENT_ID);
-        ClassEnrollment existing = buildEnrollment(2L, STUDENT_ID, EnrollmentStatus.ACTIVE);
-        existing.setClazz(buildClass(60L, CENTER_ID));
-
-        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
-        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(student));
-        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.empty());
-        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(eq(CLASS_ID), any())).thenReturn(0L);
-        when(classEnrollmentRepository.findAllByStudentUser_IdAndCenter_IdAndStatusIn(
-                eq(STUDENT_ID), eq(CENTER_ID), any()))
-                .thenReturn(List.of(existing));
-        when(scheduleRepository.findAllByClazz_IdAndCenter_Id(any(), eq(CENTER_ID))).thenReturn(List.of());
-        when(scheduleEventRepository.findAllByClazz_IdAndCenter_IdOrderByEventDateAscStartTimeAsc(any(), eq(CENTER_ID)))
-                .thenReturn(List.of());
-        when(scheduleRecurringRuleRepository.findAllByClazz_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(CLASS_ID, CENTER_ID))
-                .thenReturn(List.of(buildRule(CLASS_ID, "2,4,6", LocalDate.of(2026, 8, 1),
-                        LocalDate.of(2026, 9, 30), LocalTime.of(18, 0), LocalTime.of(20, 0))));
-        when(scheduleRecurringRuleRepository.findAllByClazz_IdAndCenter_IdOrderByStartDateAscStartTimeAsc(60L, CENTER_ID))
-                .thenReturn(List.of(buildRule(60L, "1,3,5", LocalDate.of(2026, 8, 1),
-                        LocalDate.of(2026, 9, 30), LocalTime.of(18, 0), LocalTime.of(20, 0))));
-        stubEnrollmentFeeCreation();
-
-        assertThat(service.enroll(CLASS_ID, buildEnrollRequest()).getStatus())
-                .isEqualTo(EnrollmentStatus.ACTIVE);
-    }
-
-    @Test
     @DisplayName("enroll: lịch lặp cùng ngày và giao giờ bị từ chối")
     void enroll_whenRecurringSchedulesOverlap_shouldThrowStudentConflict() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID);
@@ -440,8 +361,8 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("enroll: khôi phục DROPPED → mở lại cả học phí CANCELLED của tháng cũ")
-    void enroll_whenRestoringDroppedEnrollment_shouldReactivateCancelledFeesFromPreviousMonths() {
+    @DisplayName("enroll: khôi phục DROPPED → không mở lại học phí CANCELLED của tháng cũ")
+    void enroll_whenRestoringDroppedEnrollment_shouldKeepPreviousMonthCancelledFeesClosed() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
@@ -460,8 +381,6 @@ class EnrollmentServiceTest {
                 .paidAmount(java.math.BigDecimal.ZERO)
                 .month("2026-07")
                 .build();
-        when(feeRecordRepository.findAllByStudentUser_IdAndClazz_Id(STUDENT_ID, CLASS_ID))
-                .thenReturn(List.of(oldCancelledFee));
         when(feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(
                 eq(STUDENT_ID), eq(CLASS_ID), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(Optional.empty());
@@ -470,8 +389,8 @@ class EnrollmentServiceTest {
 
         service.enroll(CLASS_ID, buildEnrollRequest());
 
-        assertThat(oldCancelledFee.getStatus()).isEqualTo(FeeStatus.UNPAID);
-        org.mockito.Mockito.verify(feeRecordRepository).save(oldCancelledFee);
+        assertThat(oldCancelledFee.getStatus()).isEqualTo(FeeStatus.CANCELLED);
+        org.mockito.Mockito.verify(feeRecordRepository, org.mockito.Mockito.never()).save(oldCancelledFee);
     }
 
     @Test
@@ -499,17 +418,44 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("enroll: student đã enroll rồi → DuplicateResourceException")
-    void enroll_whenStudentAlreadyEnrolled_shouldThrowDuplicate() {
+    @DisplayName("enroll: student đã ACTIVE rồi → trả lại enrollment hiện tại")
+    void enroll_whenStudentAlreadyActive_shouldReturnExistingEnrollment() {
         Class clazz = buildClass(CLASS_ID, CENTER_ID);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
-        ClassEnrollment enrollment = new ClassEnrollment();
-        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID)).thenReturn(Optional.of(enrollment));
 
-        assertThatThrownBy(() -> service.enroll(CLASS_ID, buildEnrollRequest()))
-                .isInstanceOf(DuplicateResourceException.class);
+        EnrollmentResponse response = service.enroll(CLASS_ID, buildEnrollRequest());
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
+        org.mockito.Mockito.verify(classEnrollmentRepository, org.mockito.Mockito.never())
+                .save(any(ClassEnrollment.class));
+    }
+
+    @Test
+    @DisplayName("enroll: enrollment DROPPED cũ → khôi phục row, không insert trùng natural key")
+    void enroll_whenDroppedHistoryExists_shouldRestoreExistingRow() {
+        Class clazz = buildClass(CLASS_ID, CENTER_ID);
+        ClassEnrollment droppedHistory = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.DROPPED);
+
+        when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
+        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
+        when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
+                .thenReturn(Optional.of(droppedHistory));
+        when(classEnrollmentRepository.countByClazz_IdAndStatusIn(eq(CLASS_ID), any())).thenReturn(0L);
+        when(classEnrollmentRepository.save(any(ClassEnrollment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(feeRecordRepository.findByStudentUser_IdAndClazz_IdAndMonth(
+                eq(STUDENT_ID), eq(CLASS_ID), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(Optional.empty());
+
+        EnrollmentResponse response = service.enroll(CLASS_ID, buildEnrollRequest());
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(droppedHistory.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
+        org.mockito.Mockito.verify(classEnrollmentRepository).save(droppedHistory);
     }
 
     @Test
@@ -649,13 +595,25 @@ class EnrollmentServiceTest {
         Class clazz = buildClass(CLASS_ID, CENTER_ID);
         when(classRepository.findById(CLASS_ID)).thenReturn(Optional.of(clazz));
         ClassEnrollment enrollment = buildEnrollment(1L, STUDENT_ID, EnrollmentStatus.ACTIVE);
+        var recipient = new com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient();
+        recipient.setStatus(com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(CLASS_ID, STUDENT_ID))
                 .thenReturn(Optional.of(enrollment));
         when(classEnrollmentRepository.save(any(ClassEnrollment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(assignmentRecipientRepository.findAllByStudentUser_IdAndClazz_IdAndSourceTypeAndStatus(
+                eq(STUDENT_ID),
+                eq(CLASS_ID),
+                eq(com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType.CLASS),
+                eq(com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.ASSIGNED)))
+                .thenReturn(List.of(recipient));
 
         service.drop(CLASS_ID, STUDENT_ID);
 
         assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.DROPPED);
+        assertThat(recipient.getStatus())
+                .isEqualTo(com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus.REVOKED);
+        org.mockito.Mockito.verify(attendanceRepository)
+                .deleteLearningHistoryByStudentAndClass(STUDENT_ID, CLASS_ID, CENTER_ID);
     }
 
     @Test
@@ -695,3 +653,4 @@ class EnrollmentServiceTest {
                 .hasMessageContaining("Không xác định được trung tâm hiện tại");
     }
 }
+

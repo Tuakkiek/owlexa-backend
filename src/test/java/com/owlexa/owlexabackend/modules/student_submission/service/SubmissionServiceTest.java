@@ -21,6 +21,7 @@ import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRep
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingOutputReader;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingService;
+import com.owlexa.owlexabackend.modules.enrollment.service.EnrollmentAccessService;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SaveSubmissionAnswersRequest;
 import com.owlexa.owlexabackend.modules.student_submission.dto.request.SubmissionAnswerRequest;
@@ -78,6 +79,7 @@ class SubmissionServiceTest {
     @Mock private AIGradingResultRepository aiGradingResultRepository;
     @Mock private AIGradingService aiGradingService;
     @Mock private TeacherReviewRepository teacherReviewRepository;
+    @Mock private EnrollmentAccessService enrollmentAccessService;
 
     private SubmissionService service;
 
@@ -114,7 +116,8 @@ class SubmissionServiceTest {
                 aiGradingResultRepository,
                 aiGradingService,
                 new AIGradingOutputReader(new GeminiGradingResultParser(new ObjectMapper())),
-                teacherReviewRepository
+                teacherReviewRepository,
+                enrollmentAccessService
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -177,6 +180,41 @@ class SubmissionServiceTest {
         assertThat(response.getAssignmentContent().toString()).contains("PART 3");
         assertThat(response.getAssignmentContent().toString()).contains("Directions");
         verify(submissionAttemptRepository).save(any(SubmissionAttempt.class));
+    }
+
+    @Test
+    @DisplayName("start: class-scoped assignment requires ACTIVE enrollment")
+    void startOrResume_whenClassScoped_shouldRequireActiveEnrollment() {
+        Assignment assignment = activeAssignment(null, null, 3);
+        AssignmentRecipient recipient = classRecipient(assignment);
+        when(assignmentRecipientRepository.findByAssignment_IdAndStudentUser_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
+                ASSIGNMENT_ID, STUDENT_ID, CENTER_ID)).thenReturn(Optional.of(recipient));
+        when(submissionAttemptRepository.findByAssignmentRecipient_IdAndStatus(RECIPIENT_ID, SubmissionAttemptStatus.IN_PROGRESS))
+                .thenReturn(Optional.empty());
+        when(submissionAttemptRepository.countByAssignmentRecipient_Id(RECIPIENT_ID)).thenReturn(0L);
+        when(submissionAttemptRepository.findTopByAssignmentRecipient_IdOrderByAttemptNumberDesc(RECIPIENT_ID))
+                .thenReturn(Optional.empty());
+        when(submissionAttemptRepository.save(any(SubmissionAttempt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.startOrResumeAttempt(ASSIGNMENT_ID, null);
+
+        verify(enrollmentAccessService).requireActiveEnrollment(90L, STUDENT_ID);
+    }
+
+    @Test
+    @DisplayName("save: class-scoped assignment blocks write when enrollment is not ACTIVE")
+    void saveAnswers_whenClassEnrollmentInactive_shouldThrowAccessDenied() {
+        Assignment assignment = activeAssignment(null, null, null);
+        AssignmentRecipient recipient = classRecipient(assignment);
+        SubmissionAttempt attempt = attempt(recipient, SubmissionAttemptStatus.IN_PROGRESS, 1);
+        whenStudentAttemptFound(attempt);
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Học viên hiện không còn quyền làm bài của lớp."))
+                .when(enrollmentAccessService).requireActiveEnrollment(90L, STUDENT_ID);
+
+        assertThatThrownBy(() -> service.saveAnswers(
+                ATTEMPT_ID,
+                SaveSubmissionAnswersRequest.builder().answers(List.of()).build()
+        )).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -707,6 +745,19 @@ class SubmissionServiceTest {
                 .assignedAt(Instant.now())
                 .build();
         recipient.setId(RECIPIENT_ID);
+        return recipient;
+    }
+
+    private AssignmentRecipient classRecipient(Assignment assignment) {
+        com.owlexa.owlexabackend.modules.class_management.entity.Class clazz =
+                new com.owlexa.owlexabackend.modules.class_management.entity.Class();
+        clazz.setId(90L);
+        clazz.setName("Class 90");
+        clazz.setCenter(center);
+
+        AssignmentRecipient recipient = recipient(assignment);
+        recipient.setSourceType(AssignmentTargetType.CLASS);
+        recipient.setClazz(clazz);
         return recipient;
     }
 
