@@ -44,14 +44,15 @@ public class FeeRecordService {
     }
 
     /** Statuses that indicate the student still owes money (used for unpaid/overdue lists). */
-    private static final List<FeeStatus> NOT_FULLY_PAID = List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL);
+    private static final List<FeeStatus> NOT_FULLY_PAID =
+            List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE);
 
     /**
      * Includes CANCELLED only for repairing rows left behind by a drop/enroll
      * race. The repository query still requires an active enrollment.
      */
     private static final List<FeeStatus> PENDING_WITH_RECOVERY =
-            List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.CANCELLED);
+            List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE, FeeStatus.CANCELLED);
 
     @Transactional(readOnly = true)
     public List<FeeRecordResponse> findAllOverdue() {

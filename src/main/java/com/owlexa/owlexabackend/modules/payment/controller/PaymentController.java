@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.payment.controller;
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.payment.dto.request.CashPaymentRequest;
 import com.owlexa.owlexabackend.modules.payment.dto.response.BankTransferQrResponse;
+import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentHistoryResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentSummaryResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.TimelineEntryResponse;
@@ -142,6 +143,11 @@ public class PaymentController {
         return paymentService.findMyPayments();
     }
 
+    @GetMapping("/student/payments/history")
+    public List<PaymentHistoryResponse> findMyPaymentHistory() {
+        return paymentService.findMyPaymentHistory();
+    }
+
     @GetMapping({
             "/owner/payments",
             "/cashier/payments"
@@ -161,6 +167,24 @@ public class PaymentController {
     }
 
     @GetMapping({
+            "/owner/payments/history",
+            "/cashier/payments/history"
+    })
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
+    public Page<PaymentHistoryResponse> findPaymentHistoryPaginated(
+            @RequestParam(required = false) String student,
+            @RequestParam(required = false) Long cashierId,
+            @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable
+    ) {
+        Long centerId = TenantContext.getCurrentTenantId();
+        return paymentService.findPaymentHistoryPaginated(centerId, student, cashierId, method, status, startDate, endDate, pageable);
+    }
+
+    @GetMapping({
             "/owner/payments/summary",
             "/cashier/payments/summary"
     })
@@ -175,6 +199,23 @@ public class PaymentController {
     ) {
         Long centerId = TenantContext.getCurrentTenantId();
         return paymentService.getPaymentSummary(centerId, student, cashierId, method, status, startDate, endDate);
+    }
+
+    @GetMapping({
+            "/owner/payments/history/summary",
+            "/cashier/payments/history/summary"
+    })
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
+    public PaymentSummaryResponse getPaymentHistorySummary(
+            @RequestParam(required = false) String student,
+            @RequestParam(required = false) Long cashierId,
+            @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate
+    ) {
+        Long centerId = TenantContext.getCurrentTenantId();
+        return paymentService.getPaymentHistorySummary(centerId, student, cashierId, method, status, startDate, endDate);
     }
 
 

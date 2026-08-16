@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.payment.service;
 
+import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
 import com.owlexa.owlexabackend.modules.payment.dto.request.SePayWebhookRequest;
 import com.owlexa.owlexabackend.modules.payment.entity.SePayEventStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.SePayWebhookEvent;
@@ -86,6 +87,18 @@ public class SePayWebhookService {
             log.debug("[SEPAY-WEBHOOK] CONFIRMED: paymentId={} for sepayTxId={}",
                     paymentId, event.getSepayTransactionId());
             // ── END TEMPORARY DEBUG ──
+        } catch (BusinessRuleException e) {
+            if (PaymentService.DUPLICATE_PAYMENT_CODE.equals(e.getCode())) {
+                log.warn("[SEPAY-WEBHOOK] Duplicate payment detected for webhook id={} paymentId={}: {}",
+                        req.getId(), paymentId, e.getMessage());
+                event.setProcessingStatus(SePayEventStatus.DUPLICATE_PAYMENT);
+                event.setProcessingNote(e.getMessage());
+            } else {
+                log.error("[SEPAY-WEBHOOK] Failed to process SePay webhook id={} for paymentId={}",
+                        req.getId(), paymentId, e);
+                event.setProcessingStatus(SePayEventStatus.FAILED);
+                event.setProcessingNote("Error: " + e.getMessage());
+            }
         } catch (Exception e) {
             log.error("[SEPAY-WEBHOOK] Failed to process SePay webhook id={} for paymentId={}",
                     req.getId(), paymentId, e);
