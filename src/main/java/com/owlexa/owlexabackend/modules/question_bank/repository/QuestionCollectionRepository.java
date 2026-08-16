@@ -8,18 +8,19 @@ import java.util.Optional;
 
 public interface QuestionCollectionRepository extends JpaRepository<QuestionCollection, Long> {
 
-    List<QuestionCollection> findAllByCenter_IdAndDeletedAtIsNullOrderByNameAsc(Long centerId);
+    List<QuestionCollection> findAllByCenter_IdAndCreatedBy_IdAndDeletedAtIsNullOrderByNameAsc(Long centerId, Long createdById);
 
-    Optional<QuestionCollection> findByIdAndCenter_IdAndDeletedAtIsNull(Long id, Long centerId);
+    Optional<QuestionCollection> findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(Long id, Long centerId, Long createdById);
 
-    Optional<QuestionCollection> findByCodeAndCenter_IdAndDeletedAtIsNull(String code, Long centerId);
+    Optional<QuestionCollection> findByCodeAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(String code, Long centerId, Long createdById);
 
-    boolean existsByCenter_IdAndCode(Long centerId, String code);
+    boolean existsByCenter_IdAndCreatedBy_IdAndCode(Long centerId, Long createdById, String code);
 
-    boolean existsByCenter_IdAndNameIgnoreCaseAndDeletedAtIsNull(Long centerId, String name);
+    boolean existsByCenter_IdAndCreatedBy_IdAndNameIgnoreCaseAndDeletedAtIsNull(Long centerId, Long createdById, String name);
 
-    boolean existsByCenter_IdAndNameIgnoreCaseAndDeletedAtIsNullAndIdNot(
+    boolean existsByCenter_IdAndCreatedBy_IdAndNameIgnoreCaseAndDeletedAtIsNullAndIdNot(
             Long centerId,
+            Long createdById,
             String name,
             Long id
     );

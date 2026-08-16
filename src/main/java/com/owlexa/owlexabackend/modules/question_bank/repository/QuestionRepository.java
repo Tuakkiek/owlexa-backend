@@ -22,10 +22,18 @@ public interface QuestionRepository extends JpaRepository<Question, Long>, JpaSp
     Page<Question> findAll(Specification<Question> specification, Pageable pageable);
 
     @EntityGraph(attributePaths = {"collection", "gradingCriteria", "options"})
-    Optional<Question> findByIdAndCenter_IdAndDeletedAtIsNull(Long id, Long centerId);
+    Optional<Question> findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(
+            Long id,
+            Long centerId,
+            Long collectionCreatedById
+    );
 
     @EntityGraph(attributePaths = {"collection", "gradingCriteria", "options"})
-    List<Question> findAllByIdInAndCenter_IdAndDeletedAtIsNull(Collection<Long> ids, Long centerId);
+    List<Question> findAllByIdInAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(
+            Collection<Long> ids,
+            Long centerId,
+            Long collectionCreatedById
+    );
 
     boolean existsByCollection_IdAndDeletedAtIsNull(Long collectionId);
 

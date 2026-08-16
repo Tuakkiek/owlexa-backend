@@ -169,4 +169,27 @@ public interface ScheduleEventRepository extends JpaRepository<ScheduleEvent, Lo
             @Param("excludeEventId") Long excludeEventId,
             @Param("excludeClassId") Long excludeClassId
     );
+
+    @Query("""
+            SELECT e FROM ScheduleEvent e
+            WHERE e.center.id = :centerId
+              AND e.eventDate = :eventDate
+              AND e.status <> :cancelledStatus
+              AND e.clazz.id IN (
+                    SELECT ce.clazz.id FROM ClassEnrollment ce
+                    WHERE ce.studentUser.id = :studentId
+                      AND ce.status IN (
+                            com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.ACTIVE,
+                            com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.PENDING,
+                            com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus.SUSPENDED
+                      )
+              )
+            ORDER BY e.startTime ASC
+            """)
+    List<ScheduleEvent> findStudentEventsByDate(
+            @Param("centerId") Long centerId,
+            @Param("studentId") Long studentId,
+            @Param("eventDate") LocalDate eventDate,
+            @Param("cancelledStatus") ScheduleEventStatus cancelledStatus
+    );
 }

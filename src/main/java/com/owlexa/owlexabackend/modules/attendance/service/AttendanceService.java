@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -159,6 +160,37 @@ public class AttendanceService {
                 .absentCount(absentCount)
                 .lateCount(lateCount)
                 .excusedCount(excusedCount)
+                .build());
+        }
+        
+        return responses;
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.owlexa.owlexabackend.modules.attendance.dto.response.StudentClassSessionResponse> findStudentClassSessionsByDate(LocalDate date) {
+        User currentUser = getCurrentUser();
+        Long studentUserId = currentUser.getId();
+        Long centerId = requiredCurrentCenterId();
+        
+        List<ScheduleEvent> events = scheduleEventRepository
+            .findStudentEventsByDate(centerId, studentUserId, date, ScheduleEventStatus.CANCELLED);
+            
+        List<com.owlexa.owlexabackend.modules.attendance.dto.response.StudentClassSessionResponse> responses = new ArrayList<>();
+        
+        for (ScheduleEvent event : events) {
+            Optional<Attendance> attendanceOpt = attendanceRepository.findByScheduleEvent_IdAndStudentUser_IdAndDate(
+                event.getId(), studentUserId, date);
+                
+            responses.add(com.owlexa.owlexabackend.modules.attendance.dto.response.StudentClassSessionResponse.builder()
+                .scheduleEventId(event.getId())
+                .classId(event.getClazz().getId())
+                .className(event.getClazz().getName())
+                .roomName(event.getRoom() != null ? event.getRoom().getName() : null)
+                .teacherName(event.getTeacherUser() != null ? event.getTeacherUser().getFullName() : null)
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .attendanceStatus(attendanceOpt.map(Attendance::getStatus).orElse(null))
+                .note(attendanceOpt.map(Attendance::getNote).orElse(null))
                 .build());
         }
         
