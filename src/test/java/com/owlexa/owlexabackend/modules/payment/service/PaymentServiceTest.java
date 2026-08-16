@@ -11,11 +11,13 @@ import com.owlexa.owlexabackend.modules.payment.entity.FeeRecord;
 import com.owlexa.owlexabackend.modules.payment.entity.FeeStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
+import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.SePayWebhookEventRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -32,6 +34,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -40,6 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +59,7 @@ class PaymentServiceTest {
     @Mock private RefundRepository refundRepository;
     @Mock private ClassEnrollmentRepository classEnrollmentRepository;
     @Mock private BankTransferQrService bankTransferQrService;
+    @Mock private SePayWebhookEventRepository sePayWebhookEventRepository;
 
     private PaymentService paymentService;
 
@@ -65,7 +71,7 @@ class PaymentServiceTest {
         paymentService = new PaymentService(
                 userRepository, membershipRepository, feeRecordRepository, paymentRepository,
                 auditLogRepository, installmentRepository, refundRepository,
-                classEnrollmentRepository, bankTransferQrService
+                classEnrollmentRepository, bankTransferQrService, sePayWebhookEventRepository
         );
         TenantContext.setCurrentTenantId(CURRENT_CENTER_ID);
 
@@ -85,6 +91,10 @@ class PaymentServiceTest {
                 });
         lenient().when(paymentRepository.findMaxReceiptNumberByPrefix(any(String.class)))
                 .thenReturn(null);
+        lenient().when(paymentRepository.findValidPendingByFeeRecordAndStudent(any(Long.class), any(Long.class), any(Instant.class)))
+                .thenReturn(List.of());
+        lenient().when(paymentRepository.findExpiredPendingByFeeRecordAndStudent(any(Long.class), any(Long.class), any(Instant.class)))
+                .thenReturn(List.of());
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("0901234567", null, List.of())
@@ -128,11 +138,32 @@ class PaymentServiceTest {
         return req;
     }
 
+    private Payment buildPendingPayment(Long id, FeeRecord feeRecord, BigDecimal amount) {
+        User collector = new User();
+        collector.setId(10L);
+        collector.setPhoneNumber("0901234567");
+        collector.setRole(Role.CASHIER);
+
+        Payment payment = new Payment();
+        payment.setId(id);
+        payment.setReceiptNumber("RCP-20260817-000001");
+        payment.setFeeRecord(feeRecord);
+        payment.setCenter(feeRecord.getCenter());
+        payment.setStudentUser(feeRecord.getStudentUser());
+        payment.setCollectedByUser(collector);
+        payment.setAmount(amount);
+        payment.setMethod(PaymentMethod.SEPAY);
+        payment.setStatus(TransactionStatus.PENDING);
+        payment.setSepayRef("OWX" + String.format("%06d", id));
+        payment.setExpiresAt(Instant.now().plusSeconds(600));
+        return payment;
+    }
+
     @Test
     @DisplayName("collectCash: fee record thuộc center khác → TenancyViolationException")
     void collectCash_whenFeeRecordBelongsToOtherCenter_shouldThrowTenancyViolation() {
         FeeRecord feeRecord = buildFeeRecord(99L, OTHER_CENTER_ID, new BigDecimal("1000"), BigDecimal.ZERO);
-        when(feeRecordRepository.findById(99L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(99L)).thenReturn(Optional.of(feeRecord));
 
         assertThatThrownBy(() -> paymentService.collectCash(99L, buildRequest(new BigDecimal("100"))))
                 .isInstanceOf(TenancyViolationException.class);
@@ -143,7 +174,7 @@ class PaymentServiceTest {
     void collectCash_whenAmountExceedsRemaining_shouldThrowBusinessRule() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), new BigDecimal("800"));
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         assertThatThrownBy(() -> paymentService.collectCash(50L, buildRequest(new BigDecimal("500"))))
                 .isInstanceOf(BusinessRuleException.class)
@@ -155,7 +186,7 @@ class PaymentServiceTest {
     void collectCash_whenAmountIsZero_shouldThrowBadRequest() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), BigDecimal.ZERO);
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         assertThatThrownBy(() -> paymentService.collectCash(50L, buildRequest(BigDecimal.ZERO)))
                 .isInstanceOf(com.owlexa.owlexabackend.common.exception.BadRequestException.class);
@@ -164,7 +195,7 @@ class PaymentServiceTest {
     @Test
     @DisplayName("collectCash: fee record không tồn tại → ResourceNotFoundException")
     void collectCash_whenFeeRecordNotFound_shouldThrowResourceNotFound() {
-        when(feeRecordRepository.findById(404L)).thenReturn(Optional.empty());
+        when(paymentRepository.findFeeRecordByIdForUpdate(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentService.collectCash(404L, buildRequest(new BigDecimal("100"))))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -175,7 +206,7 @@ class PaymentServiceTest {
     void collectCash_whenValidAndPartial_shouldUpdateFeeStatusToPartial() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), new BigDecimal("500"));
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
 
@@ -188,7 +219,7 @@ class PaymentServiceTest {
     void collectCash_whenFullPayment_shouldUpdateFeeStatusToPaid() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), new BigDecimal("700"));
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
 
@@ -200,7 +231,7 @@ class PaymentServiceTest {
     void collectCash_shouldGenerateReceiptNumber() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), new BigDecimal("500"));
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         var response = paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
 
@@ -213,7 +244,7 @@ class PaymentServiceTest {
     void collectCash_shouldIncrementReceiptNumberSequentially() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), new BigDecimal("500"));
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         String todayPrefix = "RCP-" + java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
         when(paymentRepository.findMaxReceiptNumberByPrefix(todayPrefix)).thenReturn(todayPrefix + "000005");
@@ -228,10 +259,84 @@ class PaymentServiceTest {
     void collectCash_shouldDefaultToCash() {
         FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
                 new BigDecimal("1000"), new BigDecimal("500"));
-        when(feeRecordRepository.findById(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
 
         var response = paymentService.collectCash(50L, buildRequest(new BigDecimal("300")));
 
         assertThat(response.getMethod()).isEqualTo(PaymentMethod.CASH);
+    }
+
+    @Test
+    @DisplayName("collectCash: có QR pending hợp lệ → không cho cashier thu trực tiếp")
+    void collectCash_whenValidPendingQrExists_shouldThrowBusinessRule() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), BigDecimal.ZERO);
+        Payment pendingQr = buildPendingPayment(77L, feeRecord, new BigDecimal("1000"));
+
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findValidPendingByFeeRecordAndStudent(any(Long.class), any(Long.class), any(Instant.class)))
+                .thenReturn(List.of(pendingQr));
+
+        assertThatThrownBy(() -> paymentService.collectCash(50L, buildRequest(new BigDecimal("1000"))))
+                .isInstanceOf(BusinessRuleException.class);
+
+        assertThat(feeRecord.getPaidAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+        verify(paymentRepository, never()).save(any(Payment.class));
+        verify(feeRecordRepository, never()).save(any(FeeRecord.class));
+    }
+
+    @Test
+    @DisplayName("createPendingBankTransfer: web/cashier tái sử dụng QR pending thay vì tạo mã thứ hai")
+    void createPendingBankTransfer_whenValidPendingExists_shouldReturnExistingPayment() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), BigDecimal.ZERO);
+        Payment existing = buildPendingPayment(88L, feeRecord, new BigDecimal("1000"));
+
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
+        when(paymentRepository.findValidPendingByFeeRecordAndStudent(any(Long.class), any(Long.class), any(Instant.class)))
+                .thenReturn(List.of(existing));
+
+        var response = paymentService.createPendingBankTransfer(50L, buildRequest(new BigDecimal("1000")));
+
+        assertThat(response.getId()).isEqualTo(88L);
+        assertThat(response.getSepayRef()).isEqualTo("OWX000088");
+        verify(paymentRepository, never()).findExpiredPendingByFeeRecordAndStudent(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("confirmBankTransferPayment: không cộng tiền lần hai khi fee record đã thanh toán đủ")
+    void confirmBankTransferPayment_whenFeeAlreadyPaid_shouldVoidDuplicateWithoutIncreasingPaidAmount() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), new BigDecimal("1000"));
+        feeRecord.setStatus(FeeStatus.PAID);
+        Payment duplicate = buildPendingPayment(89L, feeRecord, new BigDecimal("1000"));
+
+        when(paymentRepository.findByIdForUpdate(89L)).thenReturn(Optional.of(duplicate));
+        when(paymentRepository.findFeeRecordByIdForUpdate(50L)).thenReturn(Optional.of(feeRecord));
+
+        assertThatThrownBy(() -> paymentService.confirmBankTransferPayment(89L, new com.owlexa.owlexabackend.modules.payment.dto.request.SePayWebhookRequest()))
+                .isInstanceOf(BusinessRuleException.class)
+                .extracting("code")
+                .isEqualTo(PaymentService.DUPLICATE_PAYMENT_CODE);
+
+        assertThat(duplicate.getStatus()).isEqualTo(TransactionStatus.VOIDED);
+        assertThat(feeRecord.getPaidAmount()).isEqualByComparingTo(new BigDecimal("1000"));
+        verify(feeRecordRepository, never()).save(any(FeeRecord.class));
+    }
+
+    @Test
+    @DisplayName("confirmBankTransferPayment: chuyển lại cùng QR đã ACTIVE → DUPLICATE_PAYMENT")
+    void confirmBankTransferPayment_whenPaymentAlreadyActive_shouldThrowDuplicateCode() {
+        FeeRecord feeRecord = buildFeeRecord(50L, CURRENT_CENTER_ID,
+                new BigDecimal("1000"), new BigDecimal("1000"));
+        Payment active = buildPendingPayment(90L, feeRecord, new BigDecimal("1000"));
+        active.setStatus(TransactionStatus.ACTIVE);
+
+        when(paymentRepository.findByIdForUpdate(90L)).thenReturn(Optional.of(active));
+
+        assertThatThrownBy(() -> paymentService.confirmBankTransferPayment(90L, new com.owlexa.owlexabackend.modules.payment.dto.request.SePayWebhookRequest()))
+                .isInstanceOf(BusinessRuleException.class)
+                .extracting("code")
+                .isEqualTo(PaymentService.DUPLICATE_PAYMENT_CODE);
     }
 }

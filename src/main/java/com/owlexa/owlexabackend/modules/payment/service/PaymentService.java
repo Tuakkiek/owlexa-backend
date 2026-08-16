@@ -2,6 +2,7 @@ package com.owlexa.owlexabackend.modules.payment.service;
 import com.owlexa.owlexabackend.modules.payment.dto.request.CashPaymentRequest;
 import com.owlexa.owlexabackend.modules.payment.dto.request.SePayWebhookRequest;
 import com.owlexa.owlexabackend.modules.payment.dto.response.BankTransferQrResponse;
+import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentHistoryResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.TimelineEntryResponse;
 import com.owlexa.owlexabackend.modules.enrollment.entity.ClassEnrollment;
@@ -36,11 +37,13 @@ import com.owlexa.owlexabackend.modules.payment.entity.AuditLog;
 import com.owlexa.owlexabackend.modules.payment.entity.Installment;
 import com.owlexa.owlexabackend.modules.payment.entity.InstallmentStatus;
 import com.owlexa.owlexabackend.modules.payment.entity.Refund;
+import com.owlexa.owlexabackend.modules.payment.entity.SePayWebhookEvent;
 import com.owlexa.owlexabackend.modules.payment.entity.TransactionStatus;
 import com.owlexa.owlexabackend.modules.payment.repository.AuditLogRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.FeeRecordRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.InstallmentRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.RefundRepository;
+import com.owlexa.owlexabackend.modules.payment.repository.SePayWebhookEventRepository;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
 import com.owlexa.owlexabackend.modules.payment.repository.PaymentRepository;
 import com.owlexa.owlexabackend.modules.user.repository.UserRepository;
@@ -49,6 +52,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
@@ -59,8 +63,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,6 +74,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentService {
+    public static final String DUPLICATE_PAYMENT_CODE = "DUPLICATE_PAYMENT";
 
     private final UserRepository userRepository;
     private final MembershipRepository membershipRepository;
@@ -78,6 +85,7 @@ public class PaymentService {
     private final RefundRepository refundRepository;
     private final ClassEnrollmentRepository classEnrollmentRepository;
     private final BankTransferQrService bankTransferQrService;
+    private final SePayWebhookEventRepository sePayWebhookEventRepository;
 
     @Value("${app.payment.bank-transfer-expiry-minutes:30}")
     private int bankTransferExpiryMinutes;
@@ -96,7 +104,7 @@ public class PaymentService {
         assertCenterMembership(currentUser, centerId);
         assertCanCollectPayment(currentUser, centerId);
 
-        FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
+        FeeRecord feeRecord = paymentRepository.findFeeRecordByIdForUpdate(feeRecordId)
                 .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
 
         if (!feeRecord.getCenter().getId().equals(centerId)) {
@@ -111,9 +119,19 @@ public class PaymentService {
             throw new BusinessRuleException("Số tiền thanh toán vượt quá dư nợ còn lại");
         }
 
+        Instant now = Instant.now();
+        var existingPending = findValidPendingPayment(feeRecordId, feeRecord.getStudentUser().getId(), now);
+        if (existingPending.isPresent()) {
+            Payment pending = existingPending.get();
+            log.debug("Returning existing pending bank transfer {} for feeRecord {}", pending.getId(), feeRecordId);
+            return toResponse(pending, feeRecord);
+        }
+
+        expireStalePendingPayments(feeRecordId, feeRecord.getStudentUser().getId(), now);
+
         PaymentMethod method = request.getMethod() != null ? request.getMethod() : PaymentMethod.SEPAY;
         String receiptNumber = generateReceiptNumber();
-        Instant expiresAt = Instant.now().plusSeconds((long) bankTransferExpiryMinutes * 60);
+        Instant expiresAt = now.plusSeconds((long) bankTransferExpiryMinutes * 60);
 
         Payment payment = Payment.builder()
                 .receiptNumber(receiptNumber)
@@ -186,7 +204,7 @@ public class PaymentService {
                 if (!existing.getStudentUser().getId().equals(currentUser.getId())) {
                     throw new AccessDeniedException("Idempotency key belongs to another student's payment");
                 }
-                log.debug("Idempotency key {} already processed — returning existing payment {}", 
+                log.debug("Idempotency key {} already processed — returning existing payment {}",
                         idempotencyKey, existing.getId());
                 return toResponse(existing, existing.getFeeRecord());
             }
@@ -217,15 +235,15 @@ public class PaymentService {
         }
 
         // ── Check for existing valid pending payment (the core duplicate-prevention logic) ──
-        var existingPending = paymentRepository.findCurrentPendingByFeeRecordAndStudent(
-                feeRecordId, currentUser.getId());
+        Instant now = Instant.now();
+        var existingPending = findValidPendingPayment(feeRecordId, currentUser.getId(), now);
 
         if (existingPending.isPresent()) {
             Payment pending = existingPending.get();
 
             // If the existing pending payment is NOT expired, return it — do NOT create another
-            if (pending.getExpiresAt() != null && Instant.now().isBefore(pending.getExpiresAt())) {
-                log.debug("Returning existing valid pending payment {} for feeRecord {}", 
+            if (pending.getExpiresAt() == null || now.isBefore(pending.getExpiresAt())) {
+                log.debug("Returning existing valid pending payment {} for feeRecord {}",
                         pending.getId(), feeRecordId);
                 return toResponse(pending, feeRecord);
             }
@@ -239,9 +257,11 @@ public class PaymentService {
         }
 
         // ── Create new PENDING payment for the FULL remaining balance ──
+        expireStalePendingPayments(feeRecordId, currentUser.getId(), now);
+
         PaymentMethod method = PaymentMethod.SEPAY;
         String receiptNumber = generateReceiptNumber();
-        Instant expiresAt = Instant.now().plusSeconds((long) bankTransferExpiryMinutes * 60);
+        Instant expiresAt = now.plusSeconds((long) bankTransferExpiryMinutes * 60);
 
         Payment payment = Payment.builder()
                 .receiptNumber(receiptNumber)
@@ -293,8 +313,7 @@ public class PaymentService {
             throw new AccessDeniedException("You can only view your own payments");
         }
 
-        var pending = paymentRepository.findCurrentPendingByFeeRecordAndStudent(
-                feeRecordId, currentUser.getId());
+        var pending = findValidPendingPayment(feeRecordId, currentUser.getId(), Instant.now());
 
         return pending.map(p -> toResponse(p, feeRecord));
     }
@@ -313,7 +332,7 @@ public class PaymentService {
     public PaymentResponse cancelStudentPendingPayment(Long paymentId) {
         User currentUser = getCurrentUser();
 
-        Payment payment = paymentRepository.findById(paymentId)
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
 
         // Only the student who owns the payment can cancel it
@@ -378,9 +397,9 @@ public class PaymentService {
 
     // ── Confirm pending bank transfer payment (called by SePay webhook) ───
 
-    @Transactional
+    @Transactional(noRollbackFor = BusinessRuleException.class)
     public PaymentResponse confirmBankTransferPayment(Long paymentId, SePayWebhookRequest webhookRequest) {
-        Payment payment = paymentRepository.findById(paymentId)
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
 
         // ── TEMPORARY DEBUG LOGGING (remove for production) ──
@@ -390,7 +409,8 @@ public class PaymentService {
         // ── END TEMPORARY DEBUG ──
 
         if (payment.getStatus() == TransactionStatus.ACTIVE) {
-            throw new BusinessRuleException("Giao dịch thanh toán " + paymentId + " đã được xác nhận trước đó");
+            throw new BusinessRuleException(DUPLICATE_PAYMENT_CODE,
+                    "DUPLICATE_PAYMENT: payment " + paymentId + " was already confirmed");
         }
         if (payment.getStatus() == TransactionStatus.VOIDED) {
             throw new BusinessRuleException("Không thể xác nhận giao dịch đã bị hủy");
@@ -408,6 +428,25 @@ public class PaymentService {
         }
 
         // Update payment status — preserve original sepayRef (payment code)
+        FeeRecord feeRecord = paymentRepository.findFeeRecordByIdForUpdate(payment.getFeeRecord().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + payment.getFeeRecord().getId()));
+
+        BigDecimal remainingAmount = feeRecord.getAmount().subtract(feeRecord.getPaidAmount());
+        if (remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            markRejectedDuplicatePayment(payment,
+                    "DUPLICATE_PAYMENT: fee record already fully paid",
+                    DUPLICATE_PAYMENT_CODE);
+            throw new BusinessRuleException(DUPLICATE_PAYMENT_CODE,
+                    "DUPLICATE_PAYMENT: fee record already fully paid");
+        }
+        if (payment.getAmount().compareTo(remainingAmount) > 0) {
+            markRejectedDuplicatePayment(payment,
+                    "DUPLICATE_PAYMENT: amount exceeds remaining balance",
+                    DUPLICATE_PAYMENT_CODE);
+            throw new BusinessRuleException(DUPLICATE_PAYMENT_CODE,
+                    "DUPLICATE_PAYMENT: amount exceeds remaining balance");
+        }
+
         payment.setStatus(TransactionStatus.ACTIVE);
         // Store SePay's reference in the note for reconciliation, don't overwrite payment code
         if (webhookRequest.getReferenceCode() != null && !webhookRequest.getReferenceCode().isBlank()) {
@@ -421,8 +460,6 @@ public class PaymentService {
         log.debug("[SEPAY-WEBHOOK] Payment id={}: status AFTER = {}, sepayRef = {}",
                 paymentId, payment.getStatus(), payment.getSepayRef());
         // ── END TEMPORARY DEBUG ──
-
-        FeeRecord feeRecord = payment.getFeeRecord();
 
         // Allocate to oldest unpaid installment if installments exist
         allocateToInstallments(feeRecord, payment.getAmount());
@@ -453,7 +490,7 @@ public class PaymentService {
         assertCenterMembership(currentUser, centerId);
         assertCanCollectPayment(currentUser, centerId);
 
-        FeeRecord feeRecord = feeRecordRepository.findById(feeRecordId)
+        FeeRecord feeRecord = paymentRepository.findFeeRecordByIdForUpdate(feeRecordId)
                 .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeRecordId));
 
         if(!feeRecord.getCenter().getId().equals(centerId)) {
@@ -466,6 +503,13 @@ public class PaymentService {
 
         if(request.getAmount().compareTo(remainingAmount) > 0) {
             throw new BusinessRuleException("Số tiền thanh toán vượt quá dư nợ còn lại");
+        }
+
+        Instant now = Instant.now();
+        expireStalePendingPayments(feeRecordId, feeRecord.getStudentUser().getId(), now);
+        if (findValidPendingPayment(feeRecordId, feeRecord.getStudentUser().getId(), now).isPresent()) {
+            throw new BusinessRuleException(
+                    "Hóa đơn này đã có một khoản thanh toán chờ xử lý. Vui lòng chờ xử lý hoặc hủy khoản thanh toán trước khi thu tiền mặt.");
         }
 
         PaymentMethod method = request.getMethod() != null ? request.getMethod() : PaymentMethod.CASH;
@@ -553,6 +597,77 @@ public class PaymentService {
                 .map(payment -> toResponse(payment, payment.getFeeRecord()));
     }
 
+    @Transactional(readOnly = true)
+    public Page<PaymentHistoryResponse> findPaymentHistoryPaginated(Long centerId,
+                                                                    String studentQuery,
+                                                                    Long cashierId,
+                                                                    PaymentMethod method,
+                                                                    String status,
+                                                                    Instant startDate,
+                                                                    Instant endDate,
+                                                                    Pageable pageable) {
+        User currentUser = getCurrentUser();
+        assertCenterMembership(currentUser, centerId);
+
+        List<PaymentHistoryResponse> items = findPaymentHistoryItems(
+                centerId, studentQuery, cashierId, method, status, startDate, endDate);
+        return paginatePaymentHistory(items, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentHistoryResponse> findMyPaymentHistory() {
+        User currentUser = getCurrentUser();
+        List<PaymentHistoryResponse> items = new ArrayList<>();
+
+        paymentRepository.findAllByStudentUser_IdOrderByCreatedAtDesc(currentUser.getId())
+                .stream()
+                .filter(payment -> isVisibleToStudent(payment, currentUser.getId()))
+                .map(this::toHistoryResponse)
+                .forEach(items::add);
+
+        sePayWebhookEventRepository.findDuplicatePaymentRowsByStudentUserId(currentUser.getId())
+                .stream()
+                .map(this::toDuplicateHistoryResponse)
+                .forEach(items::add);
+
+        items.sort(Comparator.comparing(PaymentHistoryResponse::getCreatedAt,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        return items;
+    }
+
+    @Transactional(readOnly = true)
+    public com.owlexa.owlexabackend.modules.payment.dto.response.PaymentSummaryResponse getPaymentHistorySummary(
+            Long centerId,
+            String studentQuery,
+            Long cashierId,
+            PaymentMethod method,
+            String status,
+            Instant startDate,
+            Instant endDate) {
+
+        User currentUser = getCurrentUser();
+        assertCenterMembership(currentUser, centerId);
+
+        List<PaymentHistoryResponse> items = findPaymentHistoryItems(
+                centerId, studentQuery, cashierId, method, status, startDate, endDate);
+
+        BigDecimal totalRevenue = items.stream()
+                .filter(item -> "PAYMENT".equals(item.getSource()))
+                .filter(item -> TransactionStatus.ACTIVE.name().equals(item.getStatus()))
+                .map(PaymentHistoryResponse::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long pendingCount = items.stream()
+                .filter(item -> TransactionStatus.PENDING.name().equals(item.getStatus()))
+                .count();
+
+        return com.owlexa.owlexabackend.modules.payment.dto.response.PaymentSummaryResponse.builder()
+                .totalTransactions(items.size())
+                .totalRevenue(totalRevenue)
+                .pendingCount(pendingCount)
+                .build();
+    }
+
     // ── Payment Summary ───────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
@@ -564,7 +679,7 @@ public class PaymentService {
             TransactionStatus status,
             Instant startDate,
             Instant endDate) {
-        
+
         User currentUser = getCurrentUser();
         assertCenterMembership(currentUser, centerId);
 
@@ -598,14 +713,14 @@ public class PaymentService {
         };
 
         List<Payment> payments = paymentRepository.findAll(spec);
-        
+
         long totalTransactions = payments.size();
-        
+
         BigDecimal totalRevenue = payments.stream()
                 .filter(p -> p.getStatus() == TransactionStatus.ACTIVE)
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-                
+
         long pendingCount = payments.stream()
                 .filter(p -> p.getStatus() == TransactionStatus.PENDING)
                 .count();
@@ -818,6 +933,254 @@ public class PaymentService {
     }
 
     // Helper
+
+    private Optional<Payment> findValidPendingPayment(Long feeRecordId, Long studentUserId, Instant now) {
+        return paymentRepository.findValidPendingByFeeRecordAndStudent(feeRecordId, studentUserId, now)
+                .stream()
+                .findFirst();
+    }
+
+    private void expireStalePendingPayments(Long feeRecordId, Long studentUserId, Instant now) {
+        paymentRepository.findExpiredPendingByFeeRecordAndStudent(feeRecordId, studentUserId, now)
+                .forEach(payment -> {
+                    payment.setStatus(TransactionStatus.EXPIRED);
+                    payment.setVoidReason("Expired - superseded by new payment");
+                    payment.setVoidedAt(now);
+                    paymentRepository.save(payment);
+                    log.debug("Expired pending payment {} for feeRecord {}", payment.getId(), feeRecordId);
+                });
+    }
+
+    private void markRejectedDuplicatePayment(Payment payment, String reason, String auditAction) {
+        payment.setStatus(TransactionStatus.VOIDED);
+        payment.setVoidReason(reason);
+        payment.setVoidedAt(Instant.now());
+        paymentRepository.save(payment);
+        auditLog(payment.getCollectedByUser(), payment.getCenter(), auditAction, "Payment",
+                payment.getId(), reason);
+    }
+
+    private List<PaymentHistoryResponse> findPaymentHistoryItems(Long centerId,
+                                                                 String studentQuery,
+                                                                 Long cashierId,
+                                                                 PaymentMethod method,
+                                                                 String status,
+                                                                 Instant startDate,
+                                                                 Instant endDate) {
+        boolean duplicateOnly = DUPLICATE_PAYMENT_CODE.equals(status);
+        TransactionStatus paymentStatus = parsePaymentStatus(status);
+        List<PaymentHistoryResponse> items = new ArrayList<>();
+
+        if (!duplicateOnly) {
+            paymentRepository.findAll(buildPaymentSpecification(
+                            centerId, studentQuery, cashierId, method, paymentStatus, startDate, endDate))
+                    .stream()
+                    .map(this::toHistoryResponse)
+                    .forEach(items::add);
+        }
+
+        if (status == null || status.isBlank() || duplicateOnly) {
+            sePayWebhookEventRepository.findDuplicatePaymentRowsByCenterId(centerId)
+                    .stream()
+                    .filter(row -> duplicateEventMatchesFilters(row, studentQuery, cashierId, method, startDate, endDate))
+                    .map(this::toDuplicateHistoryResponse)
+                    .forEach(items::add);
+        }
+
+        items.sort(Comparator.comparing(PaymentHistoryResponse::getCreatedAt,
+                Comparator.nullsLast(Comparator.naturalOrder())).reversed());
+        return items;
+    }
+
+    private Specification<Payment> buildPaymentSpecification(Long centerId,
+                                                             String studentQuery,
+                                                             Long cashierId,
+                                                             PaymentMethod method,
+                                                             TransactionStatus status,
+                                                             Instant startDate,
+                                                             Instant endDate) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("center").get("id"), centerId));
+
+            if (studentQuery != null && !studentQuery.isBlank()) {
+                String pattern = "%" + studentQuery.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("studentUser").get("fullName")), pattern),
+                        cb.like(cb.lower(root.get("studentUser").get("phoneNumber")), pattern)
+                ));
+            }
+            if (cashierId != null) {
+                predicates.add(cb.equal(root.get("collectedByUser").get("id"), cashierId));
+            }
+            if (method != null) {
+                predicates.add(cb.equal(root.get("method"), method));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThan(root.get("createdAt"), endDate));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private TransactionStatus parsePaymentStatus(String status) {
+        if (status == null || status.isBlank() || DUPLICATE_PAYMENT_CODE.equals(status)) {
+            return null;
+        }
+        try {
+            return TransactionStatus.valueOf(status);
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Unsupported payment status filter: " + status);
+        }
+    }
+
+    private boolean duplicateEventMatchesFilters(Object[] row,
+                                                 String studentQuery,
+                                                 Long cashierId,
+                                                 PaymentMethod method,
+                                                 Instant startDate,
+                                                 Instant endDate) {
+        SePayWebhookEvent event = (SePayWebhookEvent) row[0];
+        Payment payment = (Payment) row[1];
+        Instant eventTime = sePayEventInstant(event);
+
+        if (cashierId != null && (payment.getCollectedByUser() == null
+                || !cashierId.equals(payment.getCollectedByUser().getId()))) {
+            return false;
+        }
+        if (method != null && payment.getMethod() != method) {
+            return false;
+        }
+        if (startDate != null && (eventTime == null || eventTime.isBefore(startDate))) {
+            return false;
+        }
+        if (endDate != null && (eventTime == null || !eventTime.isBefore(endDate))) {
+            return false;
+        }
+        if (studentQuery != null && !studentQuery.isBlank()) {
+            String query = studentQuery.toLowerCase();
+            User student = payment.getStudentUser();
+            String name = student != null && student.getFullName() != null
+                    ? student.getFullName().toLowerCase()
+                    : "";
+            String phone = student != null && student.getPhoneNumber() != null
+                    ? student.getPhoneNumber().toLowerCase()
+                    : "";
+            return name.contains(query) || phone.contains(query);
+        }
+        return true;
+    }
+
+    private Page<PaymentHistoryResponse> paginatePaymentHistory(List<PaymentHistoryResponse> items, Pageable pageable) {
+        int start = (int) Math.min(pageable.getOffset(), items.size());
+        int end = Math.min(start + pageable.getPageSize(), items.size());
+        return new PageImpl<>(items.subList(start, end), pageable, items.size());
+    }
+
+    private PaymentHistoryResponse toHistoryResponse(Payment payment) {
+        PaymentResponse response = toResponse(payment, payment.getFeeRecord());
+        return PaymentHistoryResponse.builder()
+                .id("payment-" + response.getId())
+                .paymentId(response.getId())
+                .source("PAYMENT")
+                .receiptNumber(response.getReceiptNumber())
+                .feeRecordId(response.getFeeRecordId())
+                .centerId(response.getCenterId())
+                .classId(response.getClassId())
+                .className(response.getClassName())
+                .courseName(response.getCourseName())
+                .studentUserId(response.getStudentUserId())
+                .studentPhoneNumber(response.getStudentPhoneNumber())
+                .studentFullName(response.getStudentFullName())
+                .amount(response.getAmount())
+                .method(response.getMethod())
+                .sepayRef(response.getSepayRef())
+                .note(response.getNote())
+                .collectedByUserId(response.getCollectedByUserId())
+                .collectedByUserName(response.getCollectedByUserName())
+                .centerName(response.getCenterName())
+                .status(response.getStatus().name())
+                .createdAt(response.getCreatedAt())
+                .expiresAt(response.getExpiresAt())
+                .feeRecordAmount(response.getFeeRecordAmount())
+                .feeRecordPaidAmount(response.getFeeRecordPaidAmount())
+                .feeRecordRemainingAmount(response.getFeeRecordRemainingAmount())
+                .feeRecordStatus(response.getFeeRecordStatus())
+                .build();
+    }
+
+    private PaymentHistoryResponse toDuplicateHistoryResponse(Object[] row) {
+        SePayWebhookEvent event = (SePayWebhookEvent) row[0];
+        Payment payment = (Payment) row[1];
+        FeeRecord feeRecord = payment.getFeeRecord();
+        User student = payment.getStudentUser();
+        Center center = payment.getCenter();
+        Class clazz = feeRecord != null ? feeRecord.getClazz() : null;
+        Instant eventTime = sePayEventInstant(event);
+
+        BigDecimal duplicateAmount = event.getTransferAmount() != null
+                ? BigDecimal.valueOf(event.getTransferAmount())
+                : payment.getAmount();
+
+        return PaymentHistoryResponse.builder()
+                .id("sepay-event-" + (event.getId() != null ? event.getId() : event.getSepayTransactionId()))
+                .paymentId(payment.getId())
+                .webhookEventId(event.getId())
+                .source("SEPAY_EVENT")
+                .receiptNumber("DUP-" + event.getSepayTransactionId())
+                .feeRecordId(feeRecord != null ? feeRecord.getId() : null)
+                .centerId(center != null ? center.getId() : null)
+                .centerName(center != null ? center.getName() : null)
+                .classId(clazz != null ? clazz.getId() : null)
+                .className(clazz != null ? clazz.getName() : null)
+                .courseName(clazz != null && clazz.getCourse() != null ? clazz.getCourse().getName() : null)
+                .studentUserId(student != null ? student.getId() : null)
+                .studentPhoneNumber(student != null ? student.getPhoneNumber() : null)
+                .studentFullName(student != null ? student.getFullName() : null)
+                .amount(duplicateAmount)
+                .method(payment.getMethod())
+                .sepayRef(event.getReferenceCode() != null ? event.getReferenceCode() : event.getPaymentCode())
+                .note(event.getProcessingNote() != null ? event.getProcessingNote() : event.getContent())
+                .collectedByUserId(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getId() : null)
+                .collectedByUserName(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getFullName() : null)
+                .status(DUPLICATE_PAYMENT_CODE)
+                .createdAt(eventTime)
+                .feeRecordAmount(feeRecord != null ? feeRecord.getAmount() : null)
+                .feeRecordPaidAmount(feeRecord != null ? feeRecord.getPaidAmount() : null)
+                .feeRecordRemainingAmount(feeRecord != null
+                        ? feeRecord.getAmount().subtract(feeRecord.getPaidAmount())
+                        : null)
+                .feeRecordStatus(feeRecord != null ? feeRecord.getStatus() : null)
+                .build();
+    }
+
+    private Instant sePayEventInstant(SePayWebhookEvent event) {
+        if (event.getProcessedAt() != null) {
+            return event.getProcessedAt().atZone(ZoneId.systemDefault()).toInstant();
+        }
+        if (event.getReceivedAt() != null) {
+            return event.getReceivedAt().atZone(ZoneId.systemDefault()).toInstant();
+        }
+        return null;
+    }
+
+    private boolean isVisibleToStudent(Payment payment, Long studentUserId) {
+        if (payment.getFeeRecord() == null || payment.getFeeRecord().getClazz() == null) {
+            return true;
+        }
+        return classEnrollmentRepository
+                .findByClazz_IdAndStudentUser_Id(
+                        payment.getFeeRecord().getClazz().getId(),
+                        studentUserId)
+                .map(e -> e.getStatus() != EnrollmentStatus.DROPPED)
+                .orElse(false);
+    }
 
     // Generate receipt number: RCP-YYYYMMDD-NNNNNN
     private String generateReceiptNumber() {
