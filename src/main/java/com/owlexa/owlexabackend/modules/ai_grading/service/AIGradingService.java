@@ -48,6 +48,7 @@ public class AIGradingService {
     public AIGradingJobSummaryResponse startGrading(Long submissionAttemptId) {
         User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
+        requireTeacherOwnsAttempt(submissionAttemptId, centerId, teacher.getId());
         return startGrading(submissionAttemptId, centerId, teacher.getId());
     }
 
@@ -85,19 +86,22 @@ public class AIGradingService {
         User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         Long submissionAttemptId = lifecycleService.getRetryAttemptId(jobId, centerId);
+        requireTeacherOwnsAttempt(submissionAttemptId, centerId, teacher.getId());
         return startGrading(submissionAttemptId, centerId, teacher.getId());
     }
 
     public AIGradingJobSummaryResponse getJob(Long jobId) {
-        requireTeacherInCurrentCenter();
-        return lifecycleService.getJobSummary(jobId, requiredCurrentCenterId());
+        User teacher = requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+        AIGradingJob job = findTeacherJob(jobId, centerId, teacher.getId());
+        return mapper.toJobSummaryResponse(job);
     }
 
     @Transactional(readOnly = true)
     public List<AIGradingJobSummaryResponse> listJobs(Long submissionAttemptId) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        requireAttemptInCenter(submissionAttemptId, centerId);
+        requireTeacherOwnsAttempt(submissionAttemptId, centerId, teacher.getId());
 
         return jobRepository.findAllBySubmissionAttempt_IdOrderByCreatedAtDesc(submissionAttemptId)
                 .stream()
@@ -107,9 +111,9 @@ public class AIGradingService {
 
     @Transactional(readOnly = true)
     public AIGradingResultResponse getLatestResult(Long submissionAttemptId) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        requireAttemptInCenter(submissionAttemptId, centerId);
+        requireTeacherOwnsAttempt(submissionAttemptId, centerId, teacher.getId());
 
         AIGradingResult result = resultRepository
                 .findTopBySubmissionAttempt_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_Center_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_DeletedAtIsNullAndJob_StatusOrderByCreatedAtDesc(
@@ -125,14 +129,9 @@ public class AIGradingService {
 
     @Transactional(readOnly = true)
     public AIGradingResultResponse getResultForJob(Long jobId) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        AIGradingJob job = jobRepository
-                .findByIdAndSubmissionAttempt_AssignmentRecipient_Assignment_Center_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_DeletedAtIsNull(
-                        jobId,
-                        centerId
-                )
-                .orElseThrow(() -> new ResourceNotFoundException("AI grading job not found with id: " + jobId));
+        AIGradingJob job = findTeacherJob(jobId, centerId, teacher.getId());
 
         AIGradingResult result = resultRepository.findByJob_Id(job.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -254,18 +253,28 @@ public class AIGradingService {
         }
     }
 
-    private void requireAttemptInCenter(Long submissionAttemptId, Long centerId) {
-        boolean exists = submissionAttemptRepository
-                .findByIdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
+    private void requireTeacherOwnsAttempt(Long submissionAttemptId, Long centerId, Long teacherUserId) {
+        boolean ownsAttempt = submissionAttemptRepository
+                .existsByIdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_CreatedBy_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
                         submissionAttemptId,
-                        centerId
-                )
-                .isPresent();
-        if (!exists) {
+                        centerId,
+                        teacherUserId
+                );
+        if (!ownsAttempt) {
             throw new ResourceNotFoundException(
                     "Submission attempt not found with id: " + submissionAttemptId
             );
         }
+    }
+
+    private AIGradingJob findTeacherJob(Long jobId, Long centerId, Long teacherUserId) {
+        return jobRepository
+                .findByIdAndSubmissionAttempt_AssignmentRecipient_Assignment_Center_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_CreatedBy_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_DeletedAtIsNull(
+                        jobId,
+                        centerId,
+                        teacherUserId
+                )
+                .orElseThrow(() -> new ResourceNotFoundException("AI grading job not found with id: " + jobId));
     }
 
     private User requireTeacherInCurrentCenter() {

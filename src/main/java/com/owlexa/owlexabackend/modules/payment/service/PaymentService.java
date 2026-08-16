@@ -963,10 +963,10 @@ public class PaymentService {
         return centerId;
     }
 
-    // Assert can collect payment — only CASHIER is allowed to modify payment data
+    // Assert can collect payment — OWNER and CASHIER can record payment data.
     private void assertCanCollectPayment(User currentUser, Long centerId) {
-        if (currentUser.getRole() != Role.CASHIER) {
-            throw new AccessDeniedException("Only CASHIER can collect payment");
+        if (currentUser.getRole() != Role.OWNER && currentUser.getRole() != Role.CASHIER) {
+            throw new AccessDeniedException("Only OWNER or CASHIER can collect payment");
         }
 
         assertCenterMembership(currentUser, centerId);

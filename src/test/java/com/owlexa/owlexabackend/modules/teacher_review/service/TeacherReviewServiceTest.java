@@ -486,7 +486,7 @@ class TeacherReviewServiceTest {
                 secondStudent
         );
         PageRequest pageable = PageRequest.of(0, 20);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(teacherReviewRepository.findUnreviewedQueueAttempts(
                 eq(ASSIGNMENT_ID),
@@ -534,7 +534,7 @@ class TeacherReviewServiceTest {
         review.setSelectedAiGradingResult(aiResult(review.getSubmissionAttempt(), AI_RESULT_ID));
         Assignment assignment = review.getSubmissionAttempt().getAssignmentRecipient().getAssignment();
         PageRequest pageable = PageRequest.of(0, 20);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(teacherReviewRepository.findQueueAttemptsByReviewStatus(
                 eq(ASSIGNMENT_ID),
@@ -568,7 +568,7 @@ class TeacherReviewServiceTest {
     @DisplayName("queue: invalid virtual or persisted status filter is rejected")
     void findReviewQueue_whenStatusFilterIsInvalid_shouldReject() {
         Assignment assignment = assignment(true);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.findReviewQueue(
@@ -685,6 +685,7 @@ class TeacherReviewServiceTest {
                 .center(center)
                 .status(AssignmentStatus.CLOSED)
                 .title("Final Exam")
+                .createdBy(teacher)
                 .items(new ArrayList<>())
                 .build();
         assignment.setId(ASSIGNMENT_ID);

@@ -61,13 +61,13 @@ public class ClassController {
     // ── TEACHER: View own classes ────────────────────────────────────────────
 
     @GetMapping("/teacher/classes/me")
-    @PreAuthorize("hasAuthority('CLASS_VIEW')")
+    @PreAuthorize("hasAnyAuthority('TEACHER_DOCUMENTS', 'TEACHER_ASSIGNMENTS')")
     public List<ClassResponse> findMyClassesAsTeacher() {
         return classService.findMyClassesAsTeacher();
     }
 
     @GetMapping("/teacher/classes/with-students")
-    @PreAuthorize("hasAnyAuthority('CLASS_VIEW', 'ATTENDANCE_MARK')")
+    @PreAuthorize("hasAnyAuthority('TEACHER_ATTENDANCE', 'TEACHER_ASSIGNMENTS')")
     public List<com.owlexa.owlexabackend.modules.teacher.dto.response.TeacherClassStudentsResponse> findMyClassesWithStudentsAsTeacher() {
         return classService.findMyClassesWithStudentsAsTeacher();
     }

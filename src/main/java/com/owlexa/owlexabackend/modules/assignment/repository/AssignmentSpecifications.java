@@ -16,6 +16,7 @@ public final class AssignmentSpecifications {
 
     public static Specification<Assignment> search(
             Long centerId,
+            Long teacherUserId,
             String search,
             AssignmentStatus status,
             Long classId
@@ -24,6 +25,9 @@ public final class AssignmentSpecifications {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("center").get("id"), centerId));
             predicates.add(cb.isNull(root.get("deletedAt")));
+            if (teacherUserId != null) {
+                predicates.add(cb.equal(root.get("createdBy").get("id"), teacherUserId));
+            }
 
             if (search != null && !search.isBlank()) {
                 String pattern = "%" + search.trim().toLowerCase() + "%";

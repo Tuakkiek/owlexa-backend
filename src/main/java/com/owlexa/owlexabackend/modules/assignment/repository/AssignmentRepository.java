@@ -9,4 +9,6 @@ import java.util.Optional;
 public interface AssignmentRepository extends JpaRepository<Assignment, Long>, JpaSpecificationExecutor<Assignment> {
 
     Optional<Assignment> findByIdAndCenter_IdAndDeletedAtIsNull(Long id, Long centerId);
+
+    Optional<Assignment> findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(Long id, Long centerId, Long teacherUserId);
 }

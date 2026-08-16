@@ -37,9 +37,9 @@ public class PaymentController {
     private final BankTransferQrService bankTransferQrService;
     private final PaymentRepository paymentRepository;
 
-    @PostMapping("/cashier/fee-record/{feeRecordId}/payments/cash")
+    @PostMapping({"/cashier/fee-record/{feeRecordId}/payments/cash", "/owner/fee-record/{feeRecordId}/payments/cash"})
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('PAYMENT_COLLECT')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_COLLECT', 'CASHIER_PAYMENTS')")
     public PaymentResponse collectCash(
             @PathVariable Long feeRecordId,
             @Valid @RequestBody CashPaymentRequest request
@@ -47,9 +47,9 @@ public class PaymentController {
         return paymentService.collectCash(feeRecordId, request);
     }
 
-    @PostMapping("/cashier/fee-record/{feeRecordId}/payments/bank-transfer")
+    @PostMapping({"/cashier/fee-record/{feeRecordId}/payments/bank-transfer", "/owner/fee-record/{feeRecordId}/payments/bank-transfer"})
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('PAYMENT_COLLECT')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_COLLECT', 'CASHIER_PAYMENTS')")
     public PaymentResponse createBankTransfer(
             @PathVariable Long feeRecordId,
             @Valid @RequestBody CashPaymentRequest request
@@ -58,7 +58,7 @@ public class PaymentController {
     }
 
     @GetMapping({"/cashier/payments/{paymentId}/qr", "/owner/payments/{paymentId}/qr"})
-    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENTS', 'CASHIER_PAYMENT_HISTORY')")
     public BankTransferQrResponse getPaymentQr(@PathVariable Long paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found with id: " + paymentId));
@@ -130,7 +130,7 @@ public class PaymentController {
             "/owner/fee-record/{feeRecordId}/payments",
             "/cashier/fee-record/{feeRecordId}/payments"
     })
-    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENTS', 'CASHIER_PAYMENT_HISTORY')")
     public List<PaymentResponse> findAllByFeeRecord(
             @PathVariable Long feeRecordId
     ) {
@@ -146,7 +146,7 @@ public class PaymentController {
             "/owner/payments",
             "/cashier/payments"
     })
-    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
     public Page<PaymentResponse> findAllPaginated(
             @RequestParam(required = false) String student,
             @RequestParam(required = false) Long cashierId,
@@ -164,7 +164,7 @@ public class PaymentController {
             "/owner/payments/summary",
             "/cashier/payments/summary"
     })
-    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
     public PaymentSummaryResponse getPaymentSummary(
             @RequestParam(required = false) String student,
             @RequestParam(required = false) Long cashierId,
@@ -182,7 +182,7 @@ public class PaymentController {
             "/owner/payments/{paymentId}/receipt",
             "/cashier/payments/{paymentId}/receipt"
     })
-    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
     public PaymentResponse getReceipt(@PathVariable Long paymentId) {
         return paymentService.getReceipt(paymentId);
     }
@@ -203,7 +203,7 @@ public class PaymentController {
     }
 
     @GetMapping({"/owner/students/{studentId}/timeline", "/cashier/students/{studentId}/timeline"})
-    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'FEE_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'FEE_VIEW', 'CASHIER_PAYMENTS', 'CASHIER_PAYMENT_HISTORY')")
     public List<TimelineEntryResponse> getFinancialTimeline(@PathVariable Long studentId) {
         return paymentService.getFinancialTimeline(studentId);
     }
@@ -213,7 +213,7 @@ public class PaymentController {
             "/owner/payments/all",
             "/cashier/payments/all"
     })
-    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
     public List<PaymentResponse> findAllByCenterLegacy() {
         return paymentService.findAllByCenter();
     }

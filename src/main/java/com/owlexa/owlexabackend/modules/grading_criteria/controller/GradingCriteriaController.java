@@ -23,28 +23,31 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher/grading-criteria")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('ESSAY_GRADE')")
 public class GradingCriteriaController {
 
     private final GradingCriteriaService gradingCriteriaService;
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('TEACHER_GRADING_CRITERIA', 'TEACHER_QUESTION_BANK')")
     public List<GradingCriteriaResponse> findAll(@RequestParam(required = false) String search) {
         return gradingCriteriaService.findAll(search);
     }
 
     @GetMapping("/{criteriaId}")
+    @PreAuthorize("hasAnyAuthority('TEACHER_GRADING_CRITERIA', 'TEACHER_QUESTION_BANK')")
     public GradingCriteriaResponse findById(@PathVariable Long criteriaId) {
         return gradingCriteriaService.findById(criteriaId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_GRADING_CRITERIA')")
     public GradingCriteriaResponse create(@Valid @RequestBody GradingCriteriaRequest request) {
         return gradingCriteriaService.create(request);
     }
 
     @PutMapping("/{criteriaId}")
+    @PreAuthorize("hasAuthority('TEACHER_GRADING_CRITERIA')")
     public GradingCriteriaResponse update(
             @PathVariable Long criteriaId,
             @Valid @RequestBody GradingCriteriaRequest request
@@ -54,6 +57,7 @@ public class GradingCriteriaController {
 
     @DeleteMapping("/{criteriaId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEACHER_GRADING_CRITERIA')")
     public void delete(@PathVariable Long criteriaId) {
         gradingCriteriaService.delete(criteriaId);
     }

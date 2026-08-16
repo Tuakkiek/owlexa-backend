@@ -82,10 +82,11 @@ public class TeacherReviewService {
                 .findDetailBySubmissionAttemptIdAndCenterId(submissionAttemptId, centerId)
                 .orElse(null);
         if (existingReview != null) {
+            requireTeacherOwnsReview(existingReview, teacher.getId(), submissionAttemptId);
             return teacherReviewMapper.toDetailResponse(existingReview);
         }
 
-        SubmissionAttempt attempt = findTeacherAttempt(submissionAttemptId, centerId);
+        SubmissionAttempt attempt = findTeacherAttempt(submissionAttemptId, centerId, teacher.getId());
         requireSubmittedAttempt(attempt);
 
         TeacherReview review = createReview(attempt, teacher);
@@ -101,7 +102,10 @@ public class TeacherReviewService {
                 entityManager.clear();
                 return teacherReviewRepository
                         .findDetailBySubmissionAttemptIdAndCenterId(submissionAttemptId, centerId)
-                        .map(teacherReviewMapper::toDetailResponse)
+                        .map(concurrentReview -> {
+                            requireTeacherOwnsReview(concurrentReview, teacher.getId(), submissionAttemptId);
+                            return teacherReviewMapper.toDetailResponse(concurrentReview);
+                        })
                         .orElseThrow(() -> exception);
             }
             throw exception;
@@ -110,7 +114,7 @@ public class TeacherReviewService {
 
     @Transactional(readOnly = true)
     public TeacherReviewDetailResponse getTeacherReview(Long submissionAttemptId) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
         TeacherReview review = teacherReviewRepository
@@ -118,6 +122,7 @@ public class TeacherReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Teacher review not found for submission attempt: " + submissionAttemptId
                 ));
+        requireTeacherOwnsReview(review, teacher.getId(), submissionAttemptId);
         return teacherReviewMapper.toDetailResponse(review);
     }
 
@@ -126,6 +131,7 @@ public class TeacherReviewService {
         User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         TeacherReview review = findTeacherReview(reviewId, centerId);
+        requireTeacherOwnsReview(review, teacher.getId(), reviewId);
 
         requireMutable(review);
         validateUpdateRequest(review, request);
@@ -146,6 +152,7 @@ public class TeacherReviewService {
         User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         TeacherReview review = findTeacherReview(reviewId, centerId);
+        requireTeacherOwnsReview(review, teacher.getId(), reviewId);
 
         requireMutable(review);
         validateSelectedAiResult(review, centerId);
@@ -175,6 +182,7 @@ public class TeacherReviewService {
         User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         TeacherReview review = findTeacherReview(reviewId, centerId);
+        requireTeacherOwnsReview(review, teacher.getId(), reviewId);
 
         if (review.getStatus() != TeacherReviewStatus.FINALIZED) {
             throw new BadRequestException("Chỉ có bài đánh giá đã hoàn tất mới có thể công bố");
@@ -198,9 +206,9 @@ public class TeacherReviewService {
             String reviewStatus,
             Pageable pageable
     ) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        Assignment assignment = assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(assignmentId, centerId)
+        Assignment assignment = assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(assignmentId, centerId, teacher.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bài tập với ID: " + assignmentId));
 
         Page<SubmissionAttempt> attempts = findQueueAttempts(
@@ -457,8 +465,8 @@ public class TeacherReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá của giáo viên với ID: " + reviewId));
     }
 
-    private SubmissionAttempt findTeacherAttempt(Long submissionAttemptId, Long centerId) {
-        return submissionAttemptRepository
+    private SubmissionAttempt findTeacherAttempt(Long submissionAttemptId, Long centerId, Long teacherUserId) {
+        SubmissionAttempt attempt = submissionAttemptRepository
                 .findByIdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
                         submissionAttemptId,
                         centerId
@@ -466,6 +474,21 @@ public class TeacherReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy lượt nộp bài với ID: " + submissionAttemptId
                 ));
+        requireTeacherOwnsAttempt(attempt, teacherUserId, submissionAttemptId);
+        return attempt;
+    }
+
+    private void requireTeacherOwnsReview(TeacherReview review, Long teacherUserId, Long resourceId) {
+        requireTeacherOwnsAttempt(review.getSubmissionAttempt(), teacherUserId, resourceId);
+    }
+
+    private void requireTeacherOwnsAttempt(SubmissionAttempt attempt, Long teacherUserId, Long resourceId) {
+        Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
+        if (assignment == null
+                || assignment.getCreatedBy() == null
+                || !teacherUserId.equals(assignment.getCreatedBy().getId())) {
+            throw new ResourceNotFoundException("Teacher review resource not found with id: " + resourceId);
+        }
     }
 
     private void requireSubmittedAttempt(SubmissionAttempt attempt) {

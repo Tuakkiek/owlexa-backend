@@ -87,11 +87,11 @@ public class AssignmentService {
             Long classId,
             Pageable pageable
     ) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
         return assignmentRepository.findAll(
-                        AssignmentSpecifications.search(centerId, search, status, classId),
+                        AssignmentSpecifications.search(centerId, currentUser.getId(), search, status, classId),
                         pageable
                 )
                 .map(assignmentMapper::toListResponse);
@@ -99,10 +99,10 @@ public class AssignmentService {
 
     @Transactional(readOnly = true)
     public AssignmentDetailResponse findByIdForTeacher(Long assignmentId) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        return assignmentMapper.toDetailResponse(findActiveAssignment(assignmentId, centerId));
+        return assignmentMapper.toDetailResponse(findTeacherAssignment(assignmentId, centerId, currentUser.getId()));
     }
 
     @Transactional
@@ -134,7 +134,7 @@ public class AssignmentService {
                 .updatedBy(currentUser)
                 .build();
 
-        replaceTargets(assignment, request.getTargets(), centerId);
+        replaceTargets(assignment, request.getTargets(), centerId, currentUser.getId());
 
         return assignmentMapper.toDetailResponse(assignmentRepository.save(assignment));
     }
@@ -145,7 +145,7 @@ public class AssignmentService {
         Long centerId = requiredCurrentCenterId();
         validateRequest(request);
 
-        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        Assignment assignment = findTeacherAssignment(assignmentId, centerId, currentUser.getId());
         if (assignment.getStatus() == AssignmentStatus.ARCHIVED) {
             throw new BadRequestException("Cannot update an archived assignment");
         }
@@ -175,7 +175,7 @@ public class AssignmentService {
         assignment.setAccessPassword(normalizeOptionalText(request.getAccessPassword()));
         assignment.setUpdatedBy(currentUser);
 
-        replaceTargets(assignment, request.getTargets(), centerId);
+        replaceTargets(assignment, request.getTargets(), centerId, currentUser.getId());
 
         if (assignment.getStatus() != AssignmentStatus.DRAFT) {
             Instant now = Instant.now();
@@ -201,7 +201,7 @@ public class AssignmentService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        Assignment assignment = findTeacherAssignment(assignmentId, centerId, currentUser.getId());
         requireDraft(assignment, "Only draft assignments can be published");
         validatePublishable(assignment);
 
@@ -227,7 +227,7 @@ public class AssignmentService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        Assignment assignment = findTeacherAssignment(assignmentId, centerId, currentUser.getId());
         if (assignment.getStatus() != AssignmentStatus.ACTIVE && assignment.getStatus() != AssignmentStatus.SCHEDULED) {
             throw new BadRequestException("Only active or scheduled assignments can be closed");
         }
@@ -242,7 +242,7 @@ public class AssignmentService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        Assignment assignment = findTeacherAssignment(assignmentId, centerId, currentUser.getId());
         if (assignment.getStatus() != AssignmentStatus.CLOSED) {
             throw new BadRequestException("Only closed assignments can be archived");
         }
@@ -257,7 +257,7 @@ public class AssignmentService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        Assignment assignment = findTeacherAssignment(assignmentId, centerId, currentUser.getId());
         if (assignment.getStatus() != AssignmentStatus.ARCHIVED) {
             throw new BadRequestException("Only archived assignments can be restored");
         }
@@ -272,7 +272,7 @@ public class AssignmentService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        Assignment assignment = findActiveAssignment(assignmentId, centerId);
+        Assignment assignment = findTeacherAssignment(assignmentId, centerId, currentUser.getId());
         if (assignment.getStatus() != AssignmentStatus.DRAFT
                 && assignment.getStatus() != AssignmentStatus.ARCHIVED) {
             throw new BadRequestException("Only draft or archived assignments can be deleted");
@@ -372,18 +372,21 @@ public class AssignmentService {
         }
     }
 
-    private void replaceTargets(Assignment assignment, List<AssignmentTargetRequest> targetRequests, Long centerId) {
+    private void replaceTargets(Assignment assignment, List<AssignmentTargetRequest> targetRequests, Long centerId, Long teacherUserId) {
         assignment.getTargets().clear();
         targetRequests.stream()
-                .map(request -> toTarget(assignment, request, centerId))
+                .map(request -> toTarget(assignment, request, centerId, teacherUserId))
                 .forEach(assignment.getTargets()::add);
     }
 
-    private AssignmentTarget toTarget(Assignment assignment, AssignmentTargetRequest request, Long centerId) {
+    private AssignmentTarget toTarget(Assignment assignment, AssignmentTargetRequest request, Long centerId, Long teacherUserId) {
         if (request.getTargetType() == AssignmentTargetType.CLASS) {
             com.owlexa.owlexabackend.modules.class_management.entity.Class clazz = classRepository
                     .findByIdAndCenter_Id(request.getClassId(), centerId)
                     .orElseThrow(() -> new ResourceNotFoundException("Class not found with id: " + request.getClassId()));
+            if (clazz.getTeacherUser() == null || !teacherUserId.equals(clazz.getTeacherUser().getId())) {
+                throw new AccessDeniedException("Teacher can only assign work to their own classes");
+            }
             if (clazz.getStatus() != ClassStatus.ACTIVE) {
                 throw new BadRequestException("Class target must be active");
             }
@@ -402,6 +405,16 @@ public class AssignmentService {
         boolean hasMembership = membershipRepository.existsByUser_IdAndCenter_Id(student.getId(), centerId);
         if (!hasMembership) {
             throw new ResourceNotFoundException("Student not found with id: " + request.getStudentUserId());
+        }
+        boolean inTeacherClass = classEnrollmentRepository
+                .existsByStudentUser_IdAndClazz_TeacherUser_IdAndCenter_IdAndStatus(
+                        student.getId(),
+                        teacherUserId,
+                        centerId,
+                        EnrollmentStatus.ACTIVE
+                );
+        if (!inTeacherClass) {
+            throw new AccessDeniedException("Teacher can only assign work to students in their own active classes");
         }
 
         return AssignmentTarget.builder()
@@ -582,6 +595,15 @@ public class AssignmentService {
 
     private Assignment findActiveAssignment(Long assignmentId, Long centerId) {
         return assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(assignmentId, centerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + assignmentId));
+    }
+
+    private Assignment findTeacherAssignment(Long assignmentId, Long centerId, Long teacherUserId) {
+        return assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(
+                        assignmentId,
+                        centerId,
+                        teacherUserId
+                )
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + assignmentId));
     }
 

@@ -46,6 +46,12 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
 
     boolean existsByClazz_IdAndStudentUser_IdAndStatus(Long classId, Long studentUserId, EnrollmentStatus status);
 
+    boolean existsByStudentUser_IdAndClazz_TeacherUser_IdAndCenter_IdAndStatus(
+            Long studentUserId,
+            Long teacherUserId,
+            Long centerId,
+            EnrollmentStatus status);
+
     void deleteByClazz_IdAndCenter_Id(Long classId, Long centerId);
 
     List<ClassEnrollment> findAllByStudentUser_IdAndCenter_Id(Long studentUserId, Long centerId);

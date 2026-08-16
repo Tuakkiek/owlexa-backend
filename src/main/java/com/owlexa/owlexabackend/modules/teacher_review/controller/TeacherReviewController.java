@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/teacher")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('ESSAY_GRADE')")
+@PreAuthorize("hasAuthority('TEACHER_ASSIGNMENTS')")
 public class TeacherReviewController {
 
     private final TeacherReviewService teacherReviewService;
