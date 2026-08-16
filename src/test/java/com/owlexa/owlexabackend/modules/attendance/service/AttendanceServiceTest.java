@@ -13,6 +13,8 @@ import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
 import com.owlexa.owlexabackend.modules.class_management.entity.Class;
 import com.owlexa.owlexabackend.modules.class_management.entity.Schedule;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEvent;
+import com.owlexa.owlexabackend.modules.class_management.entity.ScheduleEventStatus;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleEventRepository;
 import com.owlexa.owlexabackend.modules.class_management.repository.ScheduleRepository;
 import com.owlexa.owlexabackend.modules.enrollment.entity.EnrollmentStatus;
@@ -64,6 +66,7 @@ class AttendanceServiceTest {
     private static final Long CENTER_ID = 10L;
     private static final Long OTHER_CENTER_ID = 99L;
     private static final Long SCHEDULE_ID = 50L;
+    private static final Long SCHEDULE_EVENT_ID = 51L;
     private static final Long CLASS_ID = 200L;
     private static final Long STUDENT_ID = 100L;
 
@@ -133,6 +136,26 @@ class AttendanceServiceTest {
         return schedule;
     }
 
+    private ScheduleEvent buildScheduleEvent(Long centerId, User assignedTeacher, LocalDate eventDate) {
+        Center center = new Center();
+        center.setId(centerId);
+
+        Class clazz = new Class();
+        clazz.setId(CLASS_ID);
+        clazz.setName("Class A");
+        clazz.setCenter(center);
+        clazz.setStatus(com.owlexa.owlexabackend.modules.class_management.entity.ClassStatus.ACTIVE);
+
+        ScheduleEvent event = new ScheduleEvent();
+        event.setId(SCHEDULE_EVENT_ID);
+        event.setCenter(center);
+        event.setClazz(clazz);
+        event.setTeacherUser(assignedTeacher);
+        event.setEventDate(eventDate);
+        event.setStatus(ScheduleEventStatus.SCHEDULED);
+        return event;
+    }
+
     private User buildStudent(Long id) {
         User student = new User();
         student.setId(id);
@@ -180,10 +203,6 @@ class AttendanceServiceTest {
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
         when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
                 CLASS_ID, STUDENT_ID, EnrollmentStatus.ACTIVE)).thenReturn(true);
-        when(feeRecordRepository.existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
-                org.mockito.ArgumentMatchers.eq(STUDENT_ID), org.mockito.ArgumentMatchers.eq(CLASS_ID),
-                org.mockito.ArgumentMatchers.eq(FeeStatus.UNPAID), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(false);
         when(attendanceRepository.findBySchedule_IdAndStudentUser_IdAndDate(
                 SCHEDULE_ID, STUDENT_ID, LocalDate.of(2026, 7, 10))).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> {
@@ -203,6 +222,50 @@ class AttendanceServiceTest {
         assertThat(response).hasSize(1);
         assertThat(response.get(0).getStudentUserId()).isEqualTo(STUDENT_ID);
         assertThat(response.get(0).getStatus()).isEqualTo(AttendanceStatus.PRESENT);
+    }
+
+    @Test
+    @DisplayName("markScheduleEvent: TEACHER + event hợp lệ → tạo attendance theo schedule_event_id")
+    void markScheduleEvent_whenValid_shouldCreateEventAttendance() {
+        ScheduleEvent event = buildScheduleEvent(CENTER_ID, teacher, LocalDate.of(2026, 7, 10));
+        when(scheduleEventRepository.findById(SCHEDULE_EVENT_ID)).thenReturn(Optional.of(event));
+        when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
+        when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
+                CLASS_ID, STUDENT_ID, EnrollmentStatus.ACTIVE)).thenReturn(true);
+        when(attendanceRepository.findByScheduleEvent_IdAndStudentUser_IdAndDate(
+                SCHEDULE_EVENT_ID, STUDENT_ID, LocalDate.of(2026, 7, 10))).thenReturn(Optional.empty());
+        when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> {
+            Attendance a = invocation.getArgument(0);
+            a.setId(1L);
+            return a;
+        });
+
+        AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
+                .studentUserId(STUDENT_ID)
+                .status(AttendanceStatus.PRESENT)
+                .build();
+
+        List<AttendanceResponse> response = service.markScheduleEvent(
+                SCHEDULE_EVENT_ID, buildMarkRequest(List.of(item)));
+
+        assertThat(response).hasSize(1);
+        assertThat(response.get(0).getScheduleId()).isNull();
+        assertThat(response.get(0).getScheduleEventId()).isEqualTo(SCHEDULE_EVENT_ID);
+    }
+
+    @Test
+    @DisplayName("markScheduleEvent: date khác eventDate → BusinessRuleException")
+    void markScheduleEvent_whenDateDoesNotMatchEventDate_shouldThrowBusinessRule() {
+        ScheduleEvent event = buildScheduleEvent(CENTER_ID, teacher, LocalDate.of(2026, 7, 11));
+        when(scheduleEventRepository.findById(SCHEDULE_EVENT_ID)).thenReturn(Optional.of(event));
+
+        AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
+                .studentUserId(STUDENT_ID)
+                .status(AttendanceStatus.PRESENT)
+                .build();
+
+        assertThatThrownBy(() -> service.markScheduleEvent(SCHEDULE_EVENT_ID, buildMarkRequest(List.of(item))))
+                .isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
@@ -408,6 +471,24 @@ class AttendanceServiceTest {
     }
 
     @Test
+    @DisplayName("findAllByScheduleEvent: teacher khong duoc phan cong -> AccessDeniedException")
+    void findAllByScheduleEvent_whenTeacherNotAssigned_shouldThrowAccessDenied() {
+        User assignedTeacher = new User();
+        assignedTeacher.setId(OTHER_TEACHER_ID);
+        assignedTeacher.setPhoneNumber("0900000002");
+        assignedTeacher.setFullName("Other Teacher");
+        assignedTeacher.setRole(Role.TEACHER);
+
+        ScheduleEvent event = buildScheduleEvent(
+                CENTER_ID, assignedTeacher, LocalDate.of(2026, 7, 10));
+        when(scheduleEventRepository.findById(SCHEDULE_EVENT_ID)).thenReturn(Optional.of(event));
+
+        assertThatThrownBy(() -> service.findAllByScheduleEvent(
+                SCHEDULE_EVENT_ID, LocalDate.of(2026, 7, 10)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("findMyAttendancesAsStudent: trả về attendance của chính student đó")
     void findMyAttendancesAsStudent_shouldReturnOwnAttendance() {
         SecurityContextHolder.clearContext();
@@ -515,10 +596,11 @@ class AttendanceServiceTest {
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(buildStudent(STUDENT_ID)));
         when(classEnrollmentRepository.existsByClazz_IdAndStudentUser_IdAndStatus(
                 CLASS_ID, STUDENT_ID, EnrollmentStatus.ACTIVE)).thenReturn(true);
-        when(feeRecordRepository.existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
+        when(feeRecordRepository.countOutstandingDueByStudentAndClass(
                 org.mockito.ArgumentMatchers.eq(STUDENT_ID), org.mockito.ArgumentMatchers.eq(CLASS_ID),
-                org.mockito.ArgumentMatchers.eq(FeeStatus.UNPAID), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
+                org.mockito.ArgumentMatchers.eq(List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE)),
+                org.mockito.ArgumentMatchers.eq(LocalDate.of(2026, 7, 10))))
+                .thenReturn(1L);
 
         AttendanceMarkRequest.Item item = AttendanceMarkRequest.Item.builder()
                 .studentUserId(STUDENT_ID)

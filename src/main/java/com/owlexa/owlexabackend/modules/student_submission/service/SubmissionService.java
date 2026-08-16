@@ -751,12 +751,16 @@ public class SubmissionService {
         if (attempt.getStatus() != SubmissionAttemptStatus.IN_PROGRESS) {
             return attempt;
         }
-        if (attempt.getExpiresAt() != null && !now.isBefore(attempt.getExpiresAt())) {
+        Instant deadline = effectiveAttemptDeadline(attempt);
+        if (deadline != null && !now.isBefore(deadline)) {
             Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
-            log.info("Finalizing expired attempt: attemptId={}, expiresAt={}, now={}",
+            log.info("Finalizing expired attempt: attemptId={}, deadline={}, now={}",
                     attempt.getId(),
-                    attempt.getExpiresAt(),
+                    deadline,
                     now);
+            if (attempt.getExpiresAt() == null) {
+                attempt.setExpiresAt(deadline);
+            }
             scoreAttempt(attempt, assignment, now);
             attempt.setSubmittedAt(now);
             attempt.setStatus(SubmissionAttemptStatus.AUTO_SUBMITTED);
@@ -765,6 +769,16 @@ public class SubmissionService {
             return submissionAttemptRepository.save(attempt);
         }
         return attempt;
+    }
+
+    private Instant effectiveAttemptDeadline(SubmissionAttempt attempt) {
+        Instant expiresAt = attempt.getExpiresAt();
+        Instant dueAt = attempt.getAssignmentRecipient().getAssignment().getDueAt();
+
+        if (expiresAt != null && dueAt != null) {
+            return expiresAt.isBefore(dueAt) ? expiresAt : dueAt;
+        }
+        return expiresAt != null ? expiresAt : dueAt;
     }
 
     /**

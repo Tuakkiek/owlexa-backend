@@ -1,5 +1,6 @@
 package com.owlexa.owlexabackend.modules.attendance.service;
 
+
 import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.BusinessRuleException;
@@ -8,6 +9,7 @@ import com.owlexa.owlexabackend.common.exception.TenancyViolationException;
 import com.owlexa.owlexabackend.modules.attendance.dto.request.AttendanceMarkRequest;
 import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceResponse;
 import com.owlexa.owlexabackend.modules.attendance.dto.response.AttendanceStatsResponse;
+import com.owlexa.owlexabackend.modules.attendance.dto.response.ClassSessionResponse;
 import com.owlexa.owlexabackend.modules.attendance.entity.Attendance;
 import com.owlexa.owlexabackend.modules.attendance.entity.AttendanceStatus;
 import com.owlexa.owlexabackend.modules.attendance.repository.AttendanceRepository;
@@ -47,18 +49,142 @@ public class AttendanceService {
     private final UserRepository userRepository;
     private final FeeRecordRepository feeRecordRepository;
 
+    @Transactional(readOnly = true)
+    public List<ClassSessionResponse> findAllClassSessionsByDate(LocalDate date) {
+        Long centerId = requiredCurrentCenterId();
+        
+        List<ScheduleEvent> events = scheduleEventRepository
+            .findAllByCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(centerId, date, ScheduleEventStatus.CANCELLED);
+            
+        List<ClassSessionResponse> responses = new ArrayList<>();
+        
+        for (ScheduleEvent event : events) {
+            long studentCount = classEnrollmentRepository.countByClazz_IdAndStatus(
+                event.getClazz().getId(), EnrollmentStatus.ACTIVE);
+                
+            List<Attendance> attendances = attendanceRepository.findAllByScheduleEvent_IdAndDate(event.getId(), date);
+            
+            int presentCount = 0;
+            int absentCount = 0;
+            int lateCount = 0;
+            int excusedCount = 0;
+            
+            for (Attendance a : attendances) {
+                switch (a.getStatus()) {
+                    case PRESENT -> presentCount++;
+                    case ABSENT -> absentCount++;
+                    case LATE -> lateCount++;
+                    case EXCUSED -> excusedCount++;
+                }
+            }
+            
+            String status = (attendances.size() >= studentCount && studentCount > 0) ? "COMPLETED" : "PENDING";
+            if (studentCount == 0 && !attendances.isEmpty()) {
+                status = "COMPLETED"; // Edge case: no active students but attendance was taken somehow
+            }
+            
+            responses.add(ClassSessionResponse.builder()
+                .scheduleEventId(event.getId())
+                .classId(event.getClazz().getId())
+                .className(event.getClazz().getName())
+                .teacherUserId(event.getTeacherUser() != null ? event.getTeacherUser().getId() : null)
+                .teacherUserFullName(event.getTeacherUser() != null ? event.getTeacherUser().getFullName() : null)
+                .roomId(event.getRoom() != null ? event.getRoom().getId() : null)
+                .roomName(event.getRoom() != null ? event.getRoom().getName() : null)
+                .date(event.getEventDate())
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .attendanceStatus(status)
+                .studentCount((int) studentCount)
+                .presentCount(presentCount)
+                .absentCount(absentCount)
+                .lateCount(lateCount)
+                .excusedCount(excusedCount)
+                .build());
+        }
+        
+        return responses;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClassSessionResponse> findTeacherClassSessionsByDate(LocalDate date) {
+        User currentUser = getCurrentUser();
+        Long teacherUserId = currentUser.getId();
+        Long centerId = requiredCurrentCenterId();
+        
+        List<ScheduleEvent> events = scheduleEventRepository
+            .findAllByTeacherUser_IdAndCenter_IdAndEventDateAndStatusNotOrderByStartTimeAsc(teacherUserId, centerId, date, ScheduleEventStatus.CANCELLED);
+            
+        List<ClassSessionResponse> responses = new ArrayList<>();
+        
+        for (ScheduleEvent event : events) {
+            long studentCount = classEnrollmentRepository.countByClazz_IdAndStatus(
+                event.getClazz().getId(), EnrollmentStatus.ACTIVE);
+                
+            List<Attendance> attendances = attendanceRepository.findAllByScheduleEvent_IdAndDate(event.getId(), date);
+            
+            int presentCount = 0;
+            int absentCount = 0;
+            int lateCount = 0;
+            int excusedCount = 0;
+            
+            for (Attendance a : attendances) {
+                switch (a.getStatus()) {
+                    case PRESENT -> presentCount++;
+                    case ABSENT -> absentCount++;
+                    case LATE -> lateCount++;
+                    case EXCUSED -> excusedCount++;
+                }
+            }
+            
+            String status = (attendances.size() >= studentCount && studentCount > 0) ? "COMPLETED" : "PENDING";
+            if (studentCount == 0 && !attendances.isEmpty()) {
+                status = "COMPLETED"; // Edge case: no active students but attendance was taken somehow
+            }
+            
+            responses.add(ClassSessionResponse.builder()
+                .scheduleEventId(event.getId())
+                .classId(event.getClazz().getId())
+                .className(event.getClazz().getName())
+                .teacherUserId(event.getTeacherUser() != null ? event.getTeacherUser().getId() : null)
+                .teacherUserFullName(event.getTeacherUser() != null ? event.getTeacherUser().getFullName() : null)
+                .roomId(event.getRoom() != null ? event.getRoom().getId() : null)
+                .roomName(event.getRoom() != null ? event.getRoom().getName() : null)
+                .date(event.getEventDate())
+                .startTime(event.getStartTime())
+                .endTime(event.getEndTime())
+                .attendanceStatus(status)
+                .studentCount((int) studentCount)
+                .presentCount(presentCount)
+                .absentCount(absentCount)
+                .lateCount(lateCount)
+                .excusedCount(excusedCount)
+                .build());
+        }
+        
+        return responses;
+    }
+
     @Transactional
     public List<AttendanceResponse> mark(Long scheduleId, AttendanceMarkRequest request) {
+        return markResolvedTarget(findScheduleTarget(scheduleId), request);
+    }
+
+    @Transactional
+    public List<AttendanceResponse> markScheduleEvent(Long scheduleEventId, AttendanceMarkRequest request) {
+        return markResolvedTarget(findScheduleEventTarget(scheduleEventId), request);
+    }
+
+    private List<AttendanceResponse> markResolvedTarget(AttendanceTarget target, AttendanceMarkRequest request) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
-        AttendanceTarget target = findAttendanceTarget(scheduleId);
-
         if (!target.center().getId().equals(centerId)) {
-            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
+            throw new TenancyViolationException("Attendance target " + target.id() + " belongs to another center");
         }
 
         assertCanMarkAttendance(currentUser, centerId, target);
+        validateAttendanceDate(target, request.getDate());
 
         if (target.event() != null && target.event().getStatus() == ScheduleEventStatus.CANCELLED) {
             throw new BusinessRuleException("Cannot mark attendance for a cancelled schedule event.");
@@ -93,13 +219,12 @@ public class AttendanceService {
                 );
             }
 
-            boolean hasUnpaidOverdue = feeRecordRepository
-                    .existsByStudentUser_IdAndClazz_IdAndStatusAndDueDateBefore(
-                            student.getId(),
-                            target.clazz().getId(),
-                            FeeStatus.UNPAID,
-                            request.getDate() != null ? request.getDate() : LocalDate.now()
-                    );
+            boolean hasUnpaidOverdue = feeRecordRepository.countOutstandingDueByStudentAndClass(
+                    student.getId(),
+                    target.clazz().getId(),
+                    List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE),
+                    request.getDate()
+            ) > 0;
             if (hasUnpaidOverdue) {
                 throw new BusinessRuleException(
                         "Student has unpaid overdue fees: " + student.getId()
@@ -122,20 +247,28 @@ public class AttendanceService {
 
     @Transactional(readOnly = true)
     public List<AttendanceResponse> findAllBySchedule(Long scheduleId, LocalDate date) {
+        return findAllByResolvedTarget(findScheduleTarget(scheduleId), date);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AttendanceResponse> findAllByScheduleEvent(Long scheduleEventId, LocalDate date) {
+        return findAllByResolvedTarget(findScheduleEventTarget(scheduleEventId), date);
+    }
+
+    private List<AttendanceResponse> findAllByResolvedTarget(AttendanceTarget target, LocalDate date) {
         User currentUser = getCurrentUser();
         Long centerId = requiredCurrentCenterId();
 
-        assertCenterMembership(currentUser, centerId);
-
-        AttendanceTarget target = findAttendanceTarget(scheduleId);
-
         if (!target.center().getId().equals(centerId)) {
-            throw new TenancyViolationException("Schedule " + scheduleId + " belongs to another center");
+            throw new TenancyViolationException("Attendance target " + target.id() + " belongs to another center");
         }
 
+        assertCanViewAttendance(currentUser, centerId, target);
+        validateAttendanceDate(target, date);
+
         List<Attendance> attendances = target.event() != null
-                ? attendanceRepository.findAllByScheduleEvent_IdAndDate(scheduleId, date)
-                : attendanceRepository.findAllBySchedule_IdAndDate(scheduleId, date);
+                ? attendanceRepository.findAllByScheduleEvent_IdAndDate(target.id(), date)
+                : attendanceRepository.findAllBySchedule_IdAndDate(target.id(), date);
 
         return attendances
                 .stream()
@@ -272,6 +405,44 @@ public class AttendanceService {
         throw new AccessDeniedException("Only the assigned teacher can mark student attendance");
     }
 
+    private void assertCanViewAttendance(User currentUser, Long centerId, AttendanceTarget target) {
+        assertCenterMembership(currentUser, centerId);
+
+        if (currentUser.getRole() == Role.OWNER) {
+            return;
+        }
+
+        if (currentUser.getRole() == Role.TEACHER) {
+            if (target.teacherUser() == null) {
+                throw new BusinessRuleException(
+                        "Schedule " + target.id() + " has no assigned teacher. Cannot view attendance.");
+            }
+
+            if (!target.teacherUser().getId().equals(currentUser.getId())) {
+                throw new AccessDeniedException(
+                        "Only the assigned teacher of this schedule can view attendance. " +
+                        "You are not the assigned teacher for schedule " + target.id());
+            }
+            return;
+        }
+
+        throw new AccessDeniedException("Only OWNER or the assigned teacher can view student attendance");
+    }
+
+    private void validateAttendanceDate(AttendanceTarget target, LocalDate date) {
+        if (target.event() != null && !target.event().getEventDate().equals(date)) {
+            throw new BusinessRuleException(
+                    "Attendance date must match schedule event date: " + target.event().getEventDate());
+        }
+
+        if (target.schedule() != null
+                && target.schedule().getDayOfWeek() != null
+                && !target.schedule().getDayOfWeek().equals(date.getDayOfWeek())) {
+            throw new BusinessRuleException(
+                    "Attendance date must match schedule day of week: " + target.schedule().getDayOfWeek());
+        }
+    }
+
     private AttendanceResponse toResponse(Attendance attendance) {
         Class clazz = attendance.getScheduleEvent() != null
                 ? attendance.getScheduleEvent().getClazz()
@@ -279,7 +450,7 @@ public class AttendanceService {
         return AttendanceResponse.builder()
                 .id(attendance.getId())
                 .scheduleId(attendance.getScheduleEvent() != null
-                        ? attendance.getScheduleEvent().getId()
+                        ? null
                         : attendance.getSchedule().getId())
                 .scheduleEventId(attendance.getScheduleEvent() != null ? attendance.getScheduleEvent().getId() : null)
                 .classId(clazz.getId())
@@ -295,7 +466,20 @@ public class AttendanceService {
                 .build();
     }
 
-    private AttendanceTarget findAttendanceTarget(Long id) {
+    private AttendanceTarget findScheduleTarget(Long id) {
+        return scheduleRepository.findById(id)
+                .map(schedule -> new AttendanceTarget(
+                        schedule.getId(),
+                        schedule.getCenter(),
+                        schedule.getClazz(),
+                        schedule.getTeacherUser(),
+                        schedule,
+                        null
+                ))
+                .orElseThrow(() -> new ResourceNotFoundException("Schedule not found with id: " + id));
+    }
+
+    private AttendanceTarget findScheduleEventTarget(Long id) {
         return scheduleEventRepository.findById(id)
                 .map(event -> new AttendanceTarget(
                         event.getId(),
@@ -305,16 +489,7 @@ public class AttendanceService {
                         null,
                         event
                 ))
-                .orElseGet(() -> scheduleRepository.findById(id)
-                        .map(schedule -> new AttendanceTarget(
-                                schedule.getId(),
-                                schedule.getCenter(),
-                                schedule.getClazz(),
-                                schedule.getTeacherUser(),
-                                schedule,
-                                null
-                        ))
-                        .orElseThrow(() -> new ResourceNotFoundException("Schedule event not found with id: " + id)));
+                .orElseThrow(() -> new ResourceNotFoundException("Schedule event not found with id: " + id));
     }
 
     private java.util.Optional<Attendance> findAttendance(AttendanceTarget target, Long studentUserId, LocalDate date) {

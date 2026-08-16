@@ -3,6 +3,7 @@ import com.owlexa.owlexabackend.common.context.TenantContext;
 import com.owlexa.owlexabackend.modules.payment.dto.request.CashPaymentRequest;
 import com.owlexa.owlexabackend.modules.payment.dto.response.BankTransferQrResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentResponse;
+import com.owlexa.owlexabackend.modules.payment.dto.response.PaymentSummaryResponse;
 import com.owlexa.owlexabackend.modules.payment.dto.response.TimelineEntryResponse;
 import com.owlexa.owlexabackend.modules.payment.entity.PaymentMethod;
 import com.owlexa.owlexabackend.modules.payment.entity.Payment;
@@ -150,13 +151,32 @@ public class PaymentController {
             @RequestParam(required = false) String student,
             @RequestParam(required = false) Long cashierId,
             @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(required = false) TransactionStatus status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate,
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable
     ) {
         Long centerId = TenantContext.getCurrentTenantId();
-        return paymentService.findAllPaginated(centerId, student, cashierId, method, startDate, endDate, pageable);
+        return paymentService.findAllPaginated(centerId, student, cashierId, method, status, startDate, endDate, pageable);
     }
+
+    @GetMapping({
+            "/owner/payments/summary",
+            "/cashier/payments/summary"
+    })
+    @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
+    public PaymentSummaryResponse getPaymentSummary(
+            @RequestParam(required = false) String student,
+            @RequestParam(required = false) Long cashierId,
+            @RequestParam(required = false) PaymentMethod method,
+            @RequestParam(required = false) TransactionStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant endDate
+    ) {
+        Long centerId = TenantContext.getCurrentTenantId();
+        return paymentService.getPaymentSummary(centerId, student, cashierId, method, status, startDate, endDate);
+    }
+
 
     @GetMapping({
             "/owner/payments/{paymentId}/receipt",

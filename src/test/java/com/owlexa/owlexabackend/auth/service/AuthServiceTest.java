@@ -13,6 +13,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Permission;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.entity.UserSession;
+import com.owlexa.owlexabackend.common.exception.AuthSessionException;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
@@ -368,7 +369,7 @@ class AuthServiceTest {
         String requestToken = "";
 
         assertThatThrownBy(() -> authService.refreshToken(requestToken))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(AuthSessionException.class)
                 .hasMessageContaining("Refresh token must not be empty");
 
         verify(jwtUtil, never()).isRefreshToken(any());
@@ -379,7 +380,7 @@ class AuthServiceTest {
         String requestToken = null;
 
         assertThatThrownBy(() -> authService.refreshToken(requestToken))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(AuthSessionException.class)
                 .hasMessageContaining("Refresh token must not be empty");
 
         verify(jwtUtil, never()).isRefreshToken(any());
@@ -393,7 +394,7 @@ class AuthServiceTest {
         when(jwtUtil.extractSessionId("malformed-token")).thenReturn(null);
 
         assertThatThrownBy(() -> authService.refreshToken(requestToken))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(AuthSessionException.class)
                 .hasMessageContaining("Malformed token");
     }
 
@@ -417,7 +418,7 @@ class AuthServiceTest {
         when(jwtUtil.hashToken("reuse-refresh-token")).thenReturn("incoming-hash");
 
         assertThatThrownBy(() -> authService.refreshToken(requestToken))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(AuthSessionException.class)
                 .hasMessageContaining("Security alert: token reuse detected");
 
         verify(sessionRepository).deactivateAllByUserIdWithReason(1L, "REUSE_DETECTED");
@@ -443,7 +444,7 @@ class AuthServiceTest {
         when(jwtUtil.hashToken("revoked-refresh-token")).thenReturn("hashed-token");
 
         assertThatThrownBy(() -> authService.refreshToken(requestToken))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(AuthSessionException.class)
                 .hasMessageContaining("Session has been revoked");
     }
 
@@ -469,7 +470,7 @@ class AuthServiceTest {
         when(jwtUtil.hashToken("expired-refresh-token")).thenReturn("hashed-token");
 
         assertThatThrownBy(() -> authService.refreshToken(requestToken))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(AuthSessionException.class)
                 .hasMessageContaining("Session has expired");
 
         assertThat(session.isActive()).isFalse();
