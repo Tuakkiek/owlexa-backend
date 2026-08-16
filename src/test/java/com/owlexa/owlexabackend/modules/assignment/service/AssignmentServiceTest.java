@@ -214,6 +214,12 @@ class AssignmentServiceTest {
                 .thenReturn(Optional.of(buildAssessment(AssessmentStatus.PUBLISHED)));
         when(userRepository.findById(STUDENT_ID)).thenReturn(Optional.of(student));
         when(membershipRepository.existsByUser_IdAndCenter_Id(STUDENT_ID, CENTER_ID)).thenReturn(true);
+        when(classEnrollmentRepository.existsByStudentUser_IdAndClazz_TeacherUser_IdAndCenter_IdAndStatus(
+                STUDENT_ID,
+                TEACHER_ID,
+                CENTER_ID,
+                EnrollmentStatus.ACTIVE
+        )).thenReturn(true);
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AssignmentDetailResponse response = service.create(validStudentAssignmentRequest());
@@ -226,7 +232,7 @@ class AssignmentServiceTest {
     @DisplayName("update: archived assignments cannot be updated")
     void update_whenAssignmentIsArchived_shouldThrowBadRequest() {
         Assignment assignment = buildAssignment(AssignmentStatus.ARCHIVED);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.update(ASSIGNMENT_ID, validClassAssignmentRequest()))
@@ -241,7 +247,7 @@ class AssignmentServiceTest {
         assignment.setAssessment(buildAssessment(AssessmentStatus.PUBLISHED));
         assignment.setTargets(new ArrayList<>(List.of(buildClassTarget())));
 
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assessmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSESSMENT_ID, CENTER_ID))
                 .thenReturn(Optional.of(buildAssessment(AssessmentStatus.PUBLISHED)));
@@ -265,7 +271,7 @@ class AssignmentServiceTest {
                 buildClassTarget(),
                 buildStudentTarget(student)
         ));
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(classEnrollmentRepository.findAllByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment(student), enrollment(secondStudent)));
@@ -292,7 +298,7 @@ class AssignmentServiceTest {
     void publish_whenOpenAtIsFuture_shouldScheduleAssignment() {
         Assignment assignment = buildDraftAssignmentWithTargets(List.of(buildStudentTarget(student)));
         assignment.setOpenAt(Instant.now().plusSeconds(3600));
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -306,7 +312,7 @@ class AssignmentServiceTest {
     @DisplayName("publish: target with no active recipients throws BadRequestException")
     void publish_whenTargetsProduceNoRecipients_shouldThrowBadRequest() {
         Assignment assignment = buildDraftAssignmentWithTargets(List.of(buildClassTarget()));
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(classEnrollmentRepository.findAllByClazz_IdAndStatus(CLASS_ID, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of());
@@ -320,7 +326,7 @@ class AssignmentServiceTest {
     void publish_whenSourceAssessmentIsNoLongerPublished_shouldRejectBeforeSnapshot() {
         Assignment assignment = buildDraftAssignmentWithTargets(List.of(buildStudentTarget(student)));
         assignment.getAssessment().setStatus(AssessmentStatus.DRAFT);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.publish(ASSIGNMENT_ID))
@@ -334,14 +340,14 @@ class AssignmentServiceTest {
     @Test
     @DisplayName("publish: assignment lookup is scoped to the current tenant")
     void publish_whenAssignmentIsOutsideTenant_shouldReturnNotFound() {
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.publish(ASSIGNMENT_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
 
         verify(assignmentRepository)
-                .findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID);
+                .findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID);
 
     }
 
@@ -349,7 +355,7 @@ class AssignmentServiceTest {
     @DisplayName("close: active assignment becomes closed")
     void close_whenActive_shouldCloseAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -363,7 +369,7 @@ class AssignmentServiceTest {
     @DisplayName("archive: only closed assignments can be archived")
     void archive_whenAssignmentIsClosed_shouldArchiveAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.CLOSED);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -376,7 +382,7 @@ class AssignmentServiceTest {
     @DisplayName("restore: archived assignment becomes closed again")
     void restore_whenAssignmentIsArchived_shouldRestoreAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.ARCHIVED);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -390,7 +396,7 @@ class AssignmentServiceTest {
     @DisplayName("restore: only archived assignments can be restored")
     void restore_whenAssignmentIsNotArchived_shouldThrowBadRequest() {
         Assignment assignment = buildAssignment(AssignmentStatus.CLOSED);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.restore(ASSIGNMENT_ID))
@@ -402,7 +408,7 @@ class AssignmentServiceTest {
     @DisplayName("delete: draft assignment can be soft deleted")
     void delete_whenDraft_shouldSoftDeleteAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.DRAFT);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -417,7 +423,7 @@ class AssignmentServiceTest {
     @DisplayName("delete: archived assignment can be soft deleted")
     void delete_whenArchived_shouldSoftDeleteAssignment() {
         Assignment assignment = buildAssignment(AssignmentStatus.ARCHIVED);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any(Assignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -432,7 +438,7 @@ class AssignmentServiceTest {
     @DisplayName("delete: active assignment still cannot be deleted")
     void delete_whenActive_shouldThrowBadRequest() {
         Assignment assignment = buildAssignment(AssignmentStatus.ACTIVE);
-        when(assignmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID))
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(ASSIGNMENT_ID, CENTER_ID, TEACHER_ID))
                 .thenReturn(Optional.of(assignment));
 
         assertThatThrownBy(() -> service.delete(ASSIGNMENT_ID))
@@ -673,6 +679,7 @@ class AssignmentServiceTest {
                 .id(CLASS_ID)
                 .center(center)
                 .name("Class A")
+                .teacherUser(teacher)
                 .status(status)
                 .build();
     }

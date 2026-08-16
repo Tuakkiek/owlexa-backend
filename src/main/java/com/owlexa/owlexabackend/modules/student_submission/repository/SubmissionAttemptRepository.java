@@ -40,6 +40,12 @@ public interface SubmissionAttemptRepository extends JpaRepository<SubmissionAtt
             Long centerId
     );
 
+    boolean existsByIdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_CreatedBy_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
+            Long id,
+            Long centerId,
+            Long teacherUserId
+    );
+
     Page<SubmissionAttempt> findAllByAssignmentRecipient_Assignment_IdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
             Long assignmentId,
             Long centerId,

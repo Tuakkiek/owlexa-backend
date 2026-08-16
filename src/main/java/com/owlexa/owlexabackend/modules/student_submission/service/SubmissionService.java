@@ -18,6 +18,7 @@ import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipient;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentRecipientStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentStatus;
 import com.owlexa.owlexabackend.modules.assignment.entity.AssignmentTargetType;
+import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRepository;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
 import com.owlexa.owlexabackend.modules.enrollment.service.EnrollmentAccessService;
 import com.owlexa.owlexabackend.modules.question_bank.entity.QuestionType;
@@ -73,6 +74,7 @@ public class SubmissionService {
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2);
 
     private final AssignmentRecipientRepository assignmentRecipientRepository;
+    private final AssignmentRepository assignmentRepository;
     private final SubmissionAttemptRepository submissionAttemptRepository;
     private final AuthorizationService authorizationService;
     private final MembershipRepository membershipRepository;
@@ -429,8 +431,9 @@ public class SubmissionService {
 
     @Transactional(readOnly = true)
     public Page<TeacherSubmissionSummaryResponse> findAssignmentSubmissions(Long assignmentId, Pageable pageable) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
+        requireTeacherAssignment(assignmentId, centerId, teacher.getId());
 
         return assignmentRecipientRepository
                 .findAllByAssignment_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
@@ -491,7 +494,7 @@ public class SubmissionService {
 
     @Transactional(readOnly = true)
     public TeacherAttemptDetailResponse findAttemptDetailForTeacher(Long attemptId) {
-        requireTeacherInCurrentCenter();
+        User teacher = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
         SubmissionAttempt attempt = submissionAttemptRepository
@@ -504,6 +507,7 @@ public class SubmissionService {
         if (attempt.getAssignmentRecipient().getStatus() != AssignmentRecipientStatus.ASSIGNED) {
             throw new ResourceNotFoundException("Submission attempt not found with id: " + attemptId);
         }
+        requireTeacherOwnsAttempt(attempt, teacher.getId(), attemptId);
 
         return submissionMapper.toTeacherAttemptDetailResponse(attempt);
     }
@@ -846,6 +850,24 @@ public class SubmissionService {
         }
 
         return currentUser;
+    }
+
+    private void requireTeacherAssignment(Long assignmentId, Long centerId, Long teacherUserId) {
+        assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(
+                        assignmentId,
+                        centerId,
+                        teacherUserId
+                )
+                .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with id: " + assignmentId));
+    }
+
+    private void requireTeacherOwnsAttempt(SubmissionAttempt attempt, Long teacherUserId, Long attemptId) {
+        Assignment assignment = attempt.getAssignmentRecipient().getAssignment();
+        if (assignment == null
+                || assignment.getCreatedBy() == null
+                || !teacherUserId.equals(assignment.getCreatedBy().getId())) {
+            throw new ResourceNotFoundException("Submission attempt not found with id: " + attemptId);
+        }
     }
 
     private User requireStudentInCurrentCenter() {

@@ -55,13 +55,13 @@ public class StudentDocumentController {
     // ── Teacher: class documents ─────────────────────────────────────────────
 
     @GetMapping("/teacher/classes/{classId}/documents")
-    @PreAuthorize("hasAuthority('DOCUMENT_VIEW')")
+    @PreAuthorize("hasAuthority('TEACHER_DOCUMENTS')")
     public List<StudentDocumentResponse> findClassDocumentsAsTeacher(@PathVariable Long classId) {
         return studentDocumentService.findClassDocumentsAsTeacher(classId);
     }
 
     @PostMapping("/teacher/classes/{classId}/documents")
-    @PreAuthorize("hasAuthority('DOCUMENT_UPLOAD')")
+    @PreAuthorize("hasAuthority('TEACHER_DOCUMENTS')")
     public StudentDocumentResponse createForClassAsTeacher(
             @PathVariable Long classId,
             @RequestBody StudentDocumentRequest request
@@ -70,7 +70,7 @@ public class StudentDocumentController {
     }
 
     @DeleteMapping("/teacher/classes/{classId}/documents/{documentId}")
-    @PreAuthorize("hasAuthority('DOCUMENT_DELETE')")
+    @PreAuthorize("hasAuthority('TEACHER_DOCUMENTS')")
     public void deleteForClassAsTeacher(
             @PathVariable Long classId,
             @PathVariable Long documentId

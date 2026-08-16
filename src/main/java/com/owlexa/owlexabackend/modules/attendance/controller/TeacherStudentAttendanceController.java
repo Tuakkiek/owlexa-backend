@@ -21,7 +21,7 @@ public class TeacherStudentAttendanceController {
 
     /** Teacher views class sessions for a specific date */
     @GetMapping("/class-sessions")
-    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
+    @PreAuthorize("hasAuthority('TEACHER_ATTENDANCE')")
     public List<com.owlexa.owlexabackend.modules.attendance.dto.response.ClassSessionResponse> findClassSessionsByDate(
             @RequestParam LocalDate date
     ) {
@@ -31,7 +31,7 @@ public class TeacherStudentAttendanceController {
     /** Teacher marks attendance for students in their own schedule */
     @PostMapping("/schedules/{scheduleId}")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
+    @PreAuthorize("hasAuthority('TEACHER_ATTENDANCE')")
     public List<AttendanceResponse> mark(
             @PathVariable Long scheduleId,
             @Valid @RequestBody AttendanceMarkRequest request
@@ -41,7 +41,7 @@ public class TeacherStudentAttendanceController {
 
     /** Teacher views attendance for their own schedule */
     @GetMapping("/schedules/{scheduleId}")
-    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
+    @PreAuthorize("hasAuthority('TEACHER_ATTENDANCE')")
     public List<AttendanceResponse> findBySchedule(
             @PathVariable Long scheduleId,
             @RequestParam LocalDate date
@@ -52,7 +52,7 @@ public class TeacherStudentAttendanceController {
     /** Teacher marks attendance for students in their own schedule event */
     @PostMapping("/schedule-events/{scheduleEventId}")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
+    @PreAuthorize("hasAuthority('TEACHER_ATTENDANCE')")
     public List<AttendanceResponse> markScheduleEvent(
             @PathVariable Long scheduleEventId,
             @Valid @RequestBody AttendanceMarkRequest request
@@ -62,7 +62,7 @@ public class TeacherStudentAttendanceController {
 
     /** Teacher views attendance for their own schedule event */
     @GetMapping("/schedule-events/{scheduleEventId}")
-    @PreAuthorize("hasAuthority('ATTENDANCE_MARK')")
+    @PreAuthorize("hasAuthority('TEACHER_ATTENDANCE')")
     public List<AttendanceResponse> findByScheduleEvent(
             @PathVariable Long scheduleEventId,
             @RequestParam LocalDate date

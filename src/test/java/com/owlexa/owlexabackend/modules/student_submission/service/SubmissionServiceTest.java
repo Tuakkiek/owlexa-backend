@@ -18,6 +18,7 @@ import com.owlexa.owlexabackend.modules.ai_grading.entity.AIGradingResult;
 import com.owlexa.owlexabackend.modules.ai_grading.provider.gemini.GeminiGradingResultParser;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingJobRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
+import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRepository;
 import com.owlexa.owlexabackend.modules.assignment.repository.AssignmentRecipientRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingOutputReader;
 import com.owlexa.owlexabackend.modules.ai_grading.service.AIGradingService;
@@ -72,6 +73,7 @@ import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDo
 class SubmissionServiceTest {
 
     @Mock private AssignmentRecipientRepository assignmentRecipientRepository;
+    @Mock private AssignmentRepository assignmentRepository;
     @Mock private SubmissionAttemptRepository submissionAttemptRepository;
     @Mock private AuthorizationService authorizationService;
     @Mock private MembershipRepository membershipRepository;
@@ -105,6 +107,7 @@ class SubmissionServiceTest {
         FileMapper fileMapper = new FileMapper();
         service = new SubmissionService(
                 assignmentRecipientRepository,
+                assignmentRepository,
                 submissionAttemptRepository,
                 authorizationService,
                 membershipRepository,
@@ -509,6 +512,11 @@ class SubmissionServiceTest {
     void findAssignmentSubmissions_whenRecipientHasNoAttempt_shouldReturnSummaryWithoutLatestAttempt() {
         when(authorizationService.getCurrentUser()).thenReturn(teacher);
         AssignmentRecipient recipient = recipient(activeAssignment(null, null, null));
+        when(assignmentRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(
+                ASSIGNMENT_ID,
+                CENTER_ID,
+                TEACHER_ID
+        )).thenReturn(Optional.of(recipient.getAssignment()));
         when(assignmentRecipientRepository.findAllByAssignment_IdAndAssignment_Center_IdAndAssignment_DeletedAtIsNull(
                 ASSIGNMENT_ID,
                 CENTER_ID,
@@ -728,6 +736,7 @@ class SubmissionServiceTest {
                 .openAt(openAt)
                 .dueAt(dueAt)
                 .attemptLimit(attemptLimit)
+                .createdBy(teacher)
                 .items(new ArrayList<>())
                 .build();
         assignment.setId(ASSIGNMENT_ID);

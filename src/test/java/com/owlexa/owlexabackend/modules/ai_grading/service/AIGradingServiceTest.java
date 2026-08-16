@@ -18,7 +18,6 @@ import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProvi
 import com.owlexa.owlexabackend.modules.ai_grading.provider.model.AIGradingProviderResponse;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingJobRepository;
 import com.owlexa.owlexabackend.modules.ai_grading.repository.AIGradingResultRepository;
-import com.owlexa.owlexabackend.modules.student_submission.entity.SubmissionAttempt;
 import com.owlexa.owlexabackend.modules.student_submission.repository.SubmissionAttemptRepository;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -98,6 +97,12 @@ class AIGradingServiceTest {
         lenient().when(authorizationService.getCurrentUser()).thenReturn(teacher);
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID))
                 .thenReturn(true);
+        lenient().when(submissionAttemptRepository
+                .existsByIdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_CreatedBy_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
+                        ATTEMPT_ID,
+                        CENTER_ID,
+                        TEACHER_ID
+                )).thenReturn(true);
          lenient().when(provider.provider()).thenReturn(AIModelProvider.GEMINI);
     }
 
@@ -277,16 +282,9 @@ class AIGradingServiceTest {
     @Test
     @DisplayName("latest result: always selects the latest completed result")
     void getLatestResult_shouldQueryCompletedResultOnly() {
-        SubmissionAttempt attempt = new SubmissionAttempt();
-        attempt.setId(ATTEMPT_ID);
         AIGradingResult result = new AIGradingResult();
         AIGradingResultResponse mapped = AIGradingResultResponse.builder().id(50L).build();
 
-        when(submissionAttemptRepository
-                .findByIdAndAssignmentRecipient_Assignment_Center_IdAndAssignmentRecipient_Assignment_DeletedAtIsNull(
-                        ATTEMPT_ID,
-                        CENTER_ID
-                )).thenReturn(Optional.of(attempt));
         when(resultRepository
                 .findTopBySubmissionAttempt_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_Center_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_DeletedAtIsNullAndJob_StatusOrderByCreatedAtDesc(
                         ATTEMPT_ID,

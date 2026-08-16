@@ -23,4 +23,10 @@ public interface AIGradingJobRepository extends JpaRepository<AIGradingJob, Long
             Long id,
             Long centerId
     );
+
+    Optional<AIGradingJob> findByIdAndSubmissionAttempt_AssignmentRecipient_Assignment_Center_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_CreatedBy_IdAndSubmissionAttempt_AssignmentRecipient_Assignment_DeletedAtIsNull(
+            Long id,
+            Long centerId,
+            Long teacherUserId
+    );
 }

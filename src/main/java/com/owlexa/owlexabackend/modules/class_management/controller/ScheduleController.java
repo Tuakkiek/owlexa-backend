@@ -104,7 +104,7 @@ public class ScheduleController {
     // ── TEACHER: View own schedule ───────────────────────────────────────────
 
     @GetMapping("/teacher/schedules/me")
-    @PreAuthorize("hasAuthority('SCHEDULE_VIEW')")
+    @PreAuthorize("hasAnyAuthority('TEACHER_DASHBOARD', 'TEACHER_SCHEDULE')")
     public List<ScheduleResponse> findMySchedules() {
         return scheduleService.findMySchedules();
     }

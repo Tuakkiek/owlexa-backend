@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/teacher/assignments")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('ESSAY_GRADE')")
+@PreAuthorize("hasAuthority('TEACHER_ASSIGNMENTS')")
 public class TeacherAssignmentController {
 
     private final AssignmentService assignmentService;
