@@ -45,10 +45,10 @@ public class QuestionCollectionService {
 
     @Transactional(readOnly = true)
     public List<QuestionCollectionResponse> findAll() {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         List<QuestionCollection> collections =
-                collectionRepository.findAllByCenter_IdAndDeletedAtIsNullOrderByNameAsc(centerId);
+                collectionRepository.findAllByCenter_IdAndCreatedBy_IdAndDeletedAtIsNullOrderByNameAsc(centerId, currentUser.getId());
         if (collections.isEmpty()) {
             return List.of();
         }
@@ -88,10 +88,10 @@ public class QuestionCollectionService {
         String name = normalizeRequiredName(request.getName());
         String description = normalizeOptionalText(request.getDescription());
 
-        if (collectionRepository.existsByCenter_IdAndCode(centerId, code)) {
+        if (collectionRepository.existsByCenter_IdAndCreatedBy_IdAndCode(centerId, currentUser.getId(), code)) {
             throw new DuplicateResourceException("Collection code already exists: " + code);
         }
-        validateActiveNameAvailable(centerId, name, null);
+        validateActiveNameAvailable(centerId, currentUser.getId(), name, null);
 
         Center center = centerRepository.findById(centerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Center not found with id: " + centerId));
@@ -117,7 +117,7 @@ public class QuestionCollectionService {
         Long centerId = requiredCurrentCenterId();
         QuestionCollection collection = findActiveCollection(collectionId, centerId);
         String name = normalizeRequiredName(request.getName());
-        validateActiveNameAvailable(centerId, name, collectionId);
+        validateActiveNameAvailable(centerId, currentUser.getId(), name, collectionId);
 
         collection.setName(name);
         collection.setDescription(normalizeOptionalText(request.getDescription()));
@@ -150,10 +150,10 @@ public class QuestionCollectionService {
 
     @Transactional(readOnly = true)
     public QuestionCollection requireActiveByCode(String rawCode) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         String code = normalizeAndValidateCode(rawCode);
-        return collectionRepository.findByCodeAndCenter_IdAndDeletedAtIsNull(code, centerId)
+        return collectionRepository.findByCodeAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(code, centerId, currentUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Question collection not found with code: " + code
                 ));
@@ -170,17 +170,19 @@ public class QuestionCollectionService {
     }
 
     private QuestionCollection findActiveCollection(Long collectionId, Long centerId) {
-        return collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(collectionId, centerId)
+        User currentUser = authorizationService.getCurrentUser();
+        return collectionRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(collectionId, centerId, currentUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Question collection not found with id: " + collectionId
                 ));
     }
 
-    private void validateActiveNameAvailable(Long centerId, String name, Long excludedId) {
+    private void validateActiveNameAvailable(Long centerId, Long createdById, String name, Long excludedId) {
         boolean exists = excludedId == null
-                ? collectionRepository.existsByCenter_IdAndNameIgnoreCaseAndDeletedAtIsNull(centerId, name)
-                : collectionRepository.existsByCenter_IdAndNameIgnoreCaseAndDeletedAtIsNullAndIdNot(
+                ? collectionRepository.existsByCenter_IdAndCreatedBy_IdAndNameIgnoreCaseAndDeletedAtIsNull(centerId, createdById, name)
+                : collectionRepository.existsByCenter_IdAndCreatedBy_IdAndNameIgnoreCaseAndDeletedAtIsNullAndIdNot(
                         centerId,
+                        createdById,
                         name,
                         excludedId
                 );

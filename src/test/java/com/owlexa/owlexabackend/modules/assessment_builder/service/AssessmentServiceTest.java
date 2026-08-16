@@ -6,6 +6,7 @@ import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
 import com.owlexa.owlexabackend.common.richtext.RichTextDocumentService;
 
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentItemRequest;
+import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentBlockRequest;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentRequest;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentDetailResponse;
 import com.owlexa.owlexabackend.modules.assessment_builder.dto.response.AssessmentListResponse;
@@ -51,12 +52,16 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.ArrayNode;
 import static com.owlexa.owlexabackend.support.RichTextTestFixtures.serializedDocument;
 
 @ExtendWith(MockitoExtension.class)
@@ -119,7 +124,7 @@ class AssessmentServiceTest {
     @DisplayName("create: valid request creates draft assessment with question snapshot")
     void create_whenValid_shouldCreateDraftAssessmentWithSnapshot() {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(buildMultipleChoiceQuestion()));
         when(assessmentRepository.save(any(Assessment.class))).thenAnswer(invocation -> {
             Assessment assessment = invocation.getArgument(0);
@@ -150,7 +155,7 @@ class AssessmentServiceTest {
     @DisplayName("create: item points override question points")
     void create_whenItemPointsProvided_shouldUseOverridePoints() {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(buildMultipleChoiceQuestion()));
         when(assessmentRepository.save(any(Assessment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -160,10 +165,37 @@ class AssessmentServiceTest {
     }
 
     @Test
+    @DisplayName("create: content block with embedded question creates item snapshot")
+    void create_whenBlockContainsEmbeddedQuestion_shouldCreateItemSnapshotFromBlock() {
+        when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
+                .thenReturn(Optional.of(buildMultipleChoiceQuestion()));
+        when(assessmentRepository.save(any(Assessment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AssessmentRequest request = AssessmentRequest.builder()
+                .title("TOEIC Reading")
+                .blocks(List.of(AssessmentBlockRequest.builder()
+                        .position(0)
+                        .title("Passage 1")
+                        .content(blockWithEmbeddedQuestion(QUESTION_ID, new BigDecimal("3.00")))
+                        .build()))
+                .build();
+
+        AssessmentDetailResponse response = service.create(request);
+
+        assertThat(response.getBlocks()).hasSize(1);
+        assertThat(response.getBlocks().get(0).getTitle()).isEqualTo("Passage 1");
+        assertThat(response.getBlocks().get(0).getContent().toString()).contains("Shared reading passage");
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getItems().get(0).getQuestionId()).isEqualTo(QUESTION_ID);
+        assertThat(response.getItems().get(0).getPoints()).isEqualByComparingTo("3.00");
+    }
+
+    @Test
     @DisplayName("create: essay snapshots grading criteria summary and content")
     void create_whenEssayHasCriteria_shouldSnapshotCriteria() {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ESSAY_QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(ESSAY_QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(buildEssayQuestion()));
         when(assessmentRepository.save(any(Assessment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -216,7 +248,7 @@ class AssessmentServiceTest {
     @DisplayName("create: missing question throws ResourceNotFoundException")
     void create_whenQuestionMissing_shouldThrowResourceNotFound() {
         when(centerRepository.findById(CENTER_ID)).thenReturn(Optional.of(center));
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(validAssessmentRequest(null)))
@@ -229,7 +261,7 @@ class AssessmentServiceTest {
         Assessment existing = buildAssessment(AssessmentStatus.PUBLISHED, List.of(buildExistingItem(1L, 1)));
         when(assessmentRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ASSESSMENT_ID, CENTER_ID))
                 .thenReturn(Optional.of(existing));
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(ESSAY_QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(ESSAY_QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(buildEssayQuestion()));
         when(assessmentRepository.save(any(Assessment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -397,6 +429,27 @@ class AssessmentServiceTest {
                 .points(points)
                 .displayOrder(displayOrder)
                 .build();
+    }
+
+    private JsonNode blockWithEmbeddedQuestion(Long questionId, BigDecimal points) {
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode document = objectMapper.createObjectNode();
+        document.put("type", "doc");
+        ArrayNode content = document.putArray("content");
+
+        ObjectNode paragraph = content.addObject();
+        paragraph.put("type", "paragraph");
+        paragraph.putArray("content").addObject()
+                .put("type", "text")
+                .put("text", "Shared reading passage");
+
+        ObjectNode questionNode = content.addObject();
+        questionNode.put("type", "assessmentQuestion");
+        ObjectNode attrs = questionNode.putObject("attrs");
+        attrs.put("questionId", questionId);
+        attrs.put("points", points);
+
+        return document;
     }
 
     private Assessment buildAssessment(AssessmentStatus status, List<AssessmentItem> items) {

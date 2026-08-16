@@ -17,16 +17,18 @@ public final class QuestionSpecifications {
 
     public static Specification<Question> search(
             Long centerId,
+            Long createdById,
             String search,
             QuestionType type,
             QuestionDifficulty difficulty,
             Long gradingCriteriaId
     ) {
-        return search(centerId, search, null, null, type, difficulty, gradingCriteriaId);
+        return search(centerId, createdById, search, null, null, type, difficulty, gradingCriteriaId);
     }
 
     public static Specification<Question> search(
             Long centerId,
+            Long createdById,
             String search,
             Long collectionId,
             String sectionCode,
@@ -39,6 +41,7 @@ public final class QuestionSpecifications {
             var collection = root.get("collection");
 
             predicates.add(cb.equal(root.get("center").get("id"), centerId));
+            predicates.add(cb.equal(collection.get("createdBy").get("id"), createdById));
             predicates.add(cb.isNull(root.get("deletedAt")));
             predicates.add(cb.isNull(collection.get("deletedAt")));
 

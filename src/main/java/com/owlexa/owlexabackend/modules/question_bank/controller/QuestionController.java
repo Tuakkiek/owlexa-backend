@@ -3,6 +3,7 @@ package com.owlexa.owlexabackend.modules.question_bank.controller;
 import com.owlexa.owlexabackend.modules.question_bank.dto.request.QuestionBulkDeleteRequest;
 import com.owlexa.owlexabackend.modules.question_bank.dto.request.QuestionImportRequest;
 import com.owlexa.owlexabackend.modules.question_bank.dto.request.QuestionRequest;
+import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionExportResponse;
 import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionImportResultResponse;
 import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionImportValidationResponse;
 import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionResponse;
@@ -90,6 +91,12 @@ public class QuestionController {
     @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionImportResultResponse importQuestions(@Valid @RequestBody QuestionImportRequest request) {
         return questionImportService.importQuestions(request.getCollectionId(), request.getJson());
+    }
+
+    @GetMapping("/export/{collectionId}")
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
+    public QuestionExportResponse exportQuestions(@PathVariable Long collectionId) {
+        return questionService.exportQuestions(collectionId);
     }
 
     @PutMapping("/{questionId}")

@@ -22,4 +22,11 @@ public class StudentAttendanceController {
     ) {
         return attendanceService.findMyAttendancesAsStudent(classId, date);
     }
+
+    @GetMapping("/class-sessions")
+    public List<com.owlexa.owlexabackend.modules.attendance.dto.response.StudentClassSessionResponse> findClassSessionsByDate(
+            @RequestParam LocalDate date
+    ) {
+        return attendanceService.findStudentClassSessionsByDate(date);
+    }
 }
