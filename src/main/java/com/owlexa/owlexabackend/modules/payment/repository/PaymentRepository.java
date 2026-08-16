@@ -32,13 +32,31 @@ public interface PaymentRepository extends JpaRepository<Payment, Long>, JpaSpec
 
     Optional<Payment> findByIdempotencyKey(String idempotencyKey);
 
-    /** Find the single current PENDING payment for a fee record + student (if any). */
+    /** Find reusable PENDING bank-transfer payments for a fee record + student. */
     @Query("SELECT p FROM Payment p WHERE p.feeRecord.id = :feeRecordId " +
            "AND p.studentUser.id = :studentUserId AND p.status = 'PENDING' " +
-           "AND (p.method = 'BANK_TRANSFER' OR p.method = 'SEPAY' OR p.method = 'QR_CODE')")
-    Optional<Payment> findCurrentPendingByFeeRecordAndStudent(
+           "AND (p.method = 'BANK_TRANSFER' OR p.method = 'SEPAY' OR p.method = 'QR_CODE') " +
+           "AND (p.expiresAt IS NULL OR p.expiresAt > :now) " +
+           "ORDER BY p.id DESC")
+    List<Payment> findValidPendingByFeeRecordAndStudent(
             @Param("feeRecordId") Long feeRecordId,
-            @Param("studentUserId") Long studentUserId);
+            @Param("studentUserId") Long studentUserId,
+            @Param("now") Instant now);
+
+    /** Find expired PENDING bank-transfer payments for a fee record + student. */
+    @Query("SELECT p FROM Payment p WHERE p.feeRecord.id = :feeRecordId " +
+           "AND p.studentUser.id = :studentUserId AND p.status = 'PENDING' " +
+           "AND (p.method = 'BANK_TRANSFER' OR p.method = 'SEPAY' OR p.method = 'QR_CODE') " +
+           "AND p.expiresAt IS NOT NULL AND p.expiresAt <= :now")
+    List<Payment> findExpiredPendingByFeeRecordAndStudent(
+            @Param("feeRecordId") Long feeRecordId,
+            @Param("studentUserId") Long studentUserId,
+            @Param("now") Instant now);
+
+    /** Pessimistic write lock on Payment to prevent duplicate webhook confirmation. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Payment p WHERE p.id = :id")
+    Optional<Payment> findByIdForUpdate(@Param("id") Long id);
 
     /** Pessimistic write lock on FeeRecord to prevent race conditions. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

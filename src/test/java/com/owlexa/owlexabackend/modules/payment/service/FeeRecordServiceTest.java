@@ -137,7 +137,7 @@ class FeeRecordServiceTest {
         activeEnrollment.setStatus(EnrollmentStatus.ACTIVE);
 
         when(feeRecordRepository.findAllByCenter_IdAndStatusInOrderByCreatedAtDesc(
-                CENTER_ID, List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.CANCELLED)))
+                CENTER_ID, List.of(FeeStatus.UNPAID, FeeStatus.PARTIAL, FeeStatus.OVERDUE, FeeStatus.CANCELLED)))
                 .thenReturn(List.of(cancelledFee));
         when(feeRecordRepository.save(cancelledFee)).thenReturn(cancelledFee);
         when(classEnrollmentRepository.findByClazz_IdAndStudentUser_Id(50L, 100L))
