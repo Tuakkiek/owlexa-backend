@@ -30,6 +30,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,7 +107,7 @@ class QuestionCollectionServiceTest {
 
     @Test
     void createRejectsPermanentlyDuplicateCode() {
-        when(collectionRepository.existsByCenter_IdAndCode(CENTER_ID, "TOEIC_TEST_1"))
+        when(collectionRepository.existsByCenter_IdAndCreatedBy_IdAndCode(anyLong(), anyLong(), anyString()))
                 .thenReturn(true);
 
         assertThatThrownBy(() -> service.create(
@@ -122,7 +125,7 @@ class QuestionCollectionServiceTest {
                 org.mockito.Mockito.mock(QuestionRepository.CollectionQuestionCount.class);
         when(count.getCollectionId()).thenReturn(COLLECTION_ID);
         when(count.getQuestionCount()).thenReturn(6L);
-        when(collectionRepository.findAllByCenter_IdAndDeletedAtIsNullOrderByNameAsc(CENTER_ID))
+        when(collectionRepository.findAllByCenter_IdAndCreatedBy_IdAndDeletedAtIsNullOrderByNameAsc(anyLong(), anyLong()))
                 .thenReturn(List.of(collection));
         when(questionRepository.countActiveByCollectionIds(List.of(COLLECTION_ID)))
                 .thenReturn(List.of(count));
@@ -137,7 +140,7 @@ class QuestionCollectionServiceTest {
     @Test
     void updateKeepsCodeImmutable() {
         QuestionCollection collection = activeCollection();
-        when(collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(COLLECTION_ID, CENTER_ID))
+        when(collectionRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(eq(COLLECTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(collection));
         when(collectionRepository.saveAndFlush(collection)).thenReturn(collection);
         when(questionRepository.countByCollection_IdAndDeletedAtIsNull(COLLECTION_ID))
@@ -159,7 +162,7 @@ class QuestionCollectionServiceTest {
     @Test
     void deleteRejectsCollectionWithActiveQuestions() {
         QuestionCollection collection = activeCollection();
-        when(collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(COLLECTION_ID, CENTER_ID))
+        when(collectionRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(eq(COLLECTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(collection));
         when(questionRepository.existsByCollection_IdAndDeletedAtIsNull(COLLECTION_ID))
                 .thenReturn(true);
@@ -171,7 +174,7 @@ class QuestionCollectionServiceTest {
 
     @Test
     void findByIdDoesNotResolveCollectionFromAnotherTenant() {
-        when(collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(COLLECTION_ID, CENTER_ID))
+        when(collectionRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(eq(COLLECTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(COLLECTION_ID))

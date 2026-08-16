@@ -72,12 +72,12 @@ class QuestionRepositoryIntegrationTest extends BaseIntegrationTest {
                 .type(QuestionType.ESSAY)
                 .questionCode("Q-REPOSITORY-TEST")
                 .contentJson("{\"type\":\"doc\",\"content\":[]}")
-                .createdBy(teacher)
-                .updatedBy(teacher)
+                .createdBy(owner)
+                .updatedBy(owner)
                 .build());
 
         QuestionCollection foundCollection = collectionRepository
-                .findByCodeAndCenter_IdAndDeletedAtIsNull("TOEIC_REPOSITORY_TEST", center.getId())
+                .findByCodeAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull("TOEIC_REPOSITORY_TEST", center.getId(), teacher.getId())
                 .orElseThrow();
         assertThat(foundCollection.getId()).isEqualTo(collection.getId());
         assertThat(questionRepository.existsByCollection_IdAndDeletedAtIsNull(collection.getId()))
@@ -86,6 +86,7 @@ class QuestionRepositoryIntegrationTest extends BaseIntegrationTest {
         Page<Question> result = questionRepository.findAll(
                 QuestionSpecifications.search(
                         center.getId(),
+                        teacher.getId(),
                         "Repository Collection",
                         collection.getId(),
                         "PART_1",
@@ -101,7 +102,7 @@ class QuestionRepositoryIntegrationTest extends BaseIntegrationTest {
         assertThat(Hibernate.isInitialized(listed.getCollection())).isTrue();
 
         Question detail = questionRepository
-                .findByIdAndCenter_IdAndDeletedAtIsNull(question.getId(), center.getId())
+                .findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(question.getId(), center.getId(), teacher.getId())
                 .orElseThrow();
         assertThat(Hibernate.isInitialized(detail.getCollection())).isTrue();
         assertThat(Hibernate.isInitialized(detail.getOptions())).isTrue();

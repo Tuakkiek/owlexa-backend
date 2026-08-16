@@ -21,6 +21,9 @@ import com.owlexa.owlexabackend.modules.question_bank.mapper.QuestionMapper;
 import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionCollectionRepository;
 import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionRepository;
 import com.owlexa.owlexabackend.modules.question_bank.repository.QuestionSpecifications;
+import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionExportItemResponse;
+import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionExportOptionResponse;
+import com.owlexa.owlexabackend.modules.question_bank.dto.response.QuestionExportResponse;
 import com.owlexa.owlexabackend.modules.user.entity.Center;
 import com.owlexa.owlexabackend.modules.user.entity.Role;
 import com.owlexa.owlexabackend.modules.user.entity.User;
@@ -46,6 +49,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -70,6 +74,7 @@ public class QuestionService {
     private final RichTextDocumentService richTextDocumentService;
     private final FileReferenceService fileReferenceService;
     private final QuestionMapper questionMapper;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public Page<QuestionResponse> findAll(
@@ -81,7 +86,7 @@ public class QuestionService {
             Long gradingCriteriaId,
             Pageable pageable
     ) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         validateSort(pageable);
         Pageable effectivePageable = applyDefaultSort(pageable, collectionId);
@@ -92,6 +97,7 @@ public class QuestionService {
         return questionRepository.findAll(
                         QuestionSpecifications.search(
                                 centerId,
+                                currentUser.getId(),
                                 search,
                                 collectionId,
                                 normalizedSectionCode,
@@ -106,30 +112,30 @@ public class QuestionService {
 
     @Transactional(readOnly = true)
     public QuestionResponse findById(Long questionId) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        return questionMapper.toDetailResponse(findActiveQuestion(questionId, centerId));
+        return questionMapper.toDetailResponse(findActiveQuestion(questionId, centerId, currentUser.getId()));
     }
 
     @Transactional(readOnly = true)
     public List<String> findSectionCodes(Long collectionId) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
-        QuestionCollection collection = resolveActiveCollection(collectionId, centerId);
+        QuestionCollection collection = resolveActiveCollection(collectionId, centerId, currentUser.getId());
         return questionRepository.findActiveSectionCodes(collection.getId());
     }
 
     @Transactional(readOnly = true)
     public void validateImportBatch(List<QuestionRequest> requests) {
-        requireTeacherInCurrentCenter();
+        User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         Set<String> requestedOrders = new HashSet<>();
 
         for (QuestionRequest request : requests) {
             validateQuestionRequest(request);
             request.setSectionCode(normalizeSectionCode(request.getSectionCode()));
-            QuestionCollection collection = resolveActiveCollection(request.getCollectionId(), centerId);
+            QuestionCollection collection = resolveActiveCollection(request.getCollectionId(), centerId, currentUser.getId());
             String orderKey = collection.getId() + ":" + request.getDisplayOrder();
             if (!requestedOrders.add(orderKey)) {
                 throw new DuplicateResourceException(
@@ -148,7 +154,7 @@ public class QuestionService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
         validateQuestionRequest(request);
-        QuestionCollection collection = resolveActiveCollection(request.getCollectionId(), centerId);
+        QuestionCollection collection = resolveActiveCollection(request.getCollectionId(), centerId, currentUser.getId());
         String sectionCode = normalizeSectionCode(request.getSectionCode());
         validateDisplayOrderAvailable(collection.getId(), request.getDisplayOrder(), null);
 
@@ -197,8 +203,8 @@ public class QuestionService {
         Long centerId = requiredCurrentCenterId();
         validateQuestionRequest(request);
 
-        Question question = findActiveQuestion(questionId, centerId);
-        QuestionCollection collection = resolveActiveCollection(request.getCollectionId(), centerId);
+        Question question = findActiveQuestion(questionId, centerId, currentUser.getId());
+        QuestionCollection collection = resolveActiveCollection(request.getCollectionId(), centerId, currentUser.getId());
         String sectionCode = normalizeSectionCode(request.getSectionCode());
         validateDisplayOrderAvailable(collection.getId(), request.getDisplayOrder(), questionId);
         GradingCriteria gradingCriteria = resolveGradingCriteria(request, centerId);
@@ -237,7 +243,7 @@ public class QuestionService {
         User currentUser = requireTeacherInCurrentCenter();
         Long centerId = requiredCurrentCenterId();
 
-        Question question = findActiveQuestion(questionId, centerId);
+        Question question = findActiveQuestion(questionId, centerId, currentUser.getId());
         question.setDeletedAt(Instant.now());
         question.setUpdatedBy(currentUser);
         questionRepository.save(question);
@@ -266,7 +272,7 @@ public class QuestionService {
         }
 
         for (Long questionId : distinctIds) {
-            Question question = findActiveQuestion(questionId, centerId);
+            Question question = findActiveQuestion(questionId, centerId, currentUser.getId());
             question.setDeletedAt(Instant.now());
             question.setUpdatedBy(currentUser);
             questionRepository.save(question);
@@ -277,6 +283,73 @@ public class QuestionService {
                     List.of()
             );
         }
+    }
+
+    @Transactional(readOnly = true)
+    public QuestionExportResponse exportQuestions(Long collectionId) {
+        User currentUser = requireTeacherInCurrentCenter();
+        Long centerId = requiredCurrentCenterId();
+        
+        QuestionCollection collection = resolveActiveCollection(collectionId, centerId, currentUser.getId());
+        if (!collection.getCreatedBy().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Bạn không có quyền xuất bộ câu hỏi này.");
+        }
+
+        List<Question> questions = questionRepository.findAll(
+                QuestionSpecifications.search(
+                        centerId,
+                        currentUser.getId(),
+                        null,
+                        collectionId,
+                        null,
+                        null,
+                        null,
+                        null
+                ),
+                Sort.by(Sort.Order.asc("displayOrder"))
+        );
+
+        List<QuestionExportItemResponse> items = questions.stream().map(q -> {
+            List<QuestionExportOptionResponse> options = null;
+            if (q.getType() == QuestionType.MULTIPLE_CHOICE) {
+                options = q.getOptions().stream()
+                        .sorted(Comparator.comparing(QuestionOption::getDisplayOrder))
+                        .map(o -> QuestionExportOptionResponse.builder()
+                                .content(o.getContent())
+                                .isCorrect(o.getIsCorrect())
+                                .displayOrder(o.getDisplayOrder())
+                                .build())
+                        .toList();
+            }
+
+            JsonNode contentJson = null;
+            JsonNode explanationJson = null;
+            JsonNode sampleAnswerJson = null;
+            try {
+                if (q.getContentJson() != null) contentJson = objectMapper.readTree(q.getContentJson());
+                if (q.getExplanationJson() != null) explanationJson = objectMapper.readTree(q.getExplanationJson());
+                if (q.getSampleAnswerJson() != null) sampleAnswerJson = objectMapper.readTree(q.getSampleAnswerJson());
+            } catch (Exception e) {
+                // Ignore parse errors for export
+            }
+
+            return QuestionExportItemResponse.builder()
+                    .sectionCode(q.getSectionCode())
+                    .displayOrder(q.getDisplayOrder())
+                    .type(q.getType().name())
+                    .content(contentJson)
+                    .difficulty(q.getDifficulty() != null ? q.getDifficulty().name() : null)
+                    .points(q.getPoints())
+                    .explanation(explanationJson)
+                    .sampleAnswer(sampleAnswerJson)
+                    .options(options)
+                    .build();
+        }).toList();
+
+        return QuestionExportResponse.builder()
+                .version("2.0")
+                .questions(items)
+                .build();
     }
 
     private void validateQuestionRequest(QuestionRequest request) {
@@ -379,13 +452,13 @@ public class QuestionService {
                 .forEach(question.getOptions()::add);
     }
 
-    private Question findActiveQuestion(Long questionId, Long centerId) {
-        return questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(questionId, centerId)
+    private Question findActiveQuestion(Long questionId, Long centerId, Long createdById) {
+        return questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(questionId, centerId, createdById)
                 .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + questionId));
     }
 
-    private QuestionCollection resolveActiveCollection(Long collectionId, Long centerId) {
-        return collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(collectionId, centerId)
+    private QuestionCollection resolveActiveCollection(Long collectionId, Long centerId, Long createdById) {
+        return collectionRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(collectionId, centerId, createdById)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Question collection not found with id: " + collectionId
                 ));

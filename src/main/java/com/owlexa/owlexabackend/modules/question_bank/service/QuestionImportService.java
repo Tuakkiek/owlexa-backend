@@ -127,8 +127,8 @@ public class QuestionImportService {
         }
 
         QuestionType type = parseType(questionNode.path("type"), questionNumber);
-        if (type != QuestionType.MULTIPLE_CHOICE) {
-            throw questionError(questionNumber, "Only MULTIPLE_CHOICE is supported for JSON import.");
+        if (type != QuestionType.MULTIPLE_CHOICE && type != QuestionType.ESSAY) {
+            throw questionError(questionNumber, "Only MULTIPLE_CHOICE and ESSAY are supported for JSON import.");
         }
 
         String sectionCode = requiredText(
@@ -137,20 +137,24 @@ public class QuestionImportService {
                 "Missing sectionCode."
         );
         Integer displayOrder = parseDisplayOrder(questionNode.path("displayOrder"), questionNumber);
-        String content = optionalText(
-                questionNode.path("content"),
-                questionNumber,
-                "Content must be a string."
-        );
+        JsonNode content = parseRichText(questionNode.path("content"), questionNumber, "Content");
+        JsonNode explanation = parseRichText(questionNode.path("explanation"), questionNumber, "Explanation");
+        JsonNode sampleAnswer = parseRichText(questionNode.path("sampleAnswer"), questionNumber, "SampleAnswer");
+
         QuestionDifficulty difficulty = parseDifficulty(questionNode.path("difficulty"), questionNumber);
         BigDecimal points = parsePoints(questionNode.path("points"), questionNumber);
-        List<QuestionOptionRequest> options = parseOptions(questionNode.path("options"), questionNumber);
+        List<QuestionOptionRequest> options = null;
+        if (type == QuestionType.MULTIPLE_CHOICE) {
+            options = parseOptions(questionNode.path("options"), questionNumber);
+        }
 
         return QuestionRequest.builder()
                 .sectionCode(sectionCode)
                 .displayOrder(displayOrder)
                 .type(type)
-                .content(content == null ? null : plainTextDocument(content))
+                .content(content)
+                .explanation(explanation)
+                .sampleAnswer(sampleAnswer)
                 .difficulty(difficulty)
                 .points(points)
                 .options(options)
@@ -254,6 +258,23 @@ public class QuestionImportService {
         }
         String value = node.asText().trim();
         return value.isBlank() ? null : value;
+    }
+
+    private JsonNode parseRichText(JsonNode node, int questionNumber, String fieldName) {
+        if (node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            String value = node.asText().trim();
+            if (value.isBlank()) {
+                return null;
+            }
+            return plainTextDocument(value);
+        }
+        if (node.isObject()) {
+            return node;
+        }
+        throw questionError(questionNumber, fieldName + " must be a string or a rich text object.");
     }
 
     private JsonNode plainTextDocument(String value) {

@@ -112,7 +112,7 @@ public class AssessmentService {
         assessment.setContentJson(richTextDocumentService.serialize(content));
         assessment.setDescription(toDescriptionSummary(content));
 
-        replaceBlocksAndItems(assessment, request.getBlocks(), request.getItems(), request.getContent(), centerId);
+        replaceBlocksAndItems(assessment, request.getBlocks(), request.getItems(), request.getContent(), centerId, currentUser.getId());
 
         Assessment saved = assessmentRepository.save(assessment);
         fileReferenceService.syncReferences(
@@ -141,7 +141,7 @@ public class AssessmentService {
         assessment.setDescription(toDescriptionSummary(content));
         assessment.setUpdatedBy(currentUser);
 
-        replaceBlocksAndItems(assessment, request.getBlocks(), request.getItems(), request.getContent(), centerId);
+        replaceBlocksAndItems(assessment, request.getBlocks(), request.getItems(), request.getContent(), centerId, currentUser.getId());
 
         Assessment saved = assessmentRepository.save(assessment);
         fileReferenceService.syncReferences(
@@ -264,7 +264,8 @@ public class AssessmentService {
             List<com.owlexa.owlexabackend.modules.assessment_builder.dto.request.AssessmentBlockRequest> blockRequests,
             List<AssessmentItemRequest> itemRequests,
             JsonNode fallbackContent,
-            Long centerId
+            Long centerId,
+            Long createdById
     ) {
         assessment.getBlocks().clear();
         assessment.getItems().clear();
@@ -309,7 +310,7 @@ public class AssessmentService {
                     throw new BadRequestException("Assessment cannot contain duplicate questions (Question ID: " + eq.questionId() + ")");
                 }
                 Question question = questionRepository
-                        .findByIdAndCenter_IdAndDeletedAtIsNull(eq.questionId(), centerId)
+                        .findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq.questionId(), centerId, createdById)
                         .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + eq.questionId()));
 
                 validateQuestionSnapshotSource(question, assessment.getAudioFile() != null);
@@ -325,7 +326,7 @@ public class AssessmentService {
             com.owlexa.owlexabackend.modules.assessment_builder.entity.AssessmentContentBlock firstBlock = blocks.get(0);
             for (AssessmentItemRequest itemRequest : itemRequests) {
                 Question question = questionRepository
-                        .findByIdAndCenter_IdAndDeletedAtIsNull(itemRequest.getQuestionId(), centerId)
+                        .findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(itemRequest.getQuestionId(), centerId, createdById)
                         .orElseThrow(() -> new ResourceNotFoundException("Question not found with id: " + itemRequest.getQuestionId()));
                 validateQuestionSnapshotSource(question, assessment.getAudioFile() != null);
                 BigDecimal points = itemRequest.getPoints() != null ? itemRequest.getPoints() : question.getPoints();
@@ -363,10 +364,11 @@ public class AssessmentService {
     private AssessmentItem toAssessmentItem(
             Assessment assessment,
             AssessmentItemRequest itemRequest,
-            Long centerId
+            Long centerId,
+            Long createdById
     ) {
         Question question = questionRepository
-                .findByIdAndCenter_IdAndDeletedAtIsNull(itemRequest.getQuestionId(), centerId)
+                .findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(itemRequest.getQuestionId(), centerId, createdById)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Question not found with id: " + itemRequest.getQuestionId()
                 ));

@@ -51,6 +51,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -94,7 +95,8 @@ class QuestionServiceTest {
                 authorizationService,
                 richTextDocumentService,
                 fileReferenceService,
-                new QuestionMapper(richTextDocumentService, new QuestionCollectionMapper())
+                new QuestionMapper(richTextDocumentService, new QuestionCollectionMapper()),
+                new ObjectMapper()
         );
 
         TenantContext.setCurrentTenantId(CENTER_ID);
@@ -116,7 +118,7 @@ class QuestionServiceTest {
 
         lenient().when(authorizationService.getCurrentUser()).thenReturn(teacher);
         lenient().when(membershipRepository.existsByUser_IdAndCenter_Id(TEACHER_ID, CENTER_ID)).thenReturn(true);
-        lenient().when(collectionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(50L, CENTER_ID))
+        lenient().when(collectionRepository.findByIdAndCenter_IdAndCreatedBy_IdAndDeletedAtIsNull(eq(50L), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(collection));
     }
 
@@ -406,7 +408,7 @@ class QuestionServiceTest {
     @Test
     @DisplayName("findById: active question returns detail with sorted options")
     void findById_whenQuestionExists_shouldReturnDetail() {
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(buildMultipleChoiceQuestion()));
 
         QuestionResponse response = service.findById(QUESTION_ID);
@@ -421,7 +423,7 @@ class QuestionServiceTest {
     void update_whenValid_shouldReplaceQuestionOptions() {
         Question existing = buildMultipleChoiceQuestion();
         String originalQuestionCode = existing.getQuestionCode();
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(existing));
         when(questionRepository.saveAndFlush(any(Question.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -447,7 +449,7 @@ class QuestionServiceTest {
     @DisplayName("delete: active question is soft deleted")
     void delete_whenQuestionExists_shouldSoftDelete() {
         Question existing = buildMultipleChoiceQuestion();
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(existing));
         when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -464,9 +466,9 @@ class QuestionServiceTest {
         Question first = buildMultipleChoiceQuestion();
         Question second = buildMultipleChoiceQuestion();
         second.setId(31L);
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(QUESTION_ID, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(QUESTION_ID), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(first));
-        when(questionRepository.findByIdAndCenter_IdAndDeletedAtIsNull(31L, CENTER_ID))
+        when(questionRepository.findByIdAndCenter_IdAndCollection_CreatedBy_IdAndDeletedAtIsNull(eq(31L), eq(CENTER_ID), anyLong()))
                 .thenReturn(Optional.of(second));
         when(questionRepository.save(any(Question.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
