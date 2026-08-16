@@ -8,6 +8,7 @@ import com.owlexa.owlexabackend.modules.room.service.RoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,37 +22,44 @@ public class RoomController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('ROOM_MAINTENANCE')")
     public RoomResponse create(@Valid @RequestBody RoomRequest request) {
         return roomService.create(request);
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('ROOM_VIEW')")
     public List<RoomResponse> findAll() {
         return roomService.findAll();
     }
 
     @GetMapping("/{roomId}")
+    @PreAuthorize("hasAuthority('ROOM_VIEW')")
     public RoomResponse findById(@PathVariable Long roomId) {
         return roomService.findById(roomId);
     }
 
     @GetMapping("/{roomId}/schedule-summary")
+    @PreAuthorize("hasAuthority('ROOM_VIEW')")
     public List<RoomScheduleSummaryResponse> getScheduleSummary(@PathVariable Long roomId) {
         return roomService.getScheduleSummary(roomId);
     }
 
     @GetMapping("/{roomId}/delete-validation")
+    @PreAuthorize("hasAuthority('ROOM_MAINTENANCE')")
     public RoomDeleteValidationResponse validateDelete(@PathVariable Long roomId) {
         return roomService.validateDelete(roomId);
     }
 
     @PutMapping("/{roomId}")
+    @PreAuthorize("hasAuthority('ROOM_MAINTENANCE')")
     public RoomResponse update(@PathVariable Long roomId, @Valid @RequestBody RoomRequest request) {
         return roomService.update(roomId, request);
     }
 
     @DeleteMapping("/{roomId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('ROOM_MAINTENANCE')")
     public void delete(@PathVariable Long roomId) {
         roomService.delete(roomId);
     }

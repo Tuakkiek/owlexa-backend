@@ -33,13 +33,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher/questions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('TEACHER')")
 public class QuestionController {
 
     private final QuestionService questionService;
     private final QuestionImportService questionImportService;
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('TEACHER_QUESTION_BANK', 'TEACHER_ASSESSMENTS')")
     public Page<QuestionResponse> findAll(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long collectionId,
@@ -61,33 +61,39 @@ public class QuestionController {
     }
 
     @GetMapping("/section-codes")
+    @PreAuthorize("hasAnyAuthority('TEACHER_QUESTION_BANK', 'TEACHER_ASSESSMENTS')")
     public List<String> findSectionCodes(@RequestParam Long collectionId) {
         return questionService.findSectionCodes(collectionId);
     }
 
     @GetMapping("/{questionId}")
+    @PreAuthorize("hasAnyAuthority('TEACHER_QUESTION_BANK', 'TEACHER_ASSESSMENTS')")
     public QuestionResponse findById(@PathVariable Long questionId) {
         return questionService.findById(questionId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionResponse create(@Valid @RequestBody QuestionRequest request) {
         return questionService.create(request);
     }
 
     @PostMapping("/import/validate")
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionImportValidationResponse validateImport(@Valid @RequestBody QuestionImportRequest request) {
         return questionImportService.validate(request.getCollectionId(), request.getJson());
     }
 
     @PostMapping("/import")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionImportResultResponse importQuestions(@Valid @RequestBody QuestionImportRequest request) {
         return questionImportService.importQuestions(request.getCollectionId(), request.getJson());
     }
 
     @PutMapping("/{questionId}")
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionResponse update(
             @PathVariable Long questionId,
             @Valid @RequestBody QuestionRequest request
@@ -97,12 +103,14 @@ public class QuestionController {
 
     @DeleteMapping("/{questionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public void delete(@PathVariable Long questionId) {
         questionService.delete(questionId);
     }
 
     @PostMapping("/bulk-delete")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public void bulkDelete(@Valid @RequestBody QuestionBulkDeleteRequest request) {
         questionService.deleteMany(request.getQuestionIds());
     }

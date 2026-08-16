@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('ESSAY_GRADE')")
+@PreAuthorize("hasAuthority('TEACHER_ASSIGNMENTS')")
 public class TeacherAIGradingController {
 
     private final AIGradingService aiGradingService;

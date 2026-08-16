@@ -30,13 +30,13 @@ public class DashboardController {
      * Returns cashier-specific stats: today's payments, pending payments, pending amount.
      */
     @GetMapping("/cashier/dashboard/stats")
-    @PreAuthorize("hasAuthority('DASHBOARD_FINANCE')")
+    @PreAuthorize("hasAuthority('CASHIER_DASHBOARD')")
     public CashierDashboardStatsResponse getCashierStats() {
         return dashboardService.getCashierStats();
     }
 
     @GetMapping({"/owner/dashboard/revenue", "/cashier/dashboard/revenue"})
-    @PreAuthorize("hasAnyAuthority('DASHBOARD_OWNER', 'DASHBOARD_FINANCE')")
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_OWNER', 'CASHIER_DASHBOARD')")
     public RevenueSummaryResponse getRevenueSummary() {
         return dashboardService.getRevenueSummary();
     }

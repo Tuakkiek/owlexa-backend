@@ -23,23 +23,25 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher/question-collections")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('TEACHER')")
 public class QuestionCollectionController {
 
     private final QuestionCollectionService collectionService;
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('TEACHER_QUESTION_BANK', 'TEACHER_ASSESSMENTS')")
     public List<QuestionCollectionResponse> findAll() {
         return collectionService.findAll();
     }
 
     @GetMapping("/{collectionId}")
+    @PreAuthorize("hasAnyAuthority('TEACHER_QUESTION_BANK', 'TEACHER_ASSESSMENTS')")
     public QuestionCollectionResponse findById(@PathVariable Long collectionId) {
         return collectionService.findById(collectionId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionCollectionResponse create(
             @Valid @RequestBody QuestionCollectionCreateRequest request
     ) {
@@ -47,6 +49,7 @@ public class QuestionCollectionController {
     }
 
     @PutMapping("/{collectionId}")
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public QuestionCollectionResponse update(
             @PathVariable Long collectionId,
             @Valid @RequestBody QuestionCollectionUpdateRequest request
@@ -56,6 +59,7 @@ public class QuestionCollectionController {
 
     @DeleteMapping("/{collectionId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEACHER_QUESTION_BANK')")
     public void delete(@PathVariable Long collectionId) {
         collectionService.delete(collectionId);
     }

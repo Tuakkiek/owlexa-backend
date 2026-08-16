@@ -23,13 +23,13 @@ public class RefundController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('REFUND_REQUEST', 'PAYMENT_REFUND')")
+    @PreAuthorize("hasAnyAuthority('REFUND_REQUEST', 'PAYMENT_REFUND', 'CASHIER_PAYMENT_HISTORY')")
     public RefundResponse requestRefund(@Valid @RequestBody RefundRequest request) {
         return refundService.requestRefund(request);
     }
 
     @PatchMapping("/{refundId}/decision")
-    @PreAuthorize("hasAnyAuthority('REFUND_APPROVE', 'PAYMENT_REFUND')")
+    @PreAuthorize("hasAnyAuthority('REFUND_APPROVE', 'PAYMENT_REFUND', 'CASHIER_PAYMENT_HISTORY')")
     public RefundResponse decideRefund(
             @PathVariable Long refundId,
             @Valid @RequestBody RefundDecisionRequest request) {
@@ -37,7 +37,7 @@ public class RefundController {
     }
 
     @PatchMapping("/{refundId}/payout")
-    @PreAuthorize("hasAnyAuthority('REFUND_PAY', 'PAYMENT_REFUND')")
+    @PreAuthorize("hasAnyAuthority('REFUND_PAY', 'PAYMENT_REFUND', 'CASHIER_PAYMENT_HISTORY')")
     public RefundResponse markPaid(
             @PathVariable Long refundId,
             @Valid @RequestBody RefundPayoutRequest request) {
@@ -45,7 +45,7 @@ public class RefundController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('REFUND_APPROVE', 'PAYMENT_REFUND', 'PAYMENT_VIEW')")
+    @PreAuthorize("hasAnyAuthority('REFUND_APPROVE', 'PAYMENT_REFUND', 'PAYMENT_VIEW', 'CASHIER_PAYMENT_HISTORY')")
     public List<RefundResponse> getRefunds(
             @RequestParam(required = false) RefundStatus status) {
         return refundService.findAll(status);

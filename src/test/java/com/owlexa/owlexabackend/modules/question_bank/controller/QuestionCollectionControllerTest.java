@@ -59,12 +59,13 @@ class QuestionCollectionControllerTest {
     }
 
     @Test
-    void controllerRequiresTeacherRoleAtEntryPoint() {
-        PreAuthorize authorization =
-                QuestionCollectionController.class.getAnnotation(PreAuthorize.class);
+    void controllerRequiresQuestionBankPermissionAtWriteEntryPoint() throws NoSuchMethodException {
+        PreAuthorize authorization = QuestionCollectionController.class
+                .getMethod("create", QuestionCollectionCreateRequest.class)
+                .getAnnotation(PreAuthorize.class);
 
         assertThat(authorization).isNotNull();
-        assertThat(authorization.value()).isEqualTo("hasRole('TEACHER')");
+        assertThat(authorization.value()).isEqualTo("hasAuthority('TEACHER_QUESTION_BANK')");
     }
 
     @Test

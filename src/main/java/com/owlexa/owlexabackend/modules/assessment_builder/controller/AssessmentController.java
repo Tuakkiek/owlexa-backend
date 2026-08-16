@@ -27,12 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/teacher/assessments")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('TEST_VIEW')")
 public class AssessmentController {
 
     private final AssessmentService assessmentService;
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('TEACHER_ASSESSMENTS', 'TEACHER_ASSIGNMENTS')")
     public Page<AssessmentListResponse> findAll(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) AssessmentStatus status,
@@ -42,17 +42,20 @@ public class AssessmentController {
     }
 
     @GetMapping("/{assessmentId}")
+    @PreAuthorize("hasAnyAuthority('TEACHER_ASSESSMENTS', 'TEACHER_ASSIGNMENTS')")
     public AssessmentDetailResponse findById(@PathVariable Long assessmentId) {
         return assessmentService.findById(assessmentId);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('TEACHER_ASSESSMENTS')")
     public AssessmentDetailResponse create(@Valid @RequestBody AssessmentRequest request) {
         return assessmentService.create(request);
     }
 
     @PutMapping("/{assessmentId}")
+    @PreAuthorize("hasAuthority('TEACHER_ASSESSMENTS')")
     public AssessmentDetailResponse update(
             @PathVariable Long assessmentId,
             @Valid @RequestBody AssessmentRequest request
@@ -61,17 +64,20 @@ public class AssessmentController {
     }
 
     @PostMapping("/{assessmentId}/publish")
+    @PreAuthorize("hasAuthority('TEACHER_ASSESSMENTS')")
     public AssessmentDetailResponse publish(@PathVariable Long assessmentId) {
         return assessmentService.publish(assessmentId);
     }
 
     @PostMapping("/{assessmentId}/archive")
+    @PreAuthorize("hasAuthority('TEACHER_ASSESSMENTS')")
     public AssessmentDetailResponse archive(@PathVariable Long assessmentId) {
         return assessmentService.archive(assessmentId);
     }
 
     @DeleteMapping("/{assessmentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('TEACHER_ASSESSMENTS')")
     public void delete(@PathVariable Long assessmentId) {
         assessmentService.delete(assessmentId);
     }
