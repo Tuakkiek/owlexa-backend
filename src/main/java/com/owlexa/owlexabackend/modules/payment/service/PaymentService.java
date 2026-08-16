@@ -513,6 +513,7 @@ public class PaymentService {
                                                    String studentQuery,
                                                    Long cashierId,
                                                    PaymentMethod method,
+                                                   TransactionStatus status,
                                                    Instant startDate,
                                                    Instant endDate,
                                                    Pageable pageable) {
@@ -536,6 +537,9 @@ public class PaymentService {
             if (method != null) {
                 predicates.add(cb.equal(root.get("method"), method));
             }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
             if (startDate != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
             }
@@ -547,6 +551,70 @@ public class PaymentService {
 
         return paymentRepository.findAll(spec, pageable)
                 .map(payment -> toResponse(payment, payment.getFeeRecord()));
+    }
+
+    // ── Payment Summary ───────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public com.owlexa.owlexabackend.modules.payment.dto.response.PaymentSummaryResponse getPaymentSummary(
+            Long centerId,
+            String studentQuery,
+            Long cashierId,
+            PaymentMethod method,
+            TransactionStatus status,
+            Instant startDate,
+            Instant endDate) {
+        
+        User currentUser = getCurrentUser();
+        assertCenterMembership(currentUser, centerId);
+
+        Specification<Payment> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("center").get("id"), centerId));
+
+            if (studentQuery != null && !studentQuery.isBlank()) {
+                String pattern = "%" + studentQuery.toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("studentUser").get("fullName")), pattern),
+                        cb.like(cb.lower(root.get("studentUser").get("phoneNumber")), pattern)
+                ));
+            }
+            if (cashierId != null) {
+                predicates.add(cb.equal(root.get("collectedByUser").get("id"), cashierId));
+            }
+            if (method != null) {
+                predicates.add(cb.equal(root.get("method"), method));
+            }
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThan(root.get("createdAt"), endDate));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        List<Payment> payments = paymentRepository.findAll(spec);
+        
+        long totalTransactions = payments.size();
+        
+        BigDecimal totalRevenue = payments.stream()
+                .filter(p -> p.getStatus() == TransactionStatus.ACTIVE)
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                
+        long pendingCount = payments.stream()
+                .filter(p -> p.getStatus() == TransactionStatus.PENDING)
+                .count();
+
+        return com.owlexa.owlexabackend.modules.payment.dto.response.PaymentSummaryResponse.builder()
+                .totalTransactions(totalTransactions)
+                .totalRevenue(totalRevenue)
+                .pendingCount(pendingCount)
+                .build();
     }
 
     // ── Receipt ───────────────────────────────────────────────────────────

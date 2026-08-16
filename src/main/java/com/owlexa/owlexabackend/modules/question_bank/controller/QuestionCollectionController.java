@@ -23,7 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/teacher/question-collections")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('TEST_VIEW')")
+@PreAuthorize("hasRole('TEACHER')")
 public class QuestionCollectionController {
 
     private final QuestionCollectionService collectionService;
