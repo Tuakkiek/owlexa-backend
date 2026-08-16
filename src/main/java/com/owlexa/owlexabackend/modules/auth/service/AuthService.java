@@ -13,6 +13,7 @@ import com.owlexa.owlexabackend.modules.user.entity.Membership;
 import com.owlexa.owlexabackend.modules.user.entity.User;
 import com.owlexa.owlexabackend.modules.user.entity.UserSession;
 import com.owlexa.owlexabackend.modules.user.repository.MembershipRepository;
+import com.owlexa.owlexabackend.common.exception.AuthSessionException;
 import com.owlexa.owlexabackend.common.exception.BadRequestException;
 import com.owlexa.owlexabackend.common.exception.DuplicateResourceException;
 import com.owlexa.owlexabackend.common.exception.ResourceNotFoundException;
@@ -175,31 +176,31 @@ public class AuthService {
     // REFRESH TOKEN (rotation + reuse detection + sliding + absolute)
     // ═══════════════════════════════════════════════════════════════
 
-    @Transactional(noRollbackFor = BadRequestException.class)
+    @Transactional(noRollbackFor = {BadRequestException.class, AuthSessionException.class})
     public RefreshResult refreshToken(String token) {
         if (token == null || token.isBlank()) {
-            throw new BadRequestException("Refresh token must not be empty");
+            throw new AuthSessionException("Refresh token must not be empty");
         }
 
         if (!jwtUtil.isRefreshToken(token)) {
-            throw new BadRequestException("Invalid token type");
+            throw new AuthSessionException("Invalid token type");
         }
 
         String sessionId   = jwtUtil.extractSessionId(token);
         String phoneNumber = jwtUtil.extractSubject(token);
 
         if (sessionId == null || phoneNumber == null) {
-            throw new BadRequestException("Malformed token");
+            throw new AuthSessionException("Malformed token");
         }
 
         UserSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new BadRequestException("Session not found or already revoked"));
+                .orElseThrow(() -> new AuthSessionException("Session not found or already revoked"));
 
         if (!session.getUser().isActive()) {
-            throw new BadRequestException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
+            throw new AuthSessionException("Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên");
         }
         if (session.getCenter() != null && !session.getCenter().isActive()) {
-            throw new BadRequestException("Trung tâm đã tạm ngừng hoạt động");
+            throw new AuthSessionException("Trung tâm đã tạm ngừng hoạt động");
         }
 
         String incomingHash = jwtUtil.hashToken(token);
@@ -210,12 +211,12 @@ public class AuthService {
                     session.getUser().getId(), sessionId);
             sessionRepository.deactivateAllByUserIdWithReason(
                     session.getUser().getId(), "REUSE_DETECTED");
-            throw new BadRequestException(
+            throw new AuthSessionException(
                     "Security alert: token reuse detected. All sessions have been revoked. Please login again.");
         }
 
         if (!session.isActive()) {
-            throw new BadRequestException("Session has been revoked. Please login again.");
+            throw new AuthSessionException("Session has been revoked. Please login again.");
         }
 
         // ── Absolute expiration check ────────────────────────────────────
@@ -224,7 +225,7 @@ public class AuthService {
             session.setRevokedReason("ABSOLUTE_EXPIRED");
             session.setRevokedAt(LocalDateTime.now());
             sessionRepository.save(session);
-            throw new BadRequestException("Session has reached its maximum lifetime. Please login again.");
+            throw new AuthSessionException("Session has reached its maximum lifetime. Please login again.");
         }
 
         // ── Sliding expiration check ─────────────────────────────────────
@@ -233,7 +234,7 @@ public class AuthService {
             session.setRevokedReason("INACTIVE_EXPIRED");
             session.setRevokedAt(LocalDateTime.now());
             sessionRepository.save(session);
-            throw new BadRequestException("Session has expired due to inactivity. Please login again.");
+            throw new AuthSessionException("Session has expired due to inactivity. Please login again.");
         }
 
         // ── Rotation ─────────────────────────────────────────────────────

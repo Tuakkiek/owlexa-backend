@@ -42,15 +42,9 @@ public class GlobalExceptionHandler {
             errors.put(fieldError.getField(), fieldError.getDefaultMessage());
         }
 
-        String firstMessage = ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
-                .filter(msg -> msg != null && !msg.isBlank())
-                .findFirst()
-                .orElse("Dữ liệu gửi lên không hợp lệ");
-
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                 400,
-                firstMessage,
+                "Dữ liệu gửi lên không hợp lệ",
                 errors
         ));
     }
@@ -114,6 +108,16 @@ public class GlobalExceptionHandler {
         log.error("[400] BadRequestException thrown: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body(errorBody(
                 400,
+                ex.getMessage(),
+                null
+        ));
+    }
+
+    @ExceptionHandler(AuthSessionException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthSession(AuthSessionException ex) {
+        log.warn("Authentication session expired or invalid: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON).body(errorBody(
+                401,
                 ex.getMessage(),
                 null
         ));
