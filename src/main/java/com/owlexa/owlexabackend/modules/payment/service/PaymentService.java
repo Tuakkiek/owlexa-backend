@@ -268,7 +268,7 @@ public class PaymentService {
                 .feeRecord(feeRecord)
                 .center(feeRecord.getCenter())
                 .studentUser(feeRecord.getStudentUser())
-                .collectedByUser(currentUser)
+                .collectedByUser(currentUser.getRole() == Role.STUDENT ? null : currentUser)
                 .amount(remainingAmount)
                 .method(method)
                 .note("Student QR payment — full remaining balance")
@@ -410,7 +410,7 @@ public class PaymentService {
 
         if (payment.getStatus() == TransactionStatus.ACTIVE) {
             throw new BusinessRuleException(DUPLICATE_PAYMENT_CODE,
-                    "DUPLICATE_PAYMENT: payment " + paymentId + " was already confirmed");
+                    "DUPLICATE_PAYMENT: payment " + paymentId + " đã được xác nhận trước đó ref: " + payment.getSepayRef());
         }
         if (payment.getStatus() == TransactionStatus.VOIDED) {
             throw new BusinessRuleException("Không thể xác nhận giao dịch đã bị hủy");
@@ -1128,6 +1128,10 @@ public class PaymentService {
                 ? BigDecimal.valueOf(event.getTransferAmount())
                 : payment.getAmount();
 
+        boolean isSelfPay = payment.getCollectedByUser() != null
+                && student != null
+                && payment.getCollectedByUser().getId().equals(student.getId());
+
         return PaymentHistoryResponse.builder()
                 .id("sepay-event-" + (event.getId() != null ? event.getId() : event.getSepayTransactionId()))
                 .paymentId(payment.getId())
@@ -1147,8 +1151,8 @@ public class PaymentService {
                 .method(payment.getMethod())
                 .sepayRef(event.getReferenceCode() != null ? event.getReferenceCode() : event.getPaymentCode())
                 .note(event.getProcessingNote() != null ? event.getProcessingNote() : event.getContent())
-                .collectedByUserId(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getId() : null)
-                .collectedByUserName(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getFullName() : null)
+                .collectedByUserId(payment.getCollectedByUser() != null && !isSelfPay ? payment.getCollectedByUser().getId() : null)
+                .collectedByUserName(payment.getCollectedByUser() != null && !isSelfPay ? payment.getCollectedByUser().getFullName() : null)
                 .status(DUPLICATE_PAYMENT_CODE)
                 .createdAt(eventTime)
                 .feeRecordAmount(feeRecord != null ? feeRecord.getAmount() : null)
@@ -1207,8 +1211,14 @@ public class PaymentService {
         String className = feeRecord.getClazz() != null ? feeRecord.getClazz().getName() : null;
         String courseName = (feeRecord.getClazz() != null && feeRecord.getClazz().getCourse() != null)
                 ? feeRecord.getClazz().getCourse().getName() : null;
-        String collectedByUserName = payment.getCollectedByUser() != null
+        boolean isSelfPay = payment.getCollectedByUser() != null
+                && payment.getStudentUser() != null
+                && payment.getCollectedByUser().getId().equals(payment.getStudentUser().getId());
+
+        String collectedByUserName = (payment.getCollectedByUser() != null && !isSelfPay)
                 ? payment.getCollectedByUser().getFullName() : null;
+        Long collectedByUserId = (payment.getCollectedByUser() != null && !isSelfPay)
+                ? payment.getCollectedByUser().getId() : null;
 
         return PaymentResponse.builder()
                 .id(payment.getId())
@@ -1226,7 +1236,7 @@ public class PaymentService {
                 .method(payment.getMethod())
                 .sepayRef(payment.getSepayRef())
                 .note(payment.getNote())
-                .collectedByUserId(payment.getCollectedByUser() != null ? payment.getCollectedByUser().getId() : null)
+                .collectedByUserId(collectedByUserId)
                 .collectedByUserName(collectedByUserName)
                 .status(payment.getStatus())
                 .createdAt(payment.getCreatedAt())
